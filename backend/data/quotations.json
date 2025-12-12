@@ -1,0 +1,639 @@
+[
+  {
+    "id": "921c9f8f-442a-41d3-a3ec-08b4288d8e3c",
+    "quoteNo": "BSQO-2511/0001",
+    "createdAt": "2025-11-27T15:13:08",
+    "updatedAt": "2025-11-27T15:20:25",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": false,
+    "customer": {
+      "id": "08015AY",
+      "name": "ร้าน จำรัส",
+      "tax_no": "8432197056123",
+      "phone": "081-529-3746",
+      "gen_bus": "W",
+      "customer_date": "2020-04-08 00:00:00",
+      "payment_terms": "30",
+      "accum_6m": "9255867.60747663",
+      "frequency": "507",
+      "sales_g_cust": "1341314.841121495",
+      "sales_a_cust": "7178438.69158878",
+      "sales_s_cust": "152675.2990654205",
+      "sales_y_cust": "86300.79439252336",
+      "sales_c_cust": "102132.429906542",
+      "sales_e_cust": "395005.5514018691",
+      "price_level": "395005.5514018691"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "C00210090000000000",
+        "name": "กระดาษทราย No.3",
+        "qty": 100,
+        "price": 36.14400937547838,
+        "lineTotal": 3614.400937547838,
+        "category": "C",
+        "unit": "แผ่น"
+      }
+    ],
+    "totals": {
+      "exVat": 3377.9448014465775,
+      "vat": 236.45613610126065,
+      "grandTotal": 3614.400937547838,
+      "shippingCustomerPay": 0,
+      "shippingRaw": 0
+    },
+    "status": "complete",
+    "note": "",
+    "billTaxName": ""
+  },
+  {
+    "id": "6e2a89e0-be24-4bd8-9e5a-f4c31f9de512",
+    "quoteNo": "BSQO-2511/0002",
+    "createdAt": "2025-11-27T15:57:16",
+    "updatedAt": "2025-11-27T15:57:16",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": true,
+    "customer": {
+      "id": "04007AY",
+      "name": "บริษัท คอร์เนอร์สโตน มาร์เบิ้ล จำกัด",
+      "tax_no": "",
+      "phone": "",
+      "gen_bus": "I",
+      "customer_date": "2021-06-24 00:00:00",
+      "payment_terms": "0",
+      "accum_6m": "4448.59813084112",
+      "frequency": "1",
+      "sales_g_cust": "0",
+      "sales_a_cust": "4448.59813084112",
+      "sales_s_cust": "0",
+      "sales_y_cust": "0",
+      "sales_c_cust": "0",
+      "sales_e_cust": "0",
+      "price_level": "0"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "A01000000100000000",
+        "name": "อลูมิเนียมเส้น",
+        "qty": 100,
+        "price": 157.02597462496976,
+        "lineTotal": 15702.597462496977,
+        "category": "A",
+        "unit": "เส้น"
+      }
+    ],
+    "totals": {
+      "exVat": 14675.324731305585,
+      "vat": 1027.2727311913914,
+      "grandTotal": 15702.597462496977,
+      "shippingCustomerPay": 0,
+      "shippingRaw": 281.19
+    },
+    "status": "complete",
+    "note": "",
+    "billTaxName": "คอร์เนอร์"
+  },
+  {
+    "id": "7219c352-1a0f-4fba-98cb-a8d9cbc3be86",
+    "quoteNo": "BSQO-2511/0003",
+    "createdAt": "2025-11-27T20:20:34",
+    "updatedAt": "2025-11-27T21:23:48",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": true,
+    "customer": {
+      "id": "20010AY",
+      "name": "บริษัท ดับบลิวเอสเฟอร์นิเจอร์ แอนด์ ดีไซน์ จำกัด",
+      "tax_no": "",
+      "phone": "",
+      "gen_bus": "R",
+      "customer_date": "2021-07-22 00:00:00",
+      "payment_terms": "0",
+      "accum_6m": "3210",
+      "frequency": "3",
+      "sales_g_cust": "2369",
+      "sales_a_cust": "841",
+      "sales_s_cust": "0",
+      "sales_y_cust": "0",
+      "sales_c_cust": "0",
+      "sales_e_cust": "0",
+      "price_level": "0"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "A01000000100000000",
+        "name": "อลูมิเนียมเส้น",
+        "qty": 100,
+        "price": 157.28023913705553,
+        "lineTotal": 15728.023913705552,
+        "category": "A",
+        "unit": "เส้น"
+      }
+    ],
+    "totals": {
+      "exVat": 14699.087769818272,
+      "vat": 1028.9361438872802,
+      "grandTotal": 16762.062718020275,
+      "shippingCustomerPay": 1034.0388043147223,
+      "shippingRaw": 1820.44
+    },
+    "status": "draft",
+    "note": "",
+    "billTaxName": "W"
+  },
+  {
+    "id": "1cf30a12-d230-4b98-a9f3-4762888664ea",
+    "quoteNo": "CMQO-2511/0001",
+    "createdAt": "2025-11-27T21:38:47",
+    "updatedAt": "2025-11-28T14:55:10",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": true,
+    "customer": {
+      "id": "24020AY",
+      "name": "ห้างหุ้นส่วนจำกัด ธนกรเจริญทรัพย์ ก่อสร้าง",
+      "tax_no": "",
+      "phone": "",
+      "gen_bus": "P",
+      "customer_date": "2023-09-25 00:00:00",
+      "payment_terms": "30",
+      "accum_6m": "418725.5887850465",
+      "frequency": "130",
+      "sales_g_cust": "30057.58878504672",
+      "sales_a_cust": "110639.7757009345",
+      "sales_s_cust": "7237.90654205607",
+      "sales_y_cust": "138663.214953271",
+      "sales_c_cust": "111876.5140186915",
+      "sales_e_cust": "20250.58878504672",
+      "price_level": "20250.58878504672"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "A01000000100000000",
+        "name": "อลูมิเนียมเส้น",
+        "qty": 1,
+        "price": 158.21,
+        "lineTotal": 158.21,
+        "category": "A",
+        "unit": "เส้น"
+      },
+      {
+        "sku": "Y04094001620120240",
+        "name": "บอร์ด ซูเปอร์ซัน ขอบเรียบ 20 มม.120x240  ตราซุปเปอร์ซัน",
+        "qty": 2,
+        "price": 88.16,
+        "lineTotal": 176.32,
+        "category": "Y",
+        "unit": "แผ่น"
+      },
+      {
+        "sku": "S00070150000000000",
+        "name": "ปืนยิงกาว ",
+        "qty": 1,
+        "price": 71.73,
+        "lineTotal": 71.73,
+        "category": "S",
+        "unit": "อัน"
+      },
+      {
+        "sku": "E002040201D2301000",
+        "name": "มือจับเรียบมีรู A10 สีขาวอลู TOP (s)",
+        "qty": 1,
+        "price": 61.94,
+        "lineTotal": 61.94,
+        "category": "E",
+        "unit": "ตัว"
+      },
+      {
+        "sku": "A02110011310010000",
+        "name": "ตัวยู 3 หุน สีอบขาว หนา Gold",
+        "qty": 1,
+        "price": 88.21,
+        "lineTotal": 88.21,
+        "category": "A",
+        "unit": "เส้น"
+      },
+      {
+        "sku": "E051141300N9640000",
+        "name": "ดอกสว่าน 9/64 นิ้ว (JAPAN) TIGA",
+        "qty": 1,
+        "price": 37.09,
+        "lineTotal": 37.09,
+        "category": "E",
+        "unit": "ตัว"
+      }
+    ],
+    "totals": {
+      "exVat": 554.6728971962616,
+      "vat": 38.8271028037384,
+      "grandTotal": 823.5480650550758,
+      "shippingCustomerPay": 230.22499999999997,
+      "shippingRaw": 259.9
+    },
+    "status": "draft",
+    "note": "",
+    "billTaxName": "พิเชศ"
+  },
+  {
+    "id": "a1c1c38b-f61d-4531-9abc-a8d5380cd20e",
+    "quoteNo": "BSQO-2511/0004",
+    "createdAt": "2025-11-28T14:15:23",
+    "updatedAt": "2025-11-28T14:15:23",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": false,
+    "customer": {
+      "id": "30036AY",
+      "name": "นาย พิศณุ มีสมยุทธ์",
+      "tax_no": "",
+      "phone": "",
+      "gen_bus": "R",
+      "customer_date": "2023-01-09 00:00:00",
+      "payment_terms": "0",
+      "accum_6m": "1374",
+      "frequency": "3",
+      "sales_g_cust": "0",
+      "sales_a_cust": "0",
+      "sales_s_cust": "0",
+      "sales_y_cust": "0",
+      "sales_c_cust": "1374",
+      "sales_e_cust": "0",
+      "price_level": "0"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "E067030800C0010400",
+        "name": "ลูกล้อรางแขวนเล็ก 1นิ้ว (ตัว) TOP-CO ",
+        "qty": 1,
+        "price": 37.989854,
+        "lineTotal": 37.989854,
+        "category": "E",
+        "unit": "ตัว"
+      },
+      {
+        "sku": "S00070150000000000",
+        "name": "ปืนยิงกาว ",
+        "qty": 20,
+        "price": 71.93236,
+        "lineTotal": 1438.6472,
+        "category": "S",
+        "unit": "อัน"
+      },
+      {
+        "sku": "Y04094001620120240",
+        "name": "บอร์ด ซูเปอร์ซัน ขอบเรียบ 20 มม.120x240  ตราซุปเปอร์ซัน",
+        "qty": 100,
+        "price": 88.309,
+        "lineTotal": 8830.9,
+        "category": "Y",
+        "unit": "แผ่น"
+      }
+    ],
+    "totals": {
+      "exVat": 9633.2122,
+      "vat": 674.3248540000004,
+      "grandTotal": 11859.1093253,
+      "shippingCustomerPay": 1551.6331473,
+      "shippingRaw": 1721.26
+    },
+    "status": "complete",
+    "note": "",
+    "billTaxName": ""
+  },
+  {
+    "id": "94fcfbf9-c6d2-45c8-a837-85e9bb83c08c",
+    "quoteNo": "BSQO-2511/0005",
+    "createdAt": "2025-11-28T14:51:35",
+    "updatedAt": "2025-11-28T14:51:35",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": false,
+    "customer": {
+      "id": "08015AY",
+      "name": "ร้าน จำรัส",
+      "tax_no": "8432197056123",
+      "phone": "081-529-3746",
+      "gen_bus": "W",
+      "customer_date": "2020-04-08 00:00:00",
+      "payment_terms": "30",
+      "accum_6m": "9255867.60747663",
+      "frequency": "507",
+      "sales_g_cust": "1341314.841121495",
+      "sales_a_cust": "7178438.69158878",
+      "sales_s_cust": "152675.2990654205",
+      "sales_y_cust": "86300.79439252336",
+      "sales_c_cust": "102132.429906542",
+      "sales_e_cust": "395005.5514018691",
+      "price_level": "395005.5514018691"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "S00070150000000000",
+        "name": "ปืนยิงกาว ",
+        "qty": 10,
+        "price": 70.61,
+        "lineTotal": 706.1,
+        "category": "S",
+        "unit": "อัน"
+      },
+      {
+        "sku": "Y04094001620120240",
+        "name": "บอร์ด ซูเปอร์ซัน ขอบเรียบ 20 มม.120x240  ตราซุปเปอร์ซัน",
+        "qty": 100,
+        "price": 82.95,
+        "lineTotal": 8295,
+        "category": "Y",
+        "unit": "แผ่น"
+      }
+    ],
+    "totals": {
+      "exVat": 8412.242990654206,
+      "vat": 588.8570093457947,
+      "grandTotal": 9948.155,
+      "shippingCustomerPay": 947.0549999999998,
+      "shippingRaw": 1074.61
+    },
+    "status": "complete",
+    "note": "",
+    "billTaxName": ""
+  },
+  {
+    "id": "a2f00d08-7a2c-493b-9708-c58a6e64829d",
+    "quoteNo": "BSQO-2511/0006",
+    "createdAt": "2025-11-28T19:24:42",
+    "updatedAt": "2025-11-28T19:24:42",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": false,
+    "customer": {
+      "id": "08015AY",
+      "name": "ร้าน จำรัส",
+      "tax_no": "8432197056123",
+      "phone": "081-529-3746",
+      "gen_bus": "W",
+      "customer_date": "2020-04-08 00:00:00",
+      "payment_terms": "30",
+      "accum_6m": "9255867.60747663",
+      "frequency": "507",
+      "sales_g_cust": "1341314.841121495",
+      "sales_a_cust": "7178438.69158878",
+      "sales_s_cust": "152675.2990654205",
+      "sales_y_cust": "86300.79439252336",
+      "sales_c_cust": "102132.429906542",
+      "sales_e_cust": "395005.5514018691",
+      "price_level": "395005.5514018691"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "S00070150000000000",
+        "name": "ปืนยิงกาว ",
+        "qty": 10,
+        "price": 70.61,
+        "lineTotal": 706.1,
+        "category": "S",
+        "unit": "อัน"
+      },
+      {
+        "sku": "Y04094001620120240",
+        "name": "บอร์ด ซูเปอร์ซัน ขอบเรียบ 20 มม.120x240  ตราซุปเปอร์ซัน",
+        "qty": 100,
+        "price": 82.95,
+        "lineTotal": 8295,
+        "category": "Y",
+        "unit": "แผ่น"
+      }
+    ],
+    "totals": {
+      "exVat": 8412.242990654206,
+      "vat": 588.8570093457947,
+      "grandTotal": 9625.655,
+      "shippingCustomerPay": 624.5549999999998,
+      "shippingRaw": 1074.61
+    },
+    "status": "complete",
+    "note": "",
+    "billTaxName": ""
+  },
+  {
+    "id": "499c86d4-0d8e-4df1-8c39-a529f5fc91fc",
+    "quoteNo": "BSQO-2511/0007",
+    "createdAt": "2025-11-29T11:09:53",
+    "updatedAt": "2025-11-29T11:37:54",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": false,
+    "customer": {
+      "id": "08015AY",
+      "name": "ร้าน จำรัส",
+      "tax_no": "8432197056123",
+      "phone": "081-529-3746",
+      "gen_bus": "W",
+      "customer_date": "2020-04-08 00:00:00",
+      "payment_terms": "30",
+      "accum_6m": "9255867.60747663",
+      "frequency": "507",
+      "sales_g_cust": "1341314.841121495",
+      "sales_a_cust": "7178438.69158878",
+      "sales_s_cust": "152675.2990654205",
+      "sales_y_cust": "86300.79439252336",
+      "sales_c_cust": "102132.429906542",
+      "sales_e_cust": "395005.5514018691",
+      "price_level": "395005.5514018691"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "S00070150000000000",
+        "name": "ปืนยิงกาว ",
+        "qty": 100,
+        "price": 70.3,
+        "lineTotal": 7030,
+        "category": "S",
+        "unit": "อัน"
+      },
+      {
+        "sku": "Y04094001615120240",
+        "name": "บอร์ด ซูเปอร์ซัน ขอบเรียบ 15 มม.120x240  ตราซุปเปอร์ซัน",
+        "qty": 100,
+        "price": 82.95,
+        "lineTotal": 8295,
+        "category": "Y",
+        "unit": "แผ่น"
+      }
+    ],
+    "totals": {
+      "exVat": 14322.429906542055,
+      "vat": 1002.5700934579454,
+      "grandTotal": 15325,
+      "shippingCustomerPay": 0,
+      "shippingRaw": 0
+    },
+    "status": "draft",
+    "note": "",
+    "billTaxName": ""
+  },
+  {
+    "id": "4d75ddcb-5efb-4dee-b7ba-091aa70cd8f2",
+    "quoteNo": "BSQO-2511/0008",
+    "createdAt": "2025-11-29T19:53:56",
+    "updatedAt": "2025-11-29T19:53:56",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": false,
+    "customer": {
+      "id": "DAY207",
+      "name": "นางสาว ไพลิน พิกุลขาว",
+      "tax_no": "7926415308872",
+      "phone": "082-703-9184",
+      "gen_bus": "R",
+      "customer_date": "2024-02-05 00:00:00",
+      "payment_terms": "0",
+      "accum_6m": "1394109.813084112",
+      "frequency": "83",
+      "sales_g_cust": "0",
+      "sales_a_cust": "76356.29906542049",
+      "sales_s_cust": "0",
+      "sales_y_cust": "735400.4018691588",
+      "sales_c_cust": "572296.9813084112",
+      "sales_e_cust": "10056.13084112149",
+      "price_level": "10056.13084112149"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "C03260420000000000",
+        "name": "แปรงลูกกลิ้งทาสี 10 นิ้ว รุ่นมืออาชีพ PUMPKIN-PRO",
+        "qty": 1,
+        "price": 39.14,
+        "lineTotal": 39.14,
+        "category": "C",
+        "unit": "อัน"
+      },
+      {
+        "sku": "S01010010100000300",
+        "name": "เจเนรัล เพอโพส GP สีใส ",
+        "qty": 1,
+        "price": 89.99,
+        "lineTotal": 89.99,
+        "category": "S",
+        "unit": "หลอด"
+      },
+      {
+        "sku": "A01010010108150000",
+        "name": "ซอยลูกฟักสวิง 6 หุน  สีขาว",
+        "qty": 1,
+        "price": 177.5,
+        "lineTotal": 177.5,
+        "category": "A",
+        "unit": "เส้น"
+      }
+    ],
+    "totals": {
+      "exVat": 286.5700934579439,
+      "vat": 20.05990654205607,
+      "grandTotal": 306.63,
+      "shippingCustomerPay": 0,
+      "shippingRaw": 0
+    },
+    "status": "draft",
+    "note": "",
+    "billTaxName": ""
+  },
+  {
+    "id": "69787fc6-fd8c-4b50-b9c3-64c9b14be336",
+    "quoteNo": "BSQO-2511/0009",
+    "createdAt": "2025-11-30T21:03:30",
+    "updatedAt": "2025-11-30T21:03:30",
+    "employee": {
+      "id": "21113",
+      "name": "เสาวลักษณ์  ม้วนหนู",
+      "branchId": "21BS"
+    },
+    "needTaxInvoice": false,
+    "customer": {
+      "id": "08015AY",
+      "name": "ร้าน จำรัส",
+      "tax_no": "8432197056123",
+      "phone": "081-529-3746",
+      "gen_bus": "W",
+      "customer_date": "2020-04-08 00:00:00",
+      "payment_terms": "30",
+      "accum_6m": "9255867.60747663",
+      "frequency": "507",
+      "sales_g_cust": "1341314.841121495",
+      "sales_a_cust": "7178438.69158878",
+      "sales_s_cust": "152675.2990654205",
+      "sales_y_cust": "86300.79439252336",
+      "sales_c_cust": "102132.429906542",
+      "sales_e_cust": "395005.5514018691",
+      "price_level": "395005.5514018691"
+    },
+    "deliveryType": "DELIVERY",
+    "cart": [
+      {
+        "sku": "S00070150000000000",
+        "name": "ปืนยิงกาว ",
+        "qty": 10,
+        "price": 70.61,
+        "lineTotal": 706.1,
+        "category": "S",
+        "unit": "อัน"
+      },
+      {
+        "sku": "Y04094001620120240",
+        "name": "บอร์ด ซูเปอร์ซัน ขอบเรียบ 20 มม.120x240  ตราซุปเปอร์ซัน",
+        "qty": 100,
+        "price": 82.95,
+        "lineTotal": 8295,
+        "category": "Y",
+        "unit": "แผ่น"
+      }
+    ],
+    "totals": {
+      "exVat": 8412.242990654206,
+      "vat": 588.8570093457947,
+      "grandTotal": 9625.655,
+      "shippingCustomerPay": 624.5549999999998,
+      "shippingRaw": 1074.61
+    },
+    "status": "complete",
+    "note": "",
+    "billTaxName": ""
+  }
+]
