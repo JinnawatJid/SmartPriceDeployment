@@ -5,3 +5,5 @@ python-multipart==0.0.12
 pandas==2.2.3
 openpyxl==3.1.5
 PyJWT>=2.8.0
+numpy
+scipy
