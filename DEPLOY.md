@@ -20,21 +20,18 @@ This guide explains how to deploy the application on an offline (air-gapped) Win
     *   `backend.tar`
     *   `frontend.tar`
     *   `docker-compose.offline.yml`
-    *   **Required**: `backend/data/Quetung.db` (This is the database file. You must copy it to the server).
+    *   (Optional) `backend/data/Quetung.db` (Only needed if you want to enable data persistence later).
 
 ## 2. Transfer and Load (On the Offline Server)
 
 1.  Create a folder on the server, e.g., `C:\PricingApp`.
-2.  Create a subfolder named `data` inside it: `C:\PricingApp\data`.
-3.  **Crucial**: Copy `Quetung.db` into `C:\PricingApp\data`.
-    *   *Note: If you skip this, the application will see an empty database and will not function correctly.*
-4.  Copy the other files (`backend.tar`, `frontend.tar`, `docker-compose.offline.yml`) into `C:\PricingApp`.
-5.  Open PowerShell or Command Prompt as Administrator.
-6.  Navigate to the folder:
+2.  Copy the transferred files (`backend.tar`, `frontend.tar`, `docker-compose.offline.yml`) into `C:\PricingApp`.
+3.  Open PowerShell or Command Prompt as Administrator.
+4.  Navigate to the folder:
     ```powershell
     cd C:\PricingApp
     ```
-7.  Load the docker images:
+5.  Load the docker images:
     ```powershell
     docker load -i backend.tar
     docker load -i frontend.tar
@@ -53,7 +50,31 @@ This guide explains how to deploy the application on an offline (air-gapped) Win
 *   Open a browser on the server (or a connected client) and go to `http://localhost` (or the server IP).
 *   The API should be available at `http://localhost/api`.
 
+## Advanced: Enabling Data Persistence
+
+By default, the application runs with an embedded database. Any changes (new customers, quotes) will be **lost** if the container is removed.
+
+To enable persistence:
+
+1.  Stop the containers:
+    ```powershell
+    docker-compose -f docker-compose.offline.yml down
+    ```
+2.  Create a folder named `data` inside `C:\PricingApp`.
+3.  **Crucial**: Copy your `Quetung.db` file into `C:\PricingApp\data`.
+4.  Edit `docker-compose.offline.yml` using Notepad:
+    *   Uncomment the `volumes:` section.
+    *   It should look like this:
+        ```yaml
+        volumes:
+          - ./data:/app/data
+        ```
+5.  Start the containers again:
+    ```powershell
+    docker-compose -f docker-compose.offline.yml up -d
+    ```
+
 ## Troubleshooting
 
 *   **Ports**: Ensure ports 80 and 4000 are not blocked by the Windows Firewall.
-*   **Database**: If the application errors out or shows no data, verify that `C:\PricingApp\data\Quetung.db` exists and is a valid SQLite file.
+*   **Database Error**: If you see "No such table", it means you enabled persistence (volumes) but failed to copy the `Quetung.db` file into the `data` folder correctly.
