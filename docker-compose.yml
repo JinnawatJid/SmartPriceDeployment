@@ -1,0 +1,25 @@
+services:
+  backend:
+    build: ./backend
+    image: pricing-backend:latest
+    container_name: pricing-backend
+    ports:
+      - "4000:4000"
+    volumes:
+      # Uncomment the following line to persist the database on the host
+      # - ./backend_data:/app/data
+      - ./backend/data:/app/data # For development/demo, sync with local folder
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_BASE_URL=/api
+    image: pricing-frontend:latest
+    container_name: pricing-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always

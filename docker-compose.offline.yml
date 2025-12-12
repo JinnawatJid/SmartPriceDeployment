@@ -1,0 +1,19 @@
+services:
+  backend:
+    image: pricing-backend:latest
+    container_name: pricing-backend
+    ports:
+      - "4000:4000"
+    volumes:
+      # Mount the data directory from the current folder on the server
+      - ./data:/app/data
+    restart: always
+
+  frontend:
+    image: pricing-frontend:latest
+    container_name: pricing-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
