@@ -4,9 +4,10 @@ services:
     container_name: pricing-backend
     ports:
       - "4000:4000"
-    volumes:
-      # Mount the data directory from the current folder on the server
-      - ./data:/app/data
+    # volumes:
+      # Optional: Uncomment the next line to persist the database on the host.
+      # You MUST place a valid Quetung.db file in the './data' folder before uncommenting.
+      # - ./data:/app/data
     restart: always
 
   frontend:

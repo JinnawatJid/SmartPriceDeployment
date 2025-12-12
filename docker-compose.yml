@@ -5,10 +5,10 @@ services:
     container_name: pricing-backend
     ports:
       - "4000:4000"
-    volumes:
-      # Uncomment the following line to persist the database on the host
-      # - ./backend_data:/app/data
-      - ./backend/data:/app/data # For development/demo, sync with local folder
+    # volumes:
+      # Optional: Uncomment the next line to persist the database on the host.
+      # You MUST place a valid Quetung.db file in the './data' folder before uncommenting.
+      # - ./backend/data:/app/data
     restart: always
 
   frontend:
