@@ -4,6 +4,4 @@ pydantic==2.9.2
 python-multipart==0.0.12
 pandas==2.2.3
 openpyxl==3.1.5
-fontkit
 PyJWT>=2.8.0
-
