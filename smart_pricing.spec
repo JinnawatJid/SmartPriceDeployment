@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
+import os
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
@@ -57,7 +58,7 @@ datas += [
 
 a = Analysis(
     ['backend/main.py'],
-    pathex=[],
+    pathex=[os.path.abspath('backend')],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
