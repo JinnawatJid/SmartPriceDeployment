@@ -21,13 +21,22 @@ class LoginRequest(BaseModel):
 
 # === HELPER ===
 def load_employee(code: str):
+    print(f"[DEBUG] load_employee attempting to find: '{code}'")
     df = load_employees_sqlite()  # ← SQLite dataframe จาก employees.py
 
+    # DEBUG: Print columns and partial data
+    # print(f"[DEBUG] Columns in DF: {df.columns.tolist()}")
+    # print(f"[DEBUG] First 5 empCodes: {df['empCode'].head().tolist()}")
+
     row = df[df["empCode"].astype(str).str.lower() == code.lower()]
+
     if row.empty:
+        print(f"[DEBUG] load_employee: No match found for '{code}'")
         return None
 
     r = row.iloc[0]
+    print(f"[DEBUG] load_employee: Match found -> {r.to_dict()}")
+
     return {
         "id": str(r["empCode"]).strip(),
         "name": str(r["empName"]).strip(),
@@ -38,8 +47,11 @@ def load_employee(code: str):
 # === LOGIN ROUTE ===
 @router.post("")
 def login(req: LoginRequest):
+    print(f"\n[DEBUG] Login Request Received: {req}")
     emp = load_employee(req.employeeCode)
+
     if not emp:
+        print(f"[DEBUG] Login Failed: Invalid employee code '{req.employeeCode}'")
         raise HTTPException(status_code=401, detail="รหัสพนักงานไม่ถูกต้อง")
 
     token = jwt.encode(
@@ -53,4 +65,5 @@ def login(req: LoginRequest):
         algorithm=JWT_ALG,
     )
 
+    print(f"[DEBUG] Login Success: Token generated for {emp['id']}")
     return {"token": token, "employee": emp}
