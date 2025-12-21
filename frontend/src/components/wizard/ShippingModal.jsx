@@ -1,5 +1,6 @@
 // src/components/wizard/ShippingModal.jsx
 import React, { useEffect, useRef, useState } from "react";
+import api from "../../services/api";
 
 const TruckIcon = () => (
   <img
@@ -51,16 +52,8 @@ export default function ShippingModal({
         profit: Number(profit || 0),
       };
 
-      const res = await fetch("http://127.0.0.1:4000/api/shipping/calculate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(`HTTP ${res.status}: ${msg}`);
-        }
-    const data = await res.json();
+      const res = await api.post("/api/shipping/calculate", payload);
+      const data = res.data;
     onConfirm?.({
       ...data,
       vehicleType,
