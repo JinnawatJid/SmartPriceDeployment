@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from scipy.special import erf
+import sys
+import os
 
 # ============== WEIGHTS (รวมกัน = 100) ==============\
 W_ACCUM6M = 20.72
@@ -60,7 +62,13 @@ def _z_to_score_fixed(z, mean, sd):
 # ============== โหลดไฟล์สถิติ (mean/sd) ===================
 STATS = {}
 try:
-    JSON_PATH = Path(__file__).parent / "mean_sd.json"
+    if getattr(sys, 'frozen', False):
+        # If running as bundled app, use _MEIPASS
+        JSON_PATH = Path(sys._MEIPASS) / "mean_sd.json"
+    else:
+        # Dev mode
+        JSON_PATH = Path(__file__).parent / "mean_sd.json"
+
     with open(JSON_PATH, "r") as f:
         # (ไฟล์ json เดิมเป็น list ที่มี 1 dict)
         STATS = json.load(f)[0] 
