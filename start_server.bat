@@ -39,3 +39,11 @@ REM Run the application
 REM The executable is located in the smart_pricing folder
 cd smart_pricing
 smart_pricing.exe
+
+REM Pause to keep the window open if the server crashes
+echo.
+echo ========================================================
+echo Server has stopped.
+echo If this was unexpected, please share the error message above.
+echo ========================================================
+pause
