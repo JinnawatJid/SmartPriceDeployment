@@ -24,9 +24,12 @@ from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 import os
 import sys
+import logging
 
 # --- LOGGING CONFIG (Ensure visible stdout in frozen app) ---
 sys.stdout.reconfigure(line_buffering=True)
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:    %(message)s')
+logger = logging.getLogger(__name__)
 # ------------------------------------------------------------
 
 app = FastAPI(title="Smart Pricing API", version="1.0.0")
@@ -34,12 +37,17 @@ app = FastAPI(title="Smart Pricing API", version="1.0.0")
 # --- BASE DIR SETUP (Dev vs Frozen) ---
 if getattr(sys, 'frozen', False):
     # PyInstaller onedir mode:
-    # Resources placed with `datas=[(src, '.')]` in spec file end up in the same directory as the executable.
-    # sys._MEIPASS points to the _internal temp directory, which is NOT where we put our data in this spec.
-    # Therefore, we use the directory of the executable.
-    BASE_DIR = os.path.dirname(sys.executable)
+    # In newer PyInstaller (v6+), bundled resources often live in `sys._MEIPASS` (_internal),
+    # even in onedir mode. We check there first.
+    if hasattr(sys, '_MEIPASS'):
+        BASE_DIR = sys._MEIPASS
+    else:
+        # Fallback for older PyInstaller or if _MEIPASS is not used (resources at root)
+        BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+logger.info(f"Resolved BASE_DIR to: {BASE_DIR}")
 
 # โหลด template จาก backend ตรง ๆ (หรือจาก unpacked bundle)
 env = Environment(loader=FileSystemLoader(BASE_DIR))
@@ -116,8 +124,10 @@ def print_quotation(payload: dict):
 # In the PyInstaller spec, we will put 'dist' inside the bundle root or a subdir.
 # Let's assume we bundle the 'dist' folder into the root of the temp directory.
 dist_dir = os.path.join(BASE_DIR, "dist")
+logger.info(f"Checking for frontend at: {dist_dir}")
 
 if os.path.exists(dist_dir):
+    logger.info(f"Found frontend at {dist_dir}. Mounting static files.")
     app.mount("/assets", StaticFiles(directory=os.path.join(dist_dir, "assets")), name="assets")
 
     @app.get("/{full_path:path}")
@@ -133,6 +143,8 @@ if os.path.exists(dist_dir):
 
         # Otherwise serve index.html for SPA routing
         return FileResponse(os.path.join(dist_dir, "index.html"))
+else:
+    logger.warning("Frontend dist directory NOT found. SPA routes will return 404.")
 
 # Note: In production (frozen), the app is usually run via Uvicorn programmatically or direct entry.
 # We will add a __main__ block for standalone execution if needed by PyInstaller.
