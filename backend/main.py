@@ -25,18 +25,19 @@ from weasyprint import HTML
 import os
 import sys
 
+# --- LOGGING CONFIG (Ensure visible stdout in frozen app) ---
+sys.stdout.reconfigure(line_buffering=True)
+# ------------------------------------------------------------
+
 app = FastAPI(title="Smart Pricing API", version="1.0.0")
 
 # --- BASE DIR SETUP (Dev vs Frozen) ---
 if getattr(sys, 'frozen', False):
-    # PyInstaller creates a temp folder and stores path in _MEIPASS
-    # In onefile mode, this is where resources are.
-    # In onedir mode (PyInstaller 6+), resources are often in _internal, also pointed to by _MEIPASS.
-    # If _MEIPASS is not set (older PyInstaller onedir?), fallback to executable dir.
-    if hasattr(sys, '_MEIPASS'):
-        BASE_DIR = sys._MEIPASS
-    else:
-        BASE_DIR = os.path.dirname(sys.executable)
+    # PyInstaller onedir mode:
+    # Resources placed with `datas=[(src, '.')]` in spec file end up in the same directory as the executable.
+    # sys._MEIPASS points to the _internal temp directory, which is NOT where we put our data in this spec.
+    # Therefore, we use the directory of the executable.
+    BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
