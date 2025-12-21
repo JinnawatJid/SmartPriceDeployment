@@ -100,13 +100,12 @@ export default function OrderDetailPage() {
       netTotal: order.totals.grandTotal,
     };
 
-      const res = await fetch("http://localhost:4000/print/quotation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      // Use api instance for consistent baseURL handling
+      const res = await api.post("/print/quotation", payload, {
+        responseType: "blob",
       });
 
-      const blob = await res.blob();
+      const blob = new Blob([res.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       window.open(url);
     } catch (err) {

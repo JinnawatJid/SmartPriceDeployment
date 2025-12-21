@@ -619,14 +619,13 @@ function Step6_Summary({ state, dispatch }) {
       netTotal: calculation.totals.total,
     };
 
-    const res = await fetch("http://localhost:4000/print/quotation"
-      , {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    // Use api instance for consistent baseURL handling
+    const res = await api.post("/print/quotation", payload, {
+      responseType: "blob", // Important for PDF
     });
 
-    const blob = await res.blob();
+    // Axios returns the data in res.data
+    const blob = new Blob([res.data], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
     window.open(url); // เปิด PDF
   };
