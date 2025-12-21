@@ -63,8 +63,12 @@ def _z_to_score_fixed(z, mean, sd):
 STATS = {}
 try:
     if getattr(sys, 'frozen', False):
-        # In a onedir bundle, resources are relative to the executable
-        JSON_PATH = Path(sys.executable).parent / "mean_sd.json"
+        # In a onedir bundle (PyInstaller 6+), resources are in sys._MEIPASS (_internal)
+        # Fallback to sys.executable parent if _MEIPASS is missing
+        if hasattr(sys, '_MEIPASS'):
+            JSON_PATH = Path(sys._MEIPASS) / "mean_sd.json"
+        else:
+            JSON_PATH = Path(sys.executable).parent / "mean_sd.json"
     else:
         # Dev mode
         JSON_PATH = Path(__file__).parent / "mean_sd.json"
