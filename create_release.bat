@@ -9,7 +9,7 @@ pip install -r backend/requirements.txt
 if %errorlevel% neq 0 goto :error
 
 echo ==========================================
-echo 2. Installing Frontend Dependencies & Building...
+echo 2. Installing Frontend Dependencies ^& Building...
 echo ==========================================
 cd frontend
 call npm install

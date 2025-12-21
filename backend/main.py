@@ -29,8 +29,9 @@ app = FastAPI(title="Smart Pricing API", version="1.0.0")
 
 # --- BASE DIR SETUP (Dev vs Frozen) ---
 if getattr(sys, 'frozen', False):
-    # If running as a compiled exe, _MEIPASS is the temp folder where files are unpacked
-    BASE_DIR = sys._MEIPASS
+    # In a onedir bundle, sys.executable points to the .exe file.
+    # The bundled resources are in the same directory as the executable.
+    BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

@@ -63,8 +63,8 @@ def _z_to_score_fixed(z, mean, sd):
 STATS = {}
 try:
     if getattr(sys, 'frozen', False):
-        # If running as bundled app, use _MEIPASS
-        JSON_PATH = Path(sys._MEIPASS) / "mean_sd.json"
+        # In a onedir bundle, resources are relative to the executable
+        JSON_PATH = Path(sys.executable).parent / "mean_sd.json"
     else:
         # Dev mode
         JSON_PATH = Path(__file__).parent / "mean_sd.json"
