@@ -21,8 +21,7 @@ hiddenimports = [
     'engineio.async_drivers.asgi',
     'pandas',
     'openpyxl',
-    'weasyprint',
-    'fontkit'
+    'weasyprint'
 ]
 
 # Add data files (source, destination in bundle)
