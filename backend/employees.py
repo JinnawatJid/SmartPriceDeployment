@@ -28,9 +28,20 @@ router = APIRouter(prefix="/employees", tags=["employees"])
 
 
 def load_employees_sqlite() -> pd.DataFrame:
-    conn = get_conn()
-    df = pd.read_sql_query('SELECT * FROM "Employees"', conn)
-    conn.close()
+    try:
+        conn = get_conn()
+        print(f"[DEBUG] load_employees_sqlite: Loading from DB...")
+        df = pd.read_sql_query('SELECT * FROM "Employees"', conn)
+        conn.close()
+        print(f"[DEBUG] load_employees_sqlite: Loaded {len(df)} rows.")
+
+        # DEBUG: Check if 'No.' exists or if it's named differently
+        if "No." not in df.columns:
+            print(f"[DEBUG] CRITICAL ERROR: Column 'No.' not found in Employees table. Columns: {df.columns.tolist()}")
+
+    except Exception as e:
+        print(f"[DEBUG] CRITICAL ERROR loading employees: {e}")
+        return pd.DataFrame()
 
     # --- CLEAN BLOCK (แก้เฉพาะส่วนนี้) ---
     # ป้องกันไม่ให้ NaN / None กลายเป็น "None" หรือ "nan"
@@ -45,26 +56,50 @@ def load_employees_sqlite() -> pd.DataFrame:
     # ----------------------------------------
 
     # empCode = No.
-    df["empCode"] = df["No."]
+    if "No." in df.columns:
+        df["empCode"] = df["No."]
+    else:
+         # Fallback logic or empty
+         df["empCode"] = ""
 
     # --- EMPNAME BLOCK (แก้เฉพาะส่วนนี้) ---
     # ใช้เฉพาะ First Name 100% และล้าง None/nan ให้หมด
-    df["empName"] = (
-        df["First Name"]
-        .replace(["nan", "None"], "")   # ลบ "nan"/"None" ถ้าหลงเหลือ
-        .fillna("")
-        .astype(str)
-        .str.strip()
-    )
+    if "First Name" in df.columns:
+        df["empName"] = (
+            df["First Name"]
+            .replace(["nan", "None"], "")   # ลบ "nan"/"None" ถ้าหลงเหลือ
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+    else:
+        df["empName"] = ""
     # -----------------------------------------
 
-    df["branchCode"] = df["Branch Code"]
+    if "Branch Code" in df.columns:
+        df["branchCode"] = df["Branch Code"]
+    else:
+        df["branchCode"] = ""
 
     # keep only 3 fields (same as old API)
-    df = df[["empCode", "empName", "branchCode"]]
+    # Ensure they exist before selecting
+    required_cols = ["empCode", "empName", "branchCode"]
+    # df = df[required_cols] # This might fail if we messed up above, but we assigned them.
 
+    # DEBUG: Print a few sample codes to help debug "21113"
+    # print(f"[DEBUG] Sample empCodes: {df['empCode'].head(10).tolist()}")
+
+    # Filter empty codes
     df = df[df["empCode"] != ""].reset_index(drop=True)
-    return df
+
+    # Check specifically for the user's failing code
+    # debug_check = df[df["empCode"].str.contains("21113")]
+    # if not debug_check.empty:
+    #     print(f"[DEBUG] Found 21113 in cleaned data: {debug_check.iloc[0].to_dict()}")
+    # else:
+    #     print(f"[DEBUG] 21113 NOT found in cleaned data.")
+
+    return df[required_cols]
 
 
 class EmployeeOut(BaseModel):
