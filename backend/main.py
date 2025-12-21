@@ -29,9 +29,14 @@ app = FastAPI(title="Smart Pricing API", version="1.0.0")
 
 # --- BASE DIR SETUP (Dev vs Frozen) ---
 if getattr(sys, 'frozen', False):
-    # In a onedir bundle, sys.executable points to the .exe file.
-    # The bundled resources are in the same directory as the executable.
-    BASE_DIR = os.path.dirname(sys.executable)
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+    # In onefile mode, this is where resources are.
+    # In onedir mode (PyInstaller 6+), resources are often in _internal, also pointed to by _MEIPASS.
+    # If _MEIPASS is not set (older PyInstaller onedir?), fallback to executable dir.
+    if hasattr(sys, '_MEIPASS'):
+        BASE_DIR = sys._MEIPASS
+    else:
+        BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
