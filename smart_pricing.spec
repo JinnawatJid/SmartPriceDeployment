@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
 
@@ -21,8 +21,14 @@ hiddenimports = [
     'engineio.async_drivers.asgi',
     'pandas',
     'openpyxl',
-    'weasyprint'
+    'weasyprint',
+    'scipy.special.cython_special',
+    'scipy.spatial.transform._rotation_groups'
 ]
+
+# Helper to collect scipy submodules just in case
+# Using collect_submodules for scipy can be heavy but safer
+# hiddenimports += collect_submodules('scipy')
 
 # Add data files (source, destination in bundle)
 # Note: we are running pyinstaller from the repo root or backend?
