@@ -1,6 +1,7 @@
 services:
   backend:
     build: ./backend
+    image: smart_pricing_backend
     container_name: smart_pricing_backend
     ports:
       - "8000:8000"
@@ -17,6 +18,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: smart_pricing_frontend
     container_name: smart_pricing_frontend
     ports:
       - "3200:80" # User mentioned 3200 in memory, but said "default recommendation" in chat. 3200 is safer.
