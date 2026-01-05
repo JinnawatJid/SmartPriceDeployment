@@ -23,7 +23,17 @@ echo Open your browser at: http://localhost:8000
 echo (Press Ctrl+C to stop)
 echo.
 
-cd dist\smart_pricing
-smart_pricing.exe
+if exist smart_pricing.exe (
+    smart_pricing.exe
+) else (
+    if exist dist\smart_pricing\smart_pricing.exe (
+        cd dist\smart_pricing
+        smart_pricing.exe
+    ) else (
+        echo [ERROR] Could not find smart_pricing.exe.
+        echo Please verify you are running this script from the correct folder.
+        pause
+    )
+)
 
 pause
