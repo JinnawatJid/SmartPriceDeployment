@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+
+<style>
+@page {
+  size: A4;
+  margin: 15mm;
+}
+
+@font-face {
+  font-family: "Sarabun";
+  src: url("Sarabun-Regular.ttf");
+}
+
+body {
+  font-family: "Sarabun", sans-serif;
+  font-size: 12px;
+}
+
+/* ===== Layout หลักทั้งหน้า ===== */
+.page {
+  position: relative;
+  min-height: calc(297mm - 30mm);
+  padding-bottom: 140px;
+}
+
+.summary-section {
+  position: fixed;
+  bottom: 15mm;   /* 👈 เท่ากับ margin ล่าง */
+  left: 15mm;
+  right: 15mm;
+}
+.center { text-align: center; }
+.right { text-align: right; }
+
+.header {
+  text-align: center;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.sub-header {
+  text-align: center;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+.section {
+  margin-top: 8px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.col {
+  width: 48%;
+}
+
+/* ===== ส่วนล่างของเอกสาร ===== */
+.summary-section {
+  margin-top: auto;
+}
+
+.signature {
+  margin-top: 80px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.signature div {
+  width: 30%;
+  text-align: center;
+}
+
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  table-layout: fixed; /* 🔥 key */
+  margin-bottom: 120px; /* เผื่อที่ให้ summary */
+}
+
+.items-table th,
+.items-table td {
+  padding: 4px 6px;
+  vertical-align: top;
+  font-size: 12px;
+}
+
+.items-table th {
+  font-weight: bold;
+  border-bottom: 1px solid #000;
+}
+
+.items-table .sku {
+  width: 20%;
+  word-break: break-all;   /* 🔥 SKU ไม่ชนอีก */
+}
+
+.items-table .name {
+  width: 22%;
+  word-break: break-word;
+}
+
+.items-table .qty {
+  width: 7%;         /* จำนวน */
+  margin-left: 4%;
+}
+
+.items-table .unit {
+  width: 6%;         /* หน่วย */
+}
+
+.items-table .price {
+  width: 14%;        /* ราคาต่อหน่วย */
+}
+
+.items-table .amount {
+  width: 14%;        /* จำนวนเงิน */
+}
+
+.items-table .right {
+  text-align: right;
+}
+.summary-row {
+  justify-content: flex-start; /* ให้ gap เป็นตัวคุม */
+  column-gap: 50mm;               
+}
+
+.summary-row .col {
+  width: 44%;                     
+}
+
+.baht {
+    margin-top: 40%;
+}
+
+
+</style>
+</head>
+
+<body>
+
+<div class="page">
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+  บริษัท ห้างกระจกตังน้ำ จำกัด (สำนักงานใหญ่)
+</div>
+<div class="sub-header">
+  226 ถนนพระรามที่2 แขวงแสมดำ เขตบางขุนเทียน จังหวัดกรุงเทพฯ 10150<br>
+  Tel : 0-2416-5840-1 
+</div>
+
+<div class="center" style="margin-top:10px;font-weight:bold;">
+  Sales Quote / ใบเสนอราคา
+</div>
+
+<div class="section row">
+  <div class="col">
+    รหัสลูกค้า : {{ q.customer.code }}<br>
+    ชื่อลูกค้า : {{ q.customer.name }}<br>
+    เบอร์โทร : {{ q.customer.phone }}
+  </div>
+  <div class="col">
+    เลขที่เอกสาร : {{ q.quoteNo }}<br>
+    วันที่ : {{ q.date }}<br>
+    พนักงานขาย : {{ q.sales }}
+  </div>
+</div>
+
+
+<!-- ===== CUSTOMER INFO ===== -->
+<table class="items-table">
+  <thead>
+    <tr>
+      <th class="sku">รหัสสินค้า</th>
+      <th class="name">รายการสินค้า</th>
+      <th class="qty">จำนวน</th>
+      <th class="unit">หน่วย</th>
+      <th class="price">ราคาต่อหน่วย</th>
+      <th class="amount">จำนวนเงิน</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for it in q["items"] %}
+    <tr>
+      <td class="sku">{{ it.code }}</td>
+      <td class="name">{{ it.name }}</td>
+      <td class="qty">{{ it.qty }}</td>
+      <td class="unit">{{ it.unit or "-" }}</td>
+      <td class="price">{{ "{:,.2f}".format(it.price) }}</td>
+      <td class="amount">{{ "{:,.2f}".format(it.amount) }}</td>
+
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+
+<!-- ===== SUMMARY + SIGNATURE (FIX ล่างกระดาษ) ===== -->
+<div class="summary-section">
+
+  <div class="section row summary-row">
+    <div class="col">
+        <div >
+            หมายเหตุ / Comment :<br>
+            {{ q.comment }}<br><br>
+        </div>
+        <div class="baht">
+            ( {{ q.amountText }} )
+        </div>
+    </div>
+    
+    <div class="col">
+      ค่าขนส่ง : {{ "{:,.2f}".format(q.shipping) }}<br>
+      รวมจำนวนเงิน : {{ "{:,.2f}".format(q.total) }}<br>
+      ส่วนลดการค้า : {{ q.discount }}<br>
+      จำนวนเงินหลังหักส่วนลด : {{"{:,.2f}".format(q.afterDiscount) }}<br>
+      มูลค่าสินค้าก่อนภาษี : {{ "{:,.2f}".format(q.exVat) }}<br>
+      ภาษีมูลค่าเพิ่ม : {{ "{:,.2f}".format(q.vat) }}<br>
+      <strong>
+        จำนวนเงินรวมสุทธิ :
+        {{ "{:,.2f}".format(q.netTotal) }}
+        </strong>
+    </div>
+  </div>
+
+  <div class="signature">
+    <div>
+      ผู้อนุมัติซื้อ<br><br>
+      ___________________<br>
+      วันที่ ____/____/____
+    </div>
+    <div>
+      พนักงานขาย<br><br>
+      {{ q.sales }}<br>
+      วันที่ {{ q.date }}
+    </div>
+    <div>
+      ผู้จัดการฝ่ายขาย<br><br>
+      ___________________<br>
+      วันที่ ____/____/____
+    </div>
+  </div>
+
+</div>
+
+</div>
+
+</body>
+</html>
