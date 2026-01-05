@@ -24,8 +24,13 @@ cd ..
 echo 3. Running PyInstaller...
 pyinstaller --clean smart_pricing.spec
 
+echo 4. Finalizing Release...
+copy start_server.bat dist\smart_pricing\
+copy DEPLOYMENT.md dist\smart_pricing\
+
 echo ==================================================
 echo      BUILD COMPLETE
 echo ==================================================
 echo The executable is located in 'dist/smart_pricing/'
+echo You can zip this folder and move it to your offline server.
 pause
