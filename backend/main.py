@@ -1,7 +1,8 @@
 # main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from customer import router as customer_router   
 from items import router as items_router
@@ -18,27 +19,30 @@ from gypsum_router import router as gypsum_router
 from quotation import router as quotation_router
 from utils.baht_text import baht_text
 
-
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 import os
-app = FastAPI(title="Smart Pricing API", version="1.0.0")
+import sys
 
-# path ของ backend
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Detect if running in frozen mode (PyInstaller)
+if getattr(sys, 'frozen', False):
+    # If _MEIPASS is defined, we are in onefile mode (or onedir with internal bundle logic)
+    # But for standard onedir (which we use), resources are relative to the executable
+    if hasattr(sys, "_MEIPASS"):
+        BASE_DIR = sys._MEIPASS
+    else:
+        BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = FastAPI(title="Smart Pricing API", version="1.0.0")
 
 # โหลด template จาก backend ตรง ๆ
 env = Environment(loader=FileSystemLoader(BASE_DIR))
 
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-       "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:4000",
-        "http://127.0.0.1:4000",
-    ],
+    allow_origins=["*"], # Allow all for flexibility in offline/docker envs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,8 +53,8 @@ app.include_router(customer_router, prefix="/api")
 app.include_router(items_router,prefix="/api")
 app.include_router(employees_router,prefix="/api")
 app.include_router(login_router,prefix="/api")
-app.include_router(pricing_router)
-app.include_router(shipping_router)
+app.include_router(pricing_router) # Router defines /api/pricing prefix internally
+app.include_router(shipping_router) # Router defines /api/shipping prefix internally
 app.include_router(glass_router,prefix="/api")
 app.include_router(aluminium_router,prefix="/api")
 app.include_router(cline_router,prefix="/api")
@@ -58,18 +62,12 @@ app.include_router(accessories_router,prefix="/api")
 app.include_router(sealant_router,prefix="/api")
 app.include_router(gypsum_router,prefix="/api")
 
-
-@app.get("/")
-def root():
-    return {"message": "Smart Pricing API connected"}
-
+# --- Print Endpoint (Root Level) ---
 @app.post("/print/quotation")
 def print_quotation(payload: dict):
-
     print("\n=== PRINT PAYLOAD ITEMS ===")
     for it in payload.get("items", []):
         print(it.get("code"), it.get("unit"))
-
 
     net_total = payload.get("netTotal", 0)
     payload["amountText"] = baht_text(net_total)
@@ -91,6 +89,35 @@ def print_quotation(payload: dict):
         }
     )
 
+# --- Static Files Serving (Fallback for Native App) ---
+# When running as a native app (frozen) or if 'dist' exists nearby, serve frontend.
+# In Docker, Nginx handles this, but this won't hurt as Nginx proxies /api and serves / itself.
+
+dist_path = os.path.join(BASE_DIR, "dist")
+if not os.path.exists(dist_path):
+    # Try looking in the parent directory (development mode)
+    dist_path = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
+
+if os.path.exists(dist_path):
+    print(f"Serving static files from: {dist_path}")
+    app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
+
+    @app.get("/{catchall:path}")
+    async def serve_react_app(catchall: str):
+        # Allow API calls to pass through
+        if catchall.startswith("api/") or catchall.startswith("print/"):
+             return Response(status_code=404)
+
+        # Check if file exists in dist
+        file_path = os.path.join(dist_path, catchall)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+
+        # Fallback to index.html for SPA routing
+        return FileResponse(os.path.join(dist_path, "index.html"))
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
 
 #uvicorn main:app --reload --port 4000
-
