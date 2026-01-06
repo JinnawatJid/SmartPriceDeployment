@@ -447,15 +447,28 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
         print(r["sku"], r.get("unit"))
     print("=== END PRICING RESPONSE ITEMS ===\n")
 
+    # FIX: Sanitize NaNs for JSON compliance
+    def sanitize(val):
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+            return 0.0 # or None
+        return val
+
+    sanitized_results = [
+        {k: sanitize(v) for k, v in item.items()}
+        for item in results
+    ]
+
+    sanitized_totals = {
+        "subtotal": sanitize(subtotal),
+        "vat": sanitize(vat),
+        "product_total": sanitize(product_total),
+        "shippingCustomerPay": sanitize(shipping_customer_pay),
+        "total": sanitize(total_final),
+        "profit": sanitize(profit),
+    }
+
     return {
-        "items": results,
-        "totals": {
-            "subtotal": subtotal,
-            "vat": vat,
-            "product_total": product_total,
-            "shippingCustomerPay": shipping_customer_pay,
-            "total": total_final,
-            "profit": profit,
-        },
+        "items": sanitized_results,
+        "totals": sanitized_totals,
         "customer_tier": results[0]["_Tier_Z"] if results else "N/A",
     }

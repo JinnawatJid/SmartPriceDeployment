@@ -140,7 +140,11 @@ def Price(df: pd.DataFrame) -> pd.DataFrame:
     
     def _apply_payment_term_markup(row):
         term = str(row.get("payment_terms") or "").strip().lower()
-        base_price = float(row.get("NewPrice", 0))
+        # FIX: Handle NoneType for NewPrice if row.get returns None explicitly
+        val = row.get("NewPrice")
+        if val is None:
+            val = 0
+        base_price = float(val)
 
         # mapping markup %
         term_markup = {
