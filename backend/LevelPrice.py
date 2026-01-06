@@ -64,57 +64,43 @@ STATS = {}
 
 def get_resource_path(relative_path):
     """
-    Get the absolute path to a resource, works for dev and for PyInstaller.
-    PyInstaller stores data in sys._MEIPASS for onefile,
-    or we can find it relative to sys.executable/internal for onedir if mapped to root.
+    Robustly locate a resource file in Dev, Docker, and PyInstaller environments.
+    Checks:
+    1. PyInstaller Internal (sys._MEIPASS) - for onefile or onedir internal
+    2. PyInstaller External (sys.executable dir) - for onedir root
+    3. Development / Docker (relative to file)
     """
+    candidates = []
+
+    # 1. PyInstaller Internal (sys._MEIPASS)
     if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
+        candidates.append(os.path.join(sys._MEIPASS, relative_path))
 
-    # For normal development
-    # Or for onedir mode where datas are mapped to root (which is usually _internal in v6+)
-    # If LevelPrice.py is inside _internal/backend/, then we need to go up?
-    # BUT, we are mapping mean_sd.json to '.' (root of bundle).
+    # 2. PyInstaller External (Sibling to Executable)
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable)
+        candidates.append(os.path.join(exe_dir, relative_path))
 
-    # Try looking relative to current file first (Dev mode)
-    dev_path = Path(__file__).parent / relative_path
-    if dev_path.exists():
-        return str(dev_path)
+    # 3. Development / Docker (Relative to this file)
+    candidates.append(str(Path(__file__).parent / relative_path))
 
-    # Try looking in the same directory as executable (older PyInstaller)
-    # or root of bundle if not found in dev path (and not frozen via MEIPASS)
-    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-    exe_path = os.path.join(exe_dir, relative_path)
-    if os.path.exists(exe_path):
-        return exe_path
+    # Check all candidates and return the first one that exists
+    for path in candidates:
+        if os.path.exists(path):
+            return path
 
-    # Last resort: Try assuming we are in _internal and file is in _internal root
-    # (This matches the error log: ...\_internal\mean_sd.json)
-    # Since __file__ pointed to _internal, and we added file to '.', it should be in _internal root.
-    # So Path(__file__).parent / relative_path SHOULD work if LevelPrice is in _internal root.
-    # If LevelPrice is in _internal/backend/, then we need parent.parent.
-
-    return str(dev_path)
+    # Default to the Dev path if nothing found (for error reporting)
+    return str(Path(__file__).parent / relative_path)
 
 try:
-    # Use simple name because we mapped it to '.' in spec
-    # But in dev, it is in same folder.
     JSON_PATH = get_resource_path("mean_sd.json")
-
-    # Fallback/Debug check if the path resolver failed but we are in frozen mode
-    if getattr(sys, 'frozen', False) and not os.path.exists(JSON_PATH):
-        # In frozen onedir, if LevelPrice is in `_internal` and file is in `_internal`,
-        # then os.path.join(os.path.dirname(__file__), "mean_sd.json") works.
-        # But if LevelPrice is compiled into PYZ, __file__ is useless.
-        # However, the error log showed `_internal\mean_sd.json` not found.
-        # This implies it WAS looking in `_internal`.
-        pass
 
     with open(JSON_PATH, "r") as f:
         # (ไฟล์ json เดิมเป็น list ที่มี 1 dict)
         STATS = json.load(f)[0] 
 except FileNotFoundError:
     print(f"❌ ไม่พบไฟล์ {JSON_PATH} - LevelPrice จะคำนวณ Z-Score ไม่ได้")
+    # Don't raise, just let STATS be empty (calculations will yield 0)
 except Exception as e:
     print(f"❌ เกิดข้อผิดพลาดในการอ่าน mean_sd.json: {e}")
 

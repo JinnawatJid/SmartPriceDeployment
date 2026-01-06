@@ -24,6 +24,10 @@ from weasyprint import HTML
 import os
 import sys
 
+# Ensure logs are flushed immediately to stdout for Windows Console visibility
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 # Detect if running in frozen mode (PyInstaller)
 if getattr(sys, 'frozen', False):
     # If _MEIPASS is defined, we are in onefile mode (or onedir with internal bundle logic)
@@ -123,12 +127,8 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
     # Enable logging for debugging
-    # Redirect stdout/stderr to a log file if frozen to help debug startup issues
-    if getattr(sys, 'frozen', False):
-        log_path = os.path.join(os.path.dirname(sys.executable), 'debug_server.log')
-        sys.stdout = open(log_path, 'a')
-        sys.stderr = sys.stdout
-        print("--- Starting Server ---")
+    # We use line buffering instead of redirecting to file, so the .bat pause can capture it.
+    print("--- Starting Server ---")
 
     # Pass the app object directly instead of the import string "main:app"
     # This prevents "Could not import module 'main'" errors in frozen (PyInstaller) environments
