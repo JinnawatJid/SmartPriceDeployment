@@ -22,7 +22,7 @@ pip install -r requirements.txt
 cd ..
 
 echo 3. Running PyInstaller...
-pyinstaller --clean smart_pricing.spec
+pyinstaller --noconfirm --clean smart_pricing.spec
 
 echo 4. Finalizing Release...
 copy start_server.bat dist\smart_pricing\
