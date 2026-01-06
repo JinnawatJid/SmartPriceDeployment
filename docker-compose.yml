@@ -5,15 +5,10 @@ services:
     container_name: smart_pricing_backend
     ports:
       - "8000:8000"
-    volumes:
-      # Mount data directory if you want persistence, though user said no external DB.
-      # But since it's SQLite, if we don't mount it, changes are lost on restart.
-      # User said: "Database: no, in the complete deployment most of data will store in the external database so currently we just deploy for testing"
-      # But for testing, persistence is nice. I'll comment it out or leave it as optional.
-      # Actually, better to NOT mount it if they want a clean slate or "testing" mode.
-      # However, if they update code, they lose data.
-      # I will just keep it inside container as requested.
-      - ./backend/data:/app/data
+    # volumes:
+      # Removed volume mount to ensure pre-seeded database (Quetung.db) inside the container is used.
+      # Mounting an empty host directory (common in fresh deployments) would hide the internal data.
+      # - ./backend/data:/app/data
     restart: always
 
   frontend:

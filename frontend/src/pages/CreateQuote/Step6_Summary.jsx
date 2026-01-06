@@ -1091,7 +1091,7 @@ const handleSaveQuotation = async (status) => {
     };
 
     // Use relative path for print endpoint to work in both Docker (Nginx proxy) and Native (Backend serve)
-    const res = await fetch("/print/quotation"
+    const res = await fetch("/api/print/quotation"
       , {
       method: "POST",
       headers: { "Content-Type": "application/json" },

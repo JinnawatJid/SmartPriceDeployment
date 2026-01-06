@@ -63,7 +63,7 @@ app.include_router(sealant_router,prefix="/api")
 app.include_router(gypsum_router,prefix="/api")
 
 # --- Print Endpoint (Root Level) ---
-@app.post("/print/quotation")
+@app.post("/api/print/quotation")
 def print_quotation(payload: dict):
     print("\n=== PRINT PAYLOAD ITEMS ===")
     for it in payload.get("items", []):
