@@ -120,4 +120,14 @@ if os.path.exists(dist_path):
 def health_check():
     return {"status": "ok"}
 
-#uvicorn main:app --reload --port 4000
+if __name__ == "__main__":
+    import uvicorn
+    # Enable logging for debugging
+    # Redirect stdout/stderr to a log file if frozen to help debug startup issues
+    if getattr(sys, 'frozen', False):
+        log_path = os.path.join(os.path.dirname(sys.executable), 'debug_server.log')
+        sys.stdout = open(log_path, 'a')
+        sys.stderr = sys.stdout
+        print("--- Starting Server ---")
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False, log_level="info")
