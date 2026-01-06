@@ -35,6 +35,7 @@ datas = [
     (frontend_dist_path, 'dist'),    # Frontend static files
     (backend_path + '/quotation.html', '.'), # Templates
     (backend_path + '/Sarabun-Regular.ttf', '.'), # Fonts
+    (backend_path + '/mean_sd.json', '.'), # Statistical data for LevelPrice
 ]
 
 # WeasyPrint / Pango / GDK DLLs need to be reachable or bundled if not system installed.

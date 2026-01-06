@@ -107,7 +107,9 @@ export default function OrderDetailPage() {
     };
 
       // Use relative path for print endpoint to work in both Docker (Nginx proxy) and Native (Backend serve)
-      const res = await fetch("/print/quotation", {
+      // Use api.post for consistent base URL handling, OR ensure path includes /api
+      // Here we keep fetch but update path to /api/print/quotation
+      const res = await fetch("/api/print/quotation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
