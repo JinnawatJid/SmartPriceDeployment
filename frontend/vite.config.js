@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:4000', // FastAPI
+        target: 'http://127.0.0.1:8000', // FastAPI running on port 8000
         changeOrigin: true,
       },
     },
