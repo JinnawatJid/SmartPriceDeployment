@@ -189,7 +189,16 @@ def Price(df: pd.DataFrame) -> pd.DataFrame:
 
     out["NewPrice"] = out.apply(_apply_payment_term_markup, axis=1)
     # ปัดราคาต่อหน่วยลง 2 ทศนิยม (ราคาขายจริง)
-    out["NewPrice"] = out["NewPrice"].apply(lambda x: math.ceil(float(x or 0) * 100) / 100)
+    def _safe_ceil(x):
+        try:
+            val = float(x or 0)
+            if math.isnan(val) or math.isinf(val):
+                return 0.0
+            return math.ceil(val * 100) / 100
+        except Exception:
+            return 0.0
+
+    out["NewPrice"] = out["NewPrice"].apply(_safe_ceil)
     # ✅ =============================================
 
     pd.set_option("display.max_columns", None)
