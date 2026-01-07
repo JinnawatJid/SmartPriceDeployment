@@ -37,6 +37,7 @@ Copy the following files to your USB drive or transfer them to the offline serve
    docker-compose up -d
    ```
 5. Access the application at: **http://localhost:3200**
+   *(Note: The Frontend listens on port 3200, which talks to the Backend on port 8000 internally.)*
 
 ---
 
@@ -66,6 +67,7 @@ Copy the entire `dist\smart_pricing\` folder to the offline server.
    start_server.bat
    ```
 4. Access the application at: **http://localhost:8000**
+   *(Note: In Native mode, the backend directly serves the frontend on port 8000.)*
 
 ---
 

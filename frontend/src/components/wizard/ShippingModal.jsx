@@ -1,5 +1,6 @@
 // src/components/wizard/ShippingModal.jsx
 import React, { useEffect, useRef, useState } from "react";
+import api from "../../services/api"; // Import centralized api service
 
 const TruckIcon = () => (
   <img
@@ -51,27 +52,22 @@ export default function ShippingModal({
         profit: Number(profit || 0),
       };
 
-      const res = await fetch("http://127.0.0.1:4000/api/shipping/calculate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(`HTTP ${res.status}: ${msg}`);
-        }
-    const data = await res.json();
-    onConfirm?.({
-      ...data,
-      vehicleType,
-      distanceKm: distanceKm,
-      unloadHours,
-      staffCount,
-    });
- // ส่งผลลัพธ์ที่ได้กลับไปให้หน้า Step6
+      // Use centralized api service (automatically handles baseURL)
+      const res = await api.post("/api/shipping/calculate", payload);
+
+      onConfirm?.({
+        ...res.data, // Access data property from axios response
+        vehicleType,
+        distanceKm: distanceKm,
+        unloadHours,
+        staffCount,
+      });
+      // ส่งผลลัพธ์ที่ได้กลับไปให้หน้า Step6
     } catch (err) {
       console.error("Error calculating shipping:", err);
-      alert("เกิดข้อผิดพลาดในการคำนวณค่าขนส่ง");
+      // More robust error message handling
+      const msg = err.response?.data?.detail || err.message || "เกิดข้อผิดพลาดในการคำนวณค่าขนส่ง";
+      alert(msg);
     }
   };
 
