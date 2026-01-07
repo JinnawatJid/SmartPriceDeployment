@@ -133,3 +133,6 @@ if __name__ == "__main__":
     # Pass the app object directly instead of the import string "main:app"
     # This prevents "Could not import module 'main'" errors in frozen (PyInstaller) environments
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False, log_level="info")
+
+
+#uvicorn main:app --reload --port 8000

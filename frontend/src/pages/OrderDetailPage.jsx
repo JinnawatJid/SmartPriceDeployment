@@ -182,7 +182,21 @@ export default function OrderDetailPage() {
                 <td className="p-3 text-center">
                   {item.qty} 
                 </td>
-                <td className="p-3 text-right">{fmt(item.price)}</td>
+                <td className="p-3 text-right">
+                  {(() => {
+                    const isGlass =
+                      (item.category || String(item.sku || "").slice(0, 1)).toUpperCase() === "G";
+
+                    const sqft = Number(item.sqft_sheet ?? 0);
+                    const displayPrice =
+                      isGlass && sqft > 0
+                        ? item.price * sqft   // บาท / แผ่น
+                        : item.price;         // หน่วยปกติ
+
+                    return fmt(displayPrice);
+                  })()}
+                </td>
+
                 <td className="p-3 text-right">{fmt(item.lineTotal)}</td>
               </tr>
             ))}
