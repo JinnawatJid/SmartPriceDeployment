@@ -459,73 +459,76 @@ case "UPDATE_CART_QTY": {
 // -------------------------
 case "APPLY_PRICING_RESULT": {
   const { key, priced } = action.payload;
-  // key = `${sku}__${sqft}`
 
   return {
     ...state,
     shippingDirty: state.deliveryType === "DELIVERY",
     cart: state.cart.map((it) => {
-      const itKey = `${it.sku}__${Number(it.sqft_sheet ?? it.sqft ?? 0)}`;
+      const sqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
+      const itKey = `${it.sku}__${sqft}`;
       if (itKey !== key) return it;
 
-      // -------------------------
-      // 1) ราคา (ยึด pricing)
-      // -------------------------
-      const unitPrice =
-        Number(
-          priced.UnitPrice ??        // ⭐ source of truth
-          priced.price ??            // fallback
-          priced.price_per_sheet ??  // fallback สุดท้าย (ถ้าจำเป็น)
-          it.price ??
-          0
-        );
+      const rawUnitPrice = Number(priced.UnitPrice ?? 0); // บาท / ตร.ฟ.
+      const qty = Number(it.qty ?? 0);
 
-
-      const lineTotal =
-        Number(
-          priced._LineTotal ??
-          priced.lineTotal ??
-          unitPrice * Number(it.qty ?? 0)
-        );
+      const cat =
+        (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
+      const isGlass = cat === "G";
 
       // -------------------------
-      // 2) metadata (ยึด pricing)
+      // ราคา (แยก truth / display)
       // -------------------------
-      const unitFromPricing =
-        String(priced.unit ?? "").trim();
+      let price;            // ใช้กับ non-glass
+      let price_per_sheet;  // ใช้กับ glass
+      let lineTotal;
 
+      if (isGlass && sqft > 0) {
+        price_per_sheet = rawUnitPrice * sqft;     // บาท / แผ่น
+        price = undefined;
+        lineTotal = price_per_sheet * qty;
+      } else {
+        price = rawUnitPrice;                       // หน่วยปกติ
+        price_per_sheet = undefined;
+        lineTotal = price * qty;
+      }
+
+      // -------------------------
+      // metadata
+      // -------------------------
+      const unitFromPricing = String(priced.unit ?? "").trim();
       const productWeightFromPricing = priced.product_weight;
-
       const variantCodeFromPricing =
         priced.variantCode ?? priced.VariantCode ?? it.variantCode ?? null;
 
       return {
         ...it,
 
-        // 🔒 ราคา
-        price: unitPrice,
-        UnitPrice: unitPrice,
+        // 🔒 truth
+        UnitPrice: rawUnitPrice,
+
+        // ✅ display
+        price,
+        price_per_sheet,
+
         lineTotal,
 
-        // 🔒 metadata จาก pricing (overwrite เสมอ)
         unit:
           unitFromPricing !== ""
             ? unitFromPricing
             : (it.unit && it.unit !== "-" ? it.unit : null),
+
         product_weight:
-          productWeightFromPricing !== null && productWeightFromPricing !== undefined
+          productWeightFromPricing != null
             ? productWeightFromPricing
-            : (it.product_weight > 0 ? it.product_weight : 0),
+            : it.product_weight ?? 0,
+
         variantCode: variantCodeFromPricing,
-
-        // 🔒 pricing เสร็จแล้ว
         needsPricing: false,
-
-        
       };
     }),
   };
 }
+
 
 
     // -------------------------
