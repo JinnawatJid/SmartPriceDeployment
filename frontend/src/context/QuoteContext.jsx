@@ -102,7 +102,11 @@ case "ADD_ITEM": {
   const normalizedItem = {
     ...newItem,
 
-    sqft_sheet: Number(newItem.sqft_sheet ?? 0),
+    sqft_sheet:
+      newItem.sqft_sheet !== undefined && newItem.sqft_sheet !== null
+        ? Number(newItem.sqft_sheet)
+        : 0,
+
     unit: newItem.unit ?? null,
 
     // ✅ ตัวตน
@@ -126,34 +130,34 @@ case "ADD_ITEM": {
 
   // 2) หา item ซ้ำ “ต้อง match ด้วย sku + variantCode + sqft”
   // ⭐ normalize เพื่อใช้เทียบ identity เท่านั้น (ไม่แก้ state จริง)
-const normalizeVariant = (v) =>
-  v === "" || v === undefined ? null : v;
+  const normalizeVariant = (v) =>
+    v === "" || v === undefined ? null : v;
 
-const normalizeSqft = (v) =>
-  v === "" || v === undefined ? 0 : Number(v);
+  const normalizeSqft = (v) =>
+    v === "" || v === undefined ? 0 : Number(v);
 
-const newVariant = normalizeVariant(normalizedItem.variantCode);
-const newSqft = normalizeSqft(normalizedItem.sqft_sheet);
+  const newVariant = normalizeVariant(normalizedItem.variantCode);
+  const newSqft = normalizeSqft(normalizedItem.sqft_sheet);
 
-const exists = state.cart.find((it) => {
-  const itVariant = normalizeVariant(it.variantCode);
-  const itSqft = normalizeSqft(it.sqft_sheet);
+  const exists = state.cart.find((it) => {
+    const itVariant = normalizeVariant(it.variantCode);
+    const itSqft = normalizeSqft(it.sqft_sheet);
 
-  // 1) sku ต้องตรงเสมอ
-  if (it.sku !== normalizedItem.sku) return false;
+    // 1) sku ต้องตรงเสมอ
+    if (it.sku !== normalizedItem.sku) return false;
 
-  // 2) ถ้ามี variant อย่างน้อยหนึ่งฝั่ง → ต้องเท่ากัน
-  if (itVariant !== null || newVariant !== null) {
-    if (itVariant !== newVariant) return false;
-  }
+    // 2) ถ้ามี variant อย่างน้อยหนึ่งฝั่ง → ต้องเท่ากัน
+    if (itVariant !== null || newVariant !== null) {
+      if (itVariant !== newVariant) return false;
+    }
 
-  // 3) ถ้ามี sqft อย่างน้อยหนึ่งฝั่ง → ต้องเท่ากัน
-  if (itSqft !== 0 || newSqft !== 0) {
-    if (itSqft !== newSqft) return false;
-  }
+    // 3) ถ้ามี sqft อย่างน้อยหนึ่งฝั่ง → ต้องเท่ากัน
+    if (itSqft !== 0 || newSqft !== 0) {
+      if (itSqft !== newSqft) return false;
+    }
 
-  return true;
-});
+    return true;
+  });
 
 
   // 3) ถ้าไม่ซ้ำ → เพิ่มบรรทัดใหม่ตามปกติ
@@ -173,14 +177,11 @@ const exists = state.cart.find((it) => {
       if (it !== exists) return it;
 
       return {
-        ...it, // ⭐ สำคัญ: ยึดของเดิมไว้ทั้งหมด
+        ...it, 
         qty: Number(it.qty) + Number(normalizedItem.qty ?? 0),
-
-        // (แนะนำ) reset lineTotal เพื่อให้ pricing คิดใหม่ถ้าจำเป็น
+        sqft_sheet: it.sqft_sheet,
         lineTotal: undefined,
         needsPricing: it.source === "ui" ? true : false,
-
-        // ⭐ ย้ำ preserve (เผื่อมันเคยว่าง/โดนยิงมาแปลกๆ)
         product_weight: it.product_weight ?? normalizedItem.product_weight ?? 0,
         variantCode: it.variantCode ?? normalizedItem.variantCode ?? null,
       };
@@ -195,7 +196,13 @@ const exists = state.cart.find((it) => {
 // UPDATE CART QTY
 // -------------------------
 case "UPDATE_CART_QTY": {
-  const { sku, qty, variantCode = null, sqft_sheet = 0 } = action.payload;
+  const {
+    sku,
+    qty,
+    variantCode = null,
+    sqft_sheet = 0,
+    from,
+  } = action.payload;
 
   const targetVariant = variantCode ?? null;
   const targetSqft = Number(sqft_sheet ?? 0);
@@ -204,7 +211,7 @@ case "UPDATE_CART_QTY": {
     ...state,
     shippingDirty: state.deliveryType === "DELIVERY",
     cart: state.cart.map((it) => {
-      const itVariant = (it.variantCode ?? null);
+      const itVariant = it.variantCode ?? null;
       const itSqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
 
       const isTarget =
@@ -215,33 +222,67 @@ case "UPDATE_CART_QTY": {
       if (!isTarget) return it;
 
       const newQty = Number(qty);
-
-      // category หาแบบปลอดภัย
       const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
       const isGlass = cat === "G";
 
-      // ราคาเดิมที่ล็อกไว้ใน state.cart
-      const unitPrice = Number(it.price ?? it.UnitPrice ?? 0);
+      // =================================================
+      // ⭐ CASE 1: ปรับ qty จาก CartItemRow
+      // =================================================
+      if (from === "cart") {
+        const displayUnitPrice = isGlass
+          ? Number(it.price_per_sheet ?? 0)
+          : Number(it.price ?? 0);
+
+        return {
+          ...it,
+          qty: newQty,
+          lineTotal: displayUnitPrice * newQty,
+          needsPricing: false,
+        };
+      }
+
+      // =================================================
+      // ⭐ CASE 2: db / draft / repeat
+      // =================================================
+      const rawUnitPrice = Number(it.UnitPrice ?? it.price ?? 0); // truth
       const sqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
 
-      // ✅ ถ้าเป็นของเดิมจาก DB/draft/repeat → ไม่ยิง pricing แต่ต้อง recal lineTotal เอง
-      const isDbItem = it.source !== "ui";
+      if (isGlass) {
+        const pricePerSheet = rawUnitPrice * sqft;
 
-      const newLineTotal = isDbItem
-        ? (isGlass ? unitPrice * newQty * sqft : unitPrice * newQty)
-        : undefined; // ของใหม่ให้ backend คิดใหม่
+        return {
+          ...it,
+          qty: newQty,
 
+          // 🔒 truth
+          UnitPrice: rawUnitPrice,
+
+          // ✅ display
+          price_per_sheet: pricePerSheet,
+          price: undefined,
+
+          lineTotal: pricePerSheet * newQty,
+          needsPricing: false,
+        };
+      }
+
+      // ===== สินค้าอื่น =====
       return {
         ...it,
         qty: newQty,
-        lineTotal: newLineTotal,
 
-        // ✅ pricing เฉพาะสินค้าใหม่
+        UnitPrice: rawUnitPrice,
+        price: rawUnitPrice,
+        price_per_sheet: undefined,
+
+        lineTotal: rawUnitPrice * newQty,
         needsPricing: it.source === "ui",
       };
     }),
   };
 }
+
+
 
 
 
@@ -356,13 +397,49 @@ case "UPDATE_CART_QTY": {
         deliveryType: action.payload.deliveryType ?? "PICKUP",
         billTaxName: action.payload.billTaxName || "",
         remark: action.payload.note || "",
-        cart: (action.payload.cart || []).map(it => ({
+        cart: (action.payload.cart || []).map(it => {
+        const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
+        const isGlass = cat === "G";
+
+        const rawUnitPrice = Number(it.price ?? it.UnitPrice ?? 0); // บาท/ตรฟ.
+        const sqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
+        const qty = Number(it.qty ?? 0);
+
+        let displayUnitPrice = rawUnitPrice;
+        let lineTotal = it.lineTotal;
+
+        if (isGlass && sqft > 0) {
+          // แปลงเป็นราคาต่อแผ่นตั้งแต่แรก
+          displayUnitPrice = rawUnitPrice * sqft;
+
+          // lineTotal จาก DB ถูกอยู่แล้ว แต่ normalize ให้ชัวร์
+          lineTotal = displayUnitPrice * qty;
+        }
+
+        return {
           ...it,
           source: "db",
           unit: it.unit ?? null,
+          UnitPrice: rawUnitPrice,
+          ...(isGlass
+            ? {
+                // ✅ กระจก → แสดงต่อแผ่น
+                price_per_sheet: rawUnitPrice * sqft,
+                price: undefined,
+                lineTotal: rawUnitPrice * sqft * qty,
+              }
+            : {
+                // ✅ สินค้าอื่น → แสดงต่อหน่วยปกติ
+                price: rawUnitPrice,
+                price_per_sheet: undefined,
+                lineTotal: rawUnitPrice * qty,
+              }),
+
           product_weight: it.product_weight ?? 0,
-          isDraftItem: true, 
-        })),
+          isDraftItem: true,
+        };
+      }),
+
         shippingCost: action.payload.totals?.shippingRaw ?? 0,
         shippingCustomerPay: action.payload.totals?.shippingCustomerPay ?? 0,
         shippingCompanyPay: action.payload.totals?.shippingCompanyPay ?? 0, // ถ้าคุณต้องการ

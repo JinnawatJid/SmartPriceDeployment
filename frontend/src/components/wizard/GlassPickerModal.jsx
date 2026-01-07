@@ -363,7 +363,7 @@ onConfirm({
               checked={variantOnly}
               onChange={(e) => setVariantOnly(e.target.checked)}
             />
-            แสดงเฉพาะสินค้า Variant
+            แสดงเฉพาะสินค้า รหัสกลุ่ม
           </label>
         </div>
 

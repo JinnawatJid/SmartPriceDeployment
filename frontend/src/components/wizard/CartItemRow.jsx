@@ -31,7 +31,7 @@ const CartItemRow = ({ item, index, calculatedItem, dispatch }) => {
         qty: newQty,
         variantCode: item.variantCode ?? null,
         sqft_sheet: item.sqft_sheet ?? item.sqft ?? 0,
-
+        from: "cart",
       },
     });
 

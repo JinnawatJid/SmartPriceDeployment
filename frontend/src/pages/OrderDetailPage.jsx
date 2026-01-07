@@ -50,7 +50,7 @@ export default function OrderDetailPage() {
             lineTotal: ln.TotalPrice,
             category: ln.Category,
             unit: ln.Unit || "-",
-            sqft_sheet: ln.sqft_sheet ?? ln.sqft ?? ln.GlassSqft ?? 0,
+            sqft_sheet: ln.Sqft_Sheet ?? ln.sqft ?? ln.GlassSqft ?? 0,
             product_weight: ln.ProductWeight ?? 0,
             variantCode: ln.VariantCode ?? "",
 

@@ -167,7 +167,23 @@ function Step6_Summary({ state, dispatch }) {
 
   
   const handleRepeatFromHistory = (order) => {
+
     if (!order) return;
+
+    console.log("=== REPEAT CLICKED ===");
+    console.log("order.id:", order?.id);
+    console.log("order.cart (raw from API):", order?.cart);
+    
+    (order?.cart || []).forEach((it, i) => {
+      console.log(`[order.cart][${i}]`, {
+        sku: it.sku,
+        qty: it.qty,
+        sqft_sheet: it.sqft_sheet,
+        Sqft_Sheet: it.Sqft_Sheet,
+        variantCode: it.variantCode,
+        VariantCode: it.VariantCode,
+      });
+    })
 
     dispatch({
       type: "LOAD_DRAFT",
@@ -189,10 +205,22 @@ function Step6_Summary({ state, dispatch }) {
 
         cart: (order.cart || []).map(it => ({
           ...it,
+
+          // ⭐ normalize สำคัญมาก
+          sqft_sheet: Number(
+            it.sqft_sheet ??
+            it.Sqft_Sheet ??
+            it.sqft ??
+            0
+          ),
+
+          variantCode: it.variantCode ?? it.VariantCode ?? "",
+
           source: "db",
           needsPricing: false,
           isDraftItem: true,
         })),
+
 
         totals: {
           exVat: 0,
@@ -627,8 +655,6 @@ useEffect(() => {
       cost: Number(item.cost || 0),
       category: item.category || "",
       unit: item.unit || item.saleUnit || item.uom || "",
-
-      // ✅ forward meta จาก items master เพื่อให้ pricing/shipping/save ใช้ได้ทันที
       product_weight: Number(item.product_weight || 0),
       sqft_sheet: Number(item.sqft_sheet || 0),
       pkg_size: Number(item.pkg_size || 1),
