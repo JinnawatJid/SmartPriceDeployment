@@ -426,13 +426,13 @@ def list_quotations(status: str = None):
             SELECT * FROM Quote_Header
             WHERE Status = ?
             ORDER BY LastUpdate DESC
-            LIMIT 5
+            
         """, (status,))
     else:
         cur.execute("""
             SELECT * FROM Quote_Header
             ORDER BY LastUpdate DESC
-            LIMIT 5
+            
         """)
 
     headers = [normalize_keys(dict(r)) for r in cur.fetchall()]

@@ -368,42 +368,51 @@ onConfirm({
         </div>
 
         {/* SKU TABLE */}
-        <div className="border rounded p-2 max-h-[250px] overflow-y-auto mb-4">
+        <div className="border rounded-lg p-2 max-h-[260px] overflow-y-auto mb-4">
           {loading ? (
-            <p>กำลังโหลดข้อมูล...</p>
+            <p className="text-sm text-gray-500">กำลังโหลดข้อมูล...</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="p-1">SKU</th>
-                  <th className="p-1">ชื่อสินค้า</th>
-                  <th className="p-1">SubGroup</th>
-                  <th className="p-1">ขนาด (นิ้ว)</th>
-                  <th className="p-1">หนา</th>
-                  <th className="p-1">สต๊อก</th>
+              <thead className="bg-gray-100 sticky top-0 z-10">
+                <tr className="grid grid-cols-12 gap-2 text-gray-700 font-semibold">
+                  <th className="col-span-2 p-2 text-left">SKU</th>
+                  <th className="col-span-4 p-2 text-left">ชื่อสินค้า</th>
+                  <th className="col-span-2 p-2 text-left">SubGroup</th>
+                  <th className="col-span-2 p-2 text-center">ขนาด (นิ้ว)</th>
+                  <th className="col-span-1 p-2 text-center">หนา</th>
+                  <th className="col-span-1 p-2 text-center">สต๊อก</th>
                 </tr>
               </thead>
+
               <tbody>
                 {filteredList.map((item) => (
                   <tr
                     key={item.sku}
-                    className={`cursor-pointer hover:bg-blue-50 ${
-                      selectedItem?.sku === item.sku ? "bg-blue-100" : ""
-                    }`}
+                    className={`grid grid-cols-12 gap-2 items-center cursor-pointer
+                      hover:bg-blue-50 transition
+                      ${selectedItem?.sku === item.sku ? "bg-blue-100" : ""}
+                    `}
                     onClick={() => setSelectedItem(item)}
                   >
-                    <td className="p-1">{item.sku}</td>
-                    <td className="p-1">{item.description}</td>
-                    <td className="p-1">{item.subGroupName}</td>
-                    <td className="p-1">{item.width} × {item.height}</td>
-                    <td className="p-1">{item.thickness} มม.</td>
-                    <td className="p-1">{item.inventory}</td>
+                    <td className="col-span-2 p-2 truncate">{item.sku}</td>
+                    <td className="col-span-4 p-2 truncate">{item.description}</td>
+                    <td className="col-span-2 p-2 truncate">{item.subGroupName}</td>
+                    <td className="col-span-2 p-2 text-center whitespace-nowrap">
+                      {item.width} × {item.height}
+                    </td>
+                    <td className="col-span-1 p-2 text-center">
+                      {item.thickness}
+                    </td>
+                    <td className="col-span-1 p-2 text-center font-semibold">
+                      {item.inventory}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </div>
+
 
         {/* SIZE SECTION */}
         {selectedItem && isVariant && (
