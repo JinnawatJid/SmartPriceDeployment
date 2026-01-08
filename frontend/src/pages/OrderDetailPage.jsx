@@ -87,14 +87,29 @@ export default function OrderDetailPage() {
         name: order.customer?.name || "ผู้ไม่ประสงค์ออกนาม",
         phone: order.customer?.phone || "",
       },
-      items: order.cart.map((it) => ({
-        code: it.sku,
-        name: it.name,
-        qty: it.qty,
-        unit: it.unit && it.unit.trim() !== "" ? it.unit : "-",
-        price: it.price,        // UnitPrice จาก DB
-        amount: it.lineTotal,   // TotalPrice จาก DB
-      })),
+      items: order.cart.map((it) => {
+        const isGlass =
+          it.category === "G" || Number(it.sqft_sheet || 0) > 0;
+
+        const pricePerSheet =
+          isGlass && it.qty > 0
+            ? Number(it.lineTotal || 0) / Number(it.qty || 1)
+            : Number(it.price || 0);
+
+        return {
+          code: it.sku,
+          name: it.name,
+          qty: it.qty,
+          unit: it.unit && it.unit.trim() !== "" ? it.unit : "-",
+
+          // ✅ ถ้าเป็นกระจก → แสดงราคาต่อแผ่น
+          price: Math.round(pricePerSheet * 100) / 100,
+
+          // ✅ ยอดรวมยังใช้ของจริงจาก DB
+          amount: Number(it.lineTotal || 0),
+        };
+      }),
+
       comment: order.note || "",
       shipping: Number(order.totals.shippingCustomerPay || 0),
       amountText: "", // backend เติม

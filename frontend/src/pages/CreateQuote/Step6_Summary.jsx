@@ -754,19 +754,46 @@ const buildQuotationPayload = (status) => {
     let lineTotal = 0;
 
     // ✅ 3) ราคา
+    const sqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
+    const isGlass = (it.category || "").toUpperCase() === "G";
+
     if (isEditDraft) {
-      unitPrice = Number(it.UnitPrice ?? it.price ?? 0);
-      lineTotal = Number(
-        it.lineTotal ?? unitPrice * Number(it.qty ?? 0)
-      );
+      const rawUnitPrice = Number(it.UnitPrice ?? it.price ?? 0); // บาท/ตรฟ
+
+      if (isGlass && sqft > 0) {
+        const pricePerSheet = rawUnitPrice * sqft;
+
+        unitPrice = rawUnitPrice; // 🔒 truth
+        lineTotal = Number(
+          it.lineTotal ?? pricePerSheet * Number(it.qty ?? 0)
+        );
+      } else {
+        unitPrice = rawUnitPrice;
+        lineTotal = Number(
+          it.lineTotal ?? rawUnitPrice * Number(it.qty ?? 0)
+        );
+      }
+
     } else {
-      unitPrice = Number(
+      const rawUnitPrice = Number(
         calc?.UnitPrice ?? it.UnitPrice ?? it.price ?? 0
       );
-      lineTotal = Number(
-        calc?._LineTotal ?? unitPrice * Number(it.qty ?? 0)
-      );
+
+      if (isGlass && sqft > 0) {
+        const pricePerSheet = rawUnitPrice * sqft;
+
+        unitPrice = rawUnitPrice;
+        lineTotal = Number(
+          calc?._LineTotal ?? pricePerSheet * Number(it.qty ?? 0)
+        );
+      } else {
+        unitPrice = rawUnitPrice;
+        lineTotal = Number(
+          calc?._LineTotal ?? rawUnitPrice * Number(it.qty ?? 0)
+        );
+      }
     }
+
 
     // ✅ 4) คืน payload ที่ใช้ "effective value"
     return {
