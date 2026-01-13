@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import api from "../../services/api.js";
 import Loader from "../Loader.jsx";
+import { useEffect } from "react";
+
 
 // ไอคอนเฉพาะส่วนค้นหา/ผลลัพธ์
 const SearchIcon = () => (
@@ -34,28 +36,56 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [results, setResults] = useState([]);
+  const [openDropdown, setOpenDropdown] = useState(false);
+  const [selectedFromDropdown, setSelectedFromDropdown] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchTerm.trim()) return;
 
-    setLoading(true);
-    setError("");
-
+  const currentCustomer = customer;
+  const loadCustomerFull = async (customerId) => {
     try {
-      const encoded = encodeURIComponent(searchTerm.trim());
-      const res = await api.get(
-        `/api/customer/search?code=${encoded}&phone=${encoded}&name=${encoded}`
-      );
-      onCustomerChange?.(res.data);
-    } catch (err) {
-      setError(err?.response?.data?.detail || "ไม่พบข้อมูลลูกค้า");
-      onCustomerChange?.(null);
-    } finally {
-      setLoading(false);
+      const res = await api.get(`/api/customer/search?code=${customerId}`);
+      onCustomerChange(res.data); // ⭐ ตัวนี้คือ object เต็ม
+    } catch {
+      setError("โหลดข้อมูลลูกค้าไม่สำเร็จ");
     }
   };
 
-  const currentCustomer = customer;
+
+  useEffect(() => {
+    // ❗ ถ้าเพิ่งเลือกจาก dropdown → ไม่ต้อง search
+    if (selectedFromDropdown) {
+      setSelectedFromDropdown(false);
+      return;
+    }
+
+    if (!searchTerm.trim()) {
+      setResults([]);
+      setOpenDropdown(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const encoded = encodeURIComponent(searchTerm.trim());
+        const res = await api.get(`/api/customer/search-list?q=${encoded}`);
+        setResults(res.data);
+        setOpenDropdown(true);
+      } catch {
+        setResults([]);
+        setOpenDropdown(false);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+
 
   return (
     <div className="w-full rounded-lg bg-gray-50 px-10 py-4">
@@ -65,33 +95,65 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
         <p className=" text-gray-600">
           ค้นหาข้อมูลลูกค้าด้วยรหัส, เบอร์โทรศัพท์, หรือชื่อ
         </p>
-        <div className="flex space-x-2 w-full">
+        <div className="relative w-full">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="กรอกรหัส, เบอร์โทร, หรือชื่อ..."
             className="w-full rounded-lg border border-gray-300 p-3 text-sm shadow-sm"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSearch();
-            }}
+
             
           />
+
+          {openDropdown && results.length > 0 && (
+            <div className="relative">
+              <ul
+                className="
+                  absolute z-20 mt-1 w-full
+                  rounded-md border bg-white shadow-lg
+                  max-h-[220px] overflow-y-auto
+                "
+              >
+                {results.map((c) => (
+                  <li
+                    key={c.id}
+                    className="cursor-pointer px-3 py-2 hover:bg-blue-50"
+                    onClick={() => {
+                      setSelectedFromDropdown(true); // ⭐ สำคัญ
+                      onCustomerChange(c);
+                      setOpenDropdown(false);
+                      setResults([]);
+                      setSearchTerm(c.name);
+                      loadCustomerFull(c.id);
+                  }}
+                  >
+                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                    <p className="text-xs text-gray-500">{c.phone}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+
           
-          <button
-            onClick={handleSearch}
-            disabled={loading}
-            className="rounded-lg bg-blue-600 px-5 py-3 text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
-          >
-            <SearchIcon />
-          </button>
+          
+
 
         </div>
           {customer && (
             <button
               type="button"
-              title = "“ยกเลิกการเลือกลูกค้า ระบบจะบันทึกเป็นผู้ไม่ประสงค์ออกนาม”"
-              onClick={() => onCustomerChange(null)}
+              title="“ยกเลิกการเลือกลูกค้า ระบบจะบันทึกเป็นผู้ไม่ประสงค์ออกนาม”"
+              onClick={() => {
+                onCustomerChange(null);
+
+                // ⭐ reset search state
+                setSearchTerm("");
+                setResults([]);
+                setOpenDropdown(false);
+              }}
               className="
                 px-3 py-1.5
                 text-xs font-semibold
@@ -104,6 +166,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
             >
               ล้างข้อมูลลูกค้า
             </button>
+
           )}
 
 

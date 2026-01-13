@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import pandas as pd
+import math
 
 from items import load_items_sqlite
 
@@ -57,6 +58,11 @@ class ShippingFromCartRequest(BaseModel):
     unload_hours: float
     staff_count: int
     cart: List[CartLine]
+
+
+
+def round_shipping_baht(x: float) -> int:
+    return int(math.floor(x))
 
 
 # =====================================================
@@ -183,8 +189,8 @@ def _calculate_shipping_cost(
         "labor_cost": round(labor_cost, 2),
         "shipping_cost": round(shipping_cost, 2),
         "shipping_cap": round(cap, 2),
-        "company_pay": round(company_pay, 2),
-        "customer_pay": round(customer_pay, 2),
+        "company_pay": round_shipping_baht(company_pay),
+        "customer_pay": round_shipping_baht(customer_pay),
     }
 
 

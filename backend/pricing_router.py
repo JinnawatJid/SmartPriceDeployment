@@ -61,8 +61,9 @@ def _safe_print_df(df, cols, title):
         pass
 
 def round_up_050(x: float) -> float:
+    if x < 1:
+        return round(x, 2)
     return math.ceil(x * 2) / 2
-
 
 # -------------------------------
 #  MAIN ENDPOINT

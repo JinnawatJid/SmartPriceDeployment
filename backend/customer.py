@@ -123,5 +123,50 @@ def search_customer(
 
     return base
 
+# ----------------------------------------
+#  /customer/search-list → ค้นหาแบบคืนหลายรายการ (สำหรับ dropdown)
+# ----------------------------------------
+@router.get("/search-list")
+def search_customer_list(
+    q: str = Query(..., min_length=1)
+):
+    conn = get_conn()
+    df = pd.read_sql_query('SELECT * FROM "Customer"', conn)
+    conn.close()
+
+    if df.empty:
+        return []
+
+    def clean(x):
+        if x is None or pd.isna(x):
+            return ""
+        return str(x).strip()
+
+    q_clean = q.strip().lower()
+
+    # normalize phone
+    def normalize_phone(x):
+        return "".join(ch for ch in clean(x) if ch.isdigit())
+
+    q_phone = normalize_phone(q)
+
+    mask = (
+        df["Customer"].astype(str).str.strip().str.lower().str.contains(q_clean)
+        | df["Name"].astype(str).str.strip().str.lower().str.contains(q_clean)
+        | df["Tel"].apply(lambda x: normalize_phone(x).startswith(q_phone) if q_phone else False)
+    )
+
+    found = df[mask].head(15)  # จำกัด 10 รายการ
+
+    results = []
+    for _, r in found.iterrows():
+        results.append({
+            "id": clean(r["Customer"]),
+            "name": clean(r["Name"]),
+            "phone": clean(r["Tel"]),
+            "tax_no": clean(r["Tax No."]),
+        })
+
+    return results
 
 
