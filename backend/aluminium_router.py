@@ -85,6 +85,11 @@ def load_aluminium_items():
     # เฉพาะ SKU ขึ้นต้นด้วย A
     df = df[df["No."].astype(str).str.upper().str.startswith("A")].copy()
 
+    
+    print("=== [DEBUG] RAW Items_Test (head) ===")
+    print(df.head(3))
+    print("COLUMNS:", list(df.columns))
+
     if df.empty:
         return pd.DataFrame()
 
@@ -219,7 +224,10 @@ def aluminium_items(
             "colorName": color_map.get(row.get("color"), ""),
 
             "thickness": row.get("thickness"),
-            "inventory": row.get("onhand_qty", 0)
+            "inventory": row.get("onhand_qty", 0),
+
+            "product_group": row.get("Product Group"),
+            "product_sub_group": row.get("Product Sub Group"),
         })
 
     return items

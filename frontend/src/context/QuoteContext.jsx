@@ -125,6 +125,17 @@ case "ADD_ITEM": {
 
     variantCode:
       newItem.variantCode ?? newItem.VariantCode ?? null,
+
+    product_group:
+      newItem.product_group ??
+      newItem["Product Group"] ??
+      null,
+
+    product_sub_group:
+      newItem.product_sub_group ??
+      newItem["Product Sub Group"] ??
+      null,
+
 };
 
 

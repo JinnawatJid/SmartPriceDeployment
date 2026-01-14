@@ -222,6 +222,10 @@ onConfirm({
   isGlass: true,
   isVariant,
 
+  product_group: selectedItem.product_group ?? null,
+  product_sub_group: selectedItem.product_sub_group ?? null,
+
+
   // --- quantity / area ---
   qty: Number(qtyCustomer),          // จำนวนแผ่น
   sqft_sheet: Number(sqftPerPiece),

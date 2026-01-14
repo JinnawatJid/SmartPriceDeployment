@@ -63,6 +63,18 @@ def load_items_sqlite():
         )
     else:
         df["isVariant"] = False
+    
+    # --- Product Group / Sub Group ---
+    if "Product Group" in df.columns:
+        df["product_group"] = df["Product Group"].astype(str).str.strip()
+    else:
+        df["product_group"] = None
+
+    if "Product Sub Group" in df.columns:
+        df["product_sub_group"] = df["Product Sub Group"].astype(str).str.strip()
+    else:
+        df["product_sub_group"] = None
+
 
 
     return df
@@ -104,6 +116,9 @@ def get_items_by_category(category_name: str):
             "pkg_size": row.get("pkg_size", 1),
             "product_weight": row.get("product_weight", 0), 
             "sqft_sheet": row.get("Sqft_Sheet"),
+            "product_group": row.get("product_group"),
+            "product_sub_group": row.get("product_sub_group"),
+
         })
 
     return items

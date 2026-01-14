@@ -206,7 +206,11 @@ def sealant_items(
             "color": row.get("color"),
             "colorName": color_map.get(row.get("color"), ""),
 
-            "inventory": row.get("onhand_qty", 0)
+            "inventory": row.get("onhand_qty", 0),
+
+            "product_group": row.get("Product Group"),
+            "product_sub_group": row.get("Product Sub Group"),
+
         })
 
     return items

@@ -18,6 +18,8 @@ import ProductDetail from "../../components/products/ProductDetail.jsx";
 import ProductImage from "../../components/products/ProductImage.jsx";
 import ProductCategorySelector from "../../components/products/ProductCategorySelector.jsx";
 import DynamicsProductFilter from "../../components/products/DynamicsProductFilter.jsx";
+import CrossSellPanel from "../../components/cross-sell/CrossSellPanel.jsx";
+
 // ---- Icons ----
   const PlusIcon = () => (
     <svg
@@ -165,7 +167,12 @@ function Step6_Summary({ state, dispatch }) {
   return typeof code === "string" ? code.trim() : "";
 };
 
-  
+  const handleCrossSellAdd = (ruleItem) => {
+    // TODO: เปิด modal ค้นหาสินค้า
+    // filter ด้วย ruleItem.displayName หรือ ruleItem.ruleGroup
+    console.log("cross sell add:", ruleItem);
+  };
+
   const handleRepeatFromHistory = (order) => {
 
     if (!order) return;
@@ -658,6 +665,8 @@ useEffect(() => {
       product_weight: Number(item.product_weight || 0),
       sqft_sheet: Number(item.sqft_sheet || 0),
       pkg_size: Number(item.pkg_size || 1),
+      product_group: item.product_group ?? null,
+      product_sub_group: item.product_sub_group ?? null,
     },
   });
 
@@ -1203,6 +1212,8 @@ const handleSaveQuotation = async (status) => {
         unit: item.unit || item.saleUnit || item.uom || "",
         product_weight: Number(item.product_weight || 0),
         pkg_size: Number(item.pkg_size || 1),
+        product_group: item.product_group ?? null,
+        product_sub_group: item.product_sub_group ?? null,
       },
     });
   };
@@ -1425,106 +1436,118 @@ const handleSaveQuotation = async (status) => {
       </div>
     </div>
   
-  {/* กลาง: รายการสินค้า */}
-    <div className="col-span-4 p-6 rounded-lg bg-gray-50 mt-3">
-      
+ {/* กลาง: รายการสินค้า */}
+<div className="col-span-4 p-6 rounded-lg bg-gray-50 mt-3">
+  <h3 className="text-xl font-semibold text-gray-800 mb-3">
+    รายการสินค้า
+  </h3>
 
-      <h3 className="text-xl font-semibold text-gray-800 mb-3">
-      รายการสินค้า
-      </h3>
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="min-w-full divide-y divide-gray-200">
+  {/* กล่องตาราง (grid ไม่เปลี่ยน) */}
+  <div className="rounded-lg border border-gray-200 bg-white">
+    
+    {/* header ไม่ scroll */}
+    <table className="min-w-full table-fixed">
       <thead className="bg-gray-50">
-      <tr>
-    {[
-    "#",
-    "สินค้า",
-    "จำนวน",
-    "ราคา/หน่วย (ใหม่)",
-    "ยอดรวม (ใหม่)",
-    "",
-    ].map((h) => (
-    <th
-    key={h}
-    className="px-4 py-3 text-xs font-bold uppercase text-gray-500 text-left"
-    >
-    {h}
-    </th>
-    ))}
-    </tr>
-    </thead>
-    <tbody className="divide-y divide-gray-100">
-    {state.cart.length === 0 && (
-    <tr>
-    <td
-    colSpan="6"
-    className="py-6 text-center text-gray-500"
-    >
-    ยังไม่มีสินค้าในตะกร้า
-    </td>
-    </tr>
-    )}
-    {state.cart.map((it, i) => (
-  <CartItemRow
-    key={uiKeyOf(it)}
-    item={it}
-    index={i}
-    dispatch={dispatch}
-    calculatedItem={calcMap[pricingKeyOf(it)]}
-  />
-))}
-
-    </tbody>
+        <tr>
+          {[
+            "#",
+            "สินค้า",
+            "จำนวน",
+            "ราคา/หน่วย (ใหม่)",
+            "ยอดรวม (ใหม่)",
+            "",
+          ].map((h) => (
+            <th
+              key={h}
+              className="px-4 py-3 text-xs font-bold uppercase text-gray-500 text-left"
+            >
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
     </table>
+
+    {/* ✅ scroll เฉพาะ body */}
+    <div className="max-h-[300px] overflow-y-auto">
+      <table className="min-w-full table-fixed">
+        <tbody className="divide-y divide-gray-100">
+          {state.cart.length === 0 && (
+            <tr>
+              <td
+                colSpan="6"
+                className="py-6 text-center text-gray-500"
+              >
+                ยังไม่มีสินค้าในตะกร้า
+              </td>
+            </tr>
+          )}
+
+          {state.cart.map((it, i) => (
+            <CartItemRow
+              key={uiKeyOf(it)}
+              item={it}
+              index={i}
+              dispatch={dispatch}
+              calculatedItem={calcMap[pricingKeyOf(it)]}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
-    </div>
+  </div>
+
+  {/* ✅ cross sell อยู่นอก scroll */}
+  <CrossSellPanel onAddRequest={handleCrossSellAdd} />
+</div>
+
   
     {/* ขวา: สรุปยอด */}
     <div className="col-span-2">
-      <div className="sticky top-28 space-y-6 rounded-lg bg-gray-50 p-6 shadow-sm mt-3">
-      <div>
-      <h4 className="mb-2 text-lg font-semibold text-gray-800">
-      ข้อมูลใบเสนอราคา
-      </h4>
-    </div>
+      <div className="sticky top-28 space-y-6 rounded-lg bg-gray-50 p-6 shadow-sm mt-3"><div>
+        <h4 className="mb-2 text-lg font-semibold text-gray-800">
+          ข้อมูลใบเสนอราคา
+        </h4>
+      </div>
   
   
-  <div className="space-y-2 border-t border-gray-200 pt-4">
-    <h4 className="text-lg font-semibold text-gray-800">
-    สรุปยอด
-    </h4>
-    <SummaryRow
-    label="ค่าขนส่ง"
-    value={
-      state.deliveryType === "DELIVERY"
-      ? fmtTHB(Number(state.shippingCustomerPay || 0))
-      : "รับเอง (ไม่มีค่าขนส่ง)"
-    }
-    
-  />
-    <SummaryRow
-    label="ราคารวมก่อนภาษี (ไม่รวม VAT)"
-    value={calculation.totals.exVatFmt || "..."}
-    loading={calculation.loading}
-    />
-    <SummaryRow
-    label="ภาษีมูลค่าเพิ่ม (7%)"
-    value={calculation.totals.vatFmt || "..."}
-    loading={calculation.loading}
-    />
-    <div className="border-t border-gray-300" />
-    <SummaryRow
-    label="ราคารวมสุทธิ (รวม VAT แล้ว)"
-    value={calculation.totals.totalFmt || "..."}
-    isTotal
-    loading={calculation.loading}
-    />
-  {calculation.error && (
-  <p className="text-sm text-red-500">
-  {calculation.error}
-  </p>
-  )}
-  </div>
+      <div className="space-y-2 border-t border-gray-200 pt-4">
+        <h4 className="text-lg font-semibold text-gray-800">
+        สรุปยอด
+        </h4>
+        <SummaryRow
+          label="ค่าขนส่ง"
+          value={
+            state.deliveryType === "DELIVERY"
+            ? fmtTHB(Number(state.shippingCustomerPay || 0))
+            : "รับเอง (ไม่มีค่าขนส่ง)"
+          }
+        
+        />
+        <SummaryRow
+          label="ราคารวมก่อนภาษี (ไม่รวม VAT)"
+          value={calculation.totals.exVatFmt || "..."}
+          loading={calculation.loading}
+        />
+        <SummaryRow
+          label="ภาษีมูลค่าเพิ่ม (7%)"
+          value={calculation.totals.vatFmt || "..."}
+          loading={calculation.loading}
+        />
+        <div className="border-t border-gray-300" />
+          <SummaryRow
+            label="ราคารวมสุทธิ (รวม VAT แล้ว)"
+            value={calculation.totals.totalFmt || "..."}
+            isTotal
+            loading={calculation.loading}
+          />
+          
+        {calculation.error && (
+        <p className="text-sm text-red-500">
+        {calculation.error}
+        </p>
+        )}
+      </div>
   
           <div className="space-y-3 border-t border-gray-200 pt-4">
               <button

@@ -444,24 +444,8 @@ def list_quotations(status: str = None):
         cur.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
         raw_rows = cur.fetchall()
 
-        print("=== RAW QUOTE_LINE FROM DB ===")
-        for r in raw_rows:
-            print(dict(r))
 
         lines = [normalize_keys(dict(r)) for r in raw_rows]
-
-        print("=== AFTER normalize_keys ===")
-        for ln in lines:
-            print(ln.keys(), "Sqft_Sheet =", ln.get("Sqft_Sheet"))
-
-        print("=== SERIALIZE CART ===")
-        for ln in lines:
-            print({
-                "Sqft_Sheet_in_ln": ln.get("Sqft_Sheet"),
-                "final_sqft_sheet": (
-                    ln["Sqft_Sheet"] if "Sqft_Sheet" in ln else 0
-                )
-            })
 
 
 

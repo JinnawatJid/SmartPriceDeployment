@@ -43,11 +43,18 @@ def get_glass_list(
 
     # Load items
     cur.execute("""
-        SELECT [No.], Description, Inventory, [Variant Mandatory if Exists]
+        SELECT
+            [No.],
+            Description,
+            Inventory,
+            [Variant Mandatory if Exists],
+            [Product Group],
+            [Product Sub Group]
         FROM Items_Test
         WHERE [No.] LIKE 'G%'
         ORDER BY [No.]
     """)
+
     rows = cur.fetchall()
 
     # Load mapping tables
@@ -65,7 +72,8 @@ def get_glass_list(
 
     result = []
 
-    for sku, desc, inv, vmand in rows:
+    for sku, desc, inv, vmand, product_group, product_sub_group in rows:
+
         parsed = parse_glass_sku(sku)
 
         # Filtering
@@ -110,6 +118,12 @@ def get_glass_list(
 
             "width": parsed["width"],
             "height": parsed["height"],
+
+            # ⭐ เพิ่มสำหรับ Cross-sell
+            "product_group": product_group,
+            "product_sub_group": product_sub_group,
+
+
         })
 
     conn.close()

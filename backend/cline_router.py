@@ -130,21 +130,36 @@ def get_cline_items(
         sku = str(row["No."]).strip()
 
         results.append({
-            "sku": sku,
-            "name": str(row.get("Description", "")).strip(),
+        # ===== identity =====
+        "sku": sku,
+        "name": str(row.get("Description", "")).strip(),
 
-            "brand": row["brand"],
-            "group": row["group"],
-            "subGroup": row["subGroup"],
-            "color": row["color"],
-            "thickness": row["thickness"],
+        # ===== SKU structure =====
+        "brand": row["brand"],
+        "group": row["group"],
+        "subGroup": row["subGroup"],
+        "color": row["color"],
+        "thickness": row["thickness"],
 
-            "brandName": brand_map.get(row["brand"], row["brand"]),
-            "groupName": group_map.get(row["group"], row["group"]),
-            "subGroupName": sub_map.get(row["subGroup"], row["subGroup"]),
-            "colorName": color_map.get(row["color"], row["color"]),
-            "thicknessName": thick_map.get(row["thickness"], row["thickness"]),
-        })
+        "brandName": brand_map.get(row["brand"], row["brand"]),
+        "groupName": group_map.get(row["group"], row["group"]),
+        "subGroupName": sub_map.get(row["subGroup"], row["subGroup"]),
+        "colorName": color_map.get(row["color"], row["color"]),
+        "thicknessName": thick_map.get(row["thickness"], row["thickness"]),
+
+        # ===== stock / unit =====
+        "inventory": int(row.get("Inventory", 0) or 0),
+        "unit": row.get("Base Unit of Measure", "") or "",
+        "pkg_size": int(row.get("Package Size", 1) or 1),
+
+        # ===== weight =====
+        "product_weight": float(row.get("Product Weight", 0) or 0),
+
+        # ===== ⭐ business grouping (สำคัญ) =====
+        "product_group": row.get("Product Group"),
+        "product_sub_group": row.get("Product Sub Group"),
+    })
+
 
     return results
 

@@ -216,9 +216,11 @@ def gypsum_items(
     items = []
     for _, row in df.iterrows():
         items.append({
+            # ===== identity =====
             "sku": row["SKU"],
             "name": row.get("Description", ""),
 
+            # ===== SKU structure =====
             "brand": row.get("brand"),
             "brandName": brand_map.get(row.get("brand"), ""),
 
@@ -232,7 +234,19 @@ def gypsum_items(
             "colorName": color_map.get(row.get("color"), ""),
 
             "thickness": row.get("thickness"),
-            "inventory": row.get("onhand_qty", 0)
+
+            # ===== stock / unit =====
+            "inventory": row.get("onhand_qty", 0),
+            "unit": row.get("Base Unit of Measure", "") or "",
+            "pkg_size": int(row.get("Package Size", 1) or 1),
+
+            # ===== weight =====
+            "product_weight": float(row.get("Product Weight", 0) or 0),
+
+            # ===== ⭐ business grouping =====
+            "product_group": row.get("Product Group"),
+            "product_sub_group": row.get("Product Sub Group"),
         })
+
 
     return items

@@ -262,25 +262,29 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
 
 
   const handleAdd = (item, qty) => {
-  if (!onConfirm) return;
+    if (!onConfirm) return;
 
-  const normalizedItem = {
-    ...item,
-    unit:
-      item.unit ||
-      item["Base Unit Measure"] ||
-      item.saleUnit ||
-      item.uom ||
-      "-",
-     pkg_size:
-       item.pkg_size ??
-       item.pkgSize ??
-       item["pkg_size"] ??
-       1,
-    product_weight:
-      item.product_weight ??
-      item.ProductWeight ??
-      0,
+    const normalizedItem = {
+      ...item,
+      unit:
+        item.unit ||
+        item["Base Unit Measure"] ||
+        item.saleUnit ||
+        item.uom ||
+        "-",
+      pkg_size:
+        item.pkg_size ??
+        item.pkgSize ??
+        item["pkg_size"] ??
+        1,
+      product_weight:
+        item.product_weight ??
+        item.ProductWeight ??
+        0,
+      
+      product_group: item.product_group ?? null,
+      product_sub_group: item.product_sub_group ?? null,
+
   };
 
 

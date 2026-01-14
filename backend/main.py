@@ -18,6 +18,7 @@ from sealant_router import router as sealant_router
 from gypsum_router import router as gypsum_router
 from quotation import router as quotation_router
 from utils.baht_text import baht_text
+from cross_sell_router import cross_sell_router
 
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
@@ -65,6 +66,8 @@ app.include_router(cline_router,prefix="/api")
 app.include_router(accessories_router,prefix="/api")
 app.include_router(sealant_router,prefix="/api")
 app.include_router(gypsum_router,prefix="/api")
+app.include_router(cross_sell_router,prefix="/api")
+
 
 # --- Print Endpoint (Root Level) ---
 @app.post("/api/print/quotation")

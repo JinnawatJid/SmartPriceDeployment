@@ -129,7 +129,11 @@ def get_accessories_items(
             "colorName": color_map.get(row["color"], ""),
 
             "character": row["character"],
-            "characterName": char_map.get(row["character"], "")
+            "characterName": char_map.get(row["character"], ""),
+
+            "product_group": row.get("Product Group"),
+            "product_sub_group": row.get("Product Sub Group"),
+
         })
 
     return results
