@@ -1,6 +1,7 @@
 // src/components/wizard/SealantPicker.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../services/api";
+import CustomDropdown from "../common/CustomDropdown";
 
 export default function SealantPicker({ onSelect }) {
   const [brand, setBrand] = useState(null);
@@ -93,52 +94,41 @@ export default function SealantPicker({ onSelect }) {
     emitFilters(next);
   };
 
-  const Dropdown = ({ label, value, onChange, items }) => (
-    <div className="flex flex-col w-full">
-      <label className="text-sm font-medium mb-1">{label}</label>
-      <select
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="border rounded-md p-2 bg-white w-[220px]"
-      >
-        <option value="">-- เลือก {label} --</option>
-        {items.map((item) => (
-          <option key={item.code || item.value} value={item.code || item.value}>
-            {item.name || item.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-
   return (
-    <div className="flex p-3 space-x-1  border rounded-xl bg-gray-50 mt-3">
-     
+    <div className="flex justify-between p-3 border rounded-xl bg-gray-50 mt-3">
 
-      <Dropdown
+      <CustomDropdown
         label="Brand"
         value={brand}
+        options={options.brands}
         onChange={handleBrandChange}
-        items={options.brands}
+        width={200}
       />
-      <Dropdown
+
+      <CustomDropdown
         label="Group"
         value={group}
+        options={options.groups}
         onChange={handleGroupChange}
-        items={options.groups}
+        width={240}
       />
-      <Dropdown
+
+      <CustomDropdown
         label="SubGroup"
         value={subGroup}
+        options={options.subGroups}
         onChange={handleSubGroupChange}
-        items={options.subGroups}
+        width={240}
       />
-      <Dropdown
+
+      <CustomDropdown
         label="Color"
         value={color}
+        options={options.colors}
         onChange={handleColorChange}
-        items={options.colors}
+        width={200}   
       />
+
     </div>
   );
 }

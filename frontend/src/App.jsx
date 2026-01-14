@@ -28,7 +28,7 @@ const WizardLayout = () => (
     
     {/* 5. สร้าง <main> เพื่อเป็น "พื้นที่สีเทา" ที่แท้จริง (อยู่ใต้ Navbar) */}
     <main className="flex-1 w-full p-4 flex flex-col">
-      <div className="bg-white container mx-auto max-w-7xl flex-1 flex flex-col rounded-lg shadow-lg">
+      <div className="bg-white container mx-auto max-w-[1280px] flex-1 flex flex-col rounded-lg shadow-lg">
         <Outlet /> 
       </div>
     </main>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
+import CustomDropdown from "../common/CustomDropdown";
+
 
 export default function GlassPickerModal({ open, onClose, onConfirm }) {
   
@@ -298,6 +300,32 @@ onConfirm({
     (!colorFilter || i.color === colorFilter)
   ).map((i) => i.thickness))];
 
+  const brandDropdownOptions = brandOptions.map((code) => ({
+  code,
+  name: glassList.find((x) => x.brand === code)?.brandName || code,
+  }));
+
+  const typeDropdownOptions = typeOptions.map((code) => ({
+    code,
+    name: glassList.find((x) => x.type === code)?.typeName || code,
+  }));
+
+  const subGroupDropdownOptions = subGroupOptions.map((code) => ({
+    code,
+    name: glassList.find((x) => x.subGroup === code)?.subGroupName || code,
+  }));
+
+  const colorDropdownOptions = colorOptions.map((code) => ({
+    code,
+    name: glassList.find((x) => x.color === code)?.colorName || code,
+  }));
+
+  const thicknessDropdownOptions = thicknessOptions.map((t) => ({
+    code: String(t),
+    name: `${t} มม.`,
+  }));
+
+
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 ">
       <div className="bg-white w-[900px] max-h-[90vh] rounded-lg shadow-lg p-4 overflow-y-auto">
@@ -317,46 +345,49 @@ onConfirm({
         />
 
         {/* FILTERS */}
-        <div className="grid grid-cols-5 gap-2 mb-4">
-          <select className="border p-2 rounded" value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
-            <option value="">แบรนด์ทั้งหมด</option>
-            {brandOptions.map((code) => {
-              const label = glassList.find((x) => x.brand === code)?.brandName || code;
-              return <option key={code} value={code}>{label}</option>;
-            })}
-          </select>
+        <div className="flex items-end gap-3 mb-4">
+          <CustomDropdown
+            label="Brand"
+            value={brandFilter || null}
+            options={brandDropdownOptions}
+            onChange={(v) => setBrandFilter(v || "")}
+            width={160}
+          />
 
-          <select className="border p-2 rounded" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            <option value="">ชนิดทั้งหมด</option>
-            {typeOptions.map((code) => {
-              const label = glassList.find((x) => x.type === code)?.typeName || code;
-              return <option key={code} value={code}>{label}</option>;
-            })}
-          </select>
+          <CustomDropdown
+            label="Type"
+            value={typeFilter || null}
+            options={typeDropdownOptions}
+            onChange={(v) => setTypeFilter(v || "")}
+            width={160}
+          />
 
-          <select className="border p-2 rounded" value={subGroupFilter} onChange={(e) => setSubGroupFilter(e.target.value)}>
-            <option value="">กลุ่มย่อยทั้งหมด</option>
-            {subGroupOptions.map((code) => {
-              const label = glassList.find((x) => x.subGroup === code)?.subGroupName || code;
-              return <option key={code} value={code}>{label}</option>;
-            })}
-          </select>
+          <CustomDropdown
+            label="SubGroup"
+            value={subGroupFilter || null}
+            options={subGroupDropdownOptions}
+            onChange={(v) => setSubGroupFilter(v || "")}
+            width={240}
+          />
 
-          <select className="border p-2 rounded" value={colorFilter} onChange={(e) => setColorFilter(e.target.value)}>
-            <option value="">สีทั้งหมด</option>
-            {colorOptions.map((code) => {
-              const label = glassList.find((x) => x.color === code)?.colorName || code;
-              return <option key={code} value={code}>{label}</option>;
-            })}
-          </select>
+          <CustomDropdown
+            label="Color"
+            value={colorFilter || null}
+            options={colorDropdownOptions}
+            onChange={(v) => setColorFilter(v || "")}
+            width={120}
+          />
 
-          <select className="border p-2 rounded" value={thickFilter} onChange={(e) => setThickFilter(e.target.value)}>
-            <option value="">ความหนา</option>
-            {thicknessOptions.map((t) => (
-              <option key={t} value={t}>{t} มม.</option>
-            ))}
-          </select>
+          <CustomDropdown
+            label="Thickness"
+            value={thickFilter || null}
+            options={thicknessDropdownOptions}
+            onChange={(v) => setThickFilter(v || "")}
+            width={120}
+          />
+
         </div>
+
 
                 
         {/* VARIANT CHECKBOX (เพิ่มใหม่) */}

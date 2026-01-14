@@ -26,7 +26,7 @@ export default function CrossSellPanel({ onAddRequest }) {
       </div>
 
       <div
-        className="space-y-2 overflow-y-auto"
+        className="grid grid-cols-3 gap-2 overflow-y-auto"
         style={{
           maxHeight: "180px", // ~ 3 items (ปรับได้)
         }}

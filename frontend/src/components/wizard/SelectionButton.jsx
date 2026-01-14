@@ -31,7 +31,7 @@ const SelectionButton = ({ icon, title, description, selected, onClick }) => {
       {/* ไอคอนและข้อความ */}
       <div className="flex-shrink-0 text-blue-600">{icon}</div>
       <div className="flex-1">
-        <h4 className="text-sm font-bold text-gray-900">{title}</h4>
+        <h4 className="text-xs font-bold text-gray-900">{title}</h4>
         <p className="text-xs text-gray-500">{description}</p>
       </div>
     </button>

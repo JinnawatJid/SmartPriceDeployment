@@ -1,6 +1,7 @@
 // src/components/wizard/GypsumPicker.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../services/api";
+import CustomDropdown from "../common/CustomDropdown";
 
 export default function GypsumPicker({ onSelect }) {
   const [brand, setBrand] = useState(null);
@@ -116,57 +117,49 @@ export default function GypsumPicker({ onSelect }) {
     emitFilters(next);
   };
 
-  const Dropdown = ({ label, value, onChange, items }) => (
-    <div className="min-w-[160px] flex flex-col">
-      <label className="text-sm font-medium mb-1">{label}</label>
-      <select
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="w-[180px] border rounded-md p-2 bg-white"
-      >
-        <option value="">-- เลือก {label} --</option>
-        {items.map((item) => (
-          <option key={item.code || item.value} value={item.code || item.value}>
-            {item.name || item.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-
   return (
-    <div className="flex p-3 space-x-1  border rounded-xl bg-gray-50 mt-3 ">
+    <div className="grid grid-cols-3 gap-3 p-3 border rounded-xl bg-gray-50 mt-3">
 
-      <Dropdown
+      <CustomDropdown
         label="Brand"
         value={brand}
+        options={options.brands}
         onChange={handleBrandChange}
-        items={options.brands}
+        width={170}
       />
-      <Dropdown
+
+      <CustomDropdown
         label="Group"
         value={group}
+        options={options.groups}
         onChange={handleGroupChange}
-        items={options.groups}
+        width={240}
       />
-      <Dropdown
+
+      <CustomDropdown
         label="SubGroup"
         value={subGroup}
+        options={options.subGroups}
         onChange={handleSubGroupChange}
-        items={options.subGroups}
+        width={240}
       />
-      <Dropdown
+
+      <CustomDropdown
         label="Color"
         value={color}
+        options={options.colors}
         onChange={handleColorChange}
-        items={options.colors}
+        width={180}   // สี = สั้น
       />
-      <Dropdown
+
+      <CustomDropdown
         label="Thickness"
         value={thickness}
+        options={options.thickness}
         onChange={handleThicknessChange}
-        items={options.thickness}
+        width={180}   // ความหนา = ตัวเลข
       />
+
     </div>
   );
 }

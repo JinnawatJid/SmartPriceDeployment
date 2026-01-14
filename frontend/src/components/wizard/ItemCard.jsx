@@ -14,7 +14,7 @@ const ItemCard = ({ item, onAdd }) => {
   };
 
   return (
-    <div className="flex flex-row rounded-xl border border-gray-200 bg-white shadow-md transition-all duration-300 hover:shadow-lg w-full p-4 gap-12">
+    <div className="flex flex-row rounded-xl border border-gray-200 bg-white shadow-md transition-all duration-300 hover:shadow-lg w-full p-4 gap-4">
       {/* ส่วนเนื้อหา */}
       <div className="flex-shrink-0 w-28 h-28 rounded-lg overflow-hidden bg-white border">
         <img
@@ -24,8 +24,8 @@ const ItemCard = ({ item, onAdd }) => {
         />
       </div>
 
-      <div className="flex-grow space-y-1 py-2">
-        <h4 className="text-xl font-bold text-gray-800">{item.name}</h4>
+      <div className="flex-grow space-y-1 py-2 min-w-0">
+        <h4 className="text-lg font-semibold text-gray-800 max-h-[3rem] overflow-hidden">{item.name}</h4>
         <p className="mt-1 text-sm text-gray-500">รหัส: {item.sku}</p>
         <p className="text-sm text-gray-500">{item.description}</p>
         {item.inventory !== undefined && (
@@ -36,7 +36,7 @@ const ItemCard = ({ item, onAdd }) => {
       </div>
 
       {/* ส่วนปุ่ม Add */}
-      <div className="flex justify-between gap-4 items-center space-x-2  p-4">
+      <div className="flex flex-shrink-0 gap-4 items-center p-4">
         <input
           type="number"
           value={qty}
@@ -46,7 +46,7 @@ const ItemCard = ({ item, onAdd }) => {
         />
         <button
           onClick={handleAddClick}
-          className=" rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
+          className=" whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm  text-white shadow-sm hover:bg-blue-700"
         >
           เลือกสินค้า
         </button>

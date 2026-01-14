@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../../services/api";
+import CustomDropdown from "../common/CustomDropdown";
 
 export default function AluminiumPicker({ onSelect }) {
   const [brand, setBrand] = useState(null);
@@ -123,61 +124,43 @@ export default function AluminiumPicker({ onSelect }) {
     emitFilters(next);
   };
 
-  // ------------- UI Component -----------------
-  const Dropdown = ({ label, value, onChange, items }) => (
-    <div className="flex flex-col w-full">
-      <label className="text-sm font-medium mb-1">{label}</label>
-      <select
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="w-[180px] border rounded-md p-2 bg-white"
-      >
-        <option value="">-- เลือก {label} --</option>
-        {items.map((item) => (
-          <option key={item.code || item.value} value={item.code || item.value}>
-            {item.name || item.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
 
   return (
-    <div className="flex p-3 space-x-1  border rounded-xl bg-gray-50 mt-3">
+    <div className="flex items-end justify-between p-3 border rounded-xl bg-gray-50 mt-3">
 
-      <Dropdown
+      <CustomDropdown
         label="Brand"
         value={brand}
-        onChange={handleBrandChange}
-        items={options.brands}
+        options={options.brands}
+        onChange={(v) => handleBrandChange(v)}
       />
 
-      <Dropdown
+      <CustomDropdown
         label="Group"
         value={group}
-        onChange={handleGroupChange}
-        items={options.groups}
+        options={options.groups}
+        onChange={(v) => handleGroupChange(v)}
       />
 
-      <Dropdown
+      <CustomDropdown
         label="SubGroup"
         value={subGroup}
-        onChange={handleSubGroupChange}
-        items={options.subGroups}
+        options={options.subGroups}
+        onChange={(v) => handleSubGroupChange(v)}
       />
 
-      <Dropdown
+      <CustomDropdown
         label="Color"
         value={color}
-        onChange={handleColorChange}
-        items={options.colors}
+        options={options.colors}
+        onChange={(v) => handleColorChange(v)}
       />
 
-      <Dropdown
+      <CustomDropdown
         label="Thickness"
         value={thickness}
-        onChange={handleThicknessChange}
-        items={options.thickness}
+        options={options.thickness}
+        onChange={(v) => handleThicknessChange(v)}
       />
     </div>
   );
