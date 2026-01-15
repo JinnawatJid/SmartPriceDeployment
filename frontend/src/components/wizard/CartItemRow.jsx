@@ -1,102 +1,188 @@
 // src/components/wizard/CartItemRow.jsx
-import React from 'react';
-import { useQuote } from '../../hooks/useQuote.js';
+import { useState } from "react";
+import { useItemPriceHistory } from "../../hooks/useItemPriceHistory";
 
-// ไอคอนถังขยะ
+function formatThaiDate(dt) {
+  if (!dt) return "";
+  const d = new Date(dt);
+  return d.toLocaleString("th-TH", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 const TrashIcon = () => (
-  <img src="/assets/delete.png" alt="delete" className="h-5 w-5 mr-4 mt-1 object-contain" />
+  <img
+    src="/assets/delete.png"
+    alt="delete"
+    className="h-5 w-5 mr-4 mt-1 object-contain"
+  />
 );
 
+export default function CartItemRow({
+  item,
+  index,
+  calculatedItem,
+  dispatch,
+  customerCode,
+}) {
+  
+  const [openPriceHistory, setOpenPriceHistory] = useState(false);
 
-const CartItemRow = ({ item, index, calculatedItem, dispatch }) => {
-  const handleRemove = () => {
-  // ใช้ key เดียวกับ Step6 (uiKeyOf) เพื่อกัน SKU ซ้ำ/มี variant
-  const key = `${item.sku}__${item.variantCode ?? ""}__${Number(
-    item.sqft_sheet ?? item.sqft ?? 0
-  )}`;
-
-  dispatch({
-    type: "REMOVE_ITEM",
-    payload: key,
+  const { prices, loading } = useItemPriceHistory({
+    sku: item.sku,
+    customerCode,
+    enabled: openPriceHistory,
   });
-};
 
+
+  
+  console.log("PRICE HISTORY DEBUG", {
+    sku: item.sku,
+    customerCode,
+    openPriceHistory,
+    prices,
+    loading,
+  });
+
+  const displayUnitPrice =
+    calculatedItem?.price_per_sheet ??
+    calculatedItem?.UnitPrice ??
+    item.price_per_sheet ??
+    item.UnitPrice ??
+    item.price ??
+    0;
+
+  const displayLineTotal =
+    calculatedItem?._LineTotal ??
+    item.lineTotal ??
+    displayUnitPrice * item.qty ??
+    0;
 
   const handleQtyChange = (e) => {
-    const newQty = Math.max(1, Number(e.target.value));
     dispatch({
       type: "UPDATE_CART_QTY",
       payload: {
         sku: item.sku,
-        qty: newQty,
+        qty: Math.max(1, Number(e.target.value)),
         variantCode: item.variantCode ?? null,
         sqft_sheet: item.sqft_sheet ?? item.sqft ?? 0,
         from: "cart",
       },
     });
-
   };
-  const displayUnitPrice =
-    calculatedItem?.price_per_sheet
-    ?? calculatedItem?.UnitPrice
-    ?? item.price_per_sheet
-    ?? item.UnitPrice
-    ?? item.price
-    ?? 0;
-  const displayLineTotal =
-    calculatedItem?._LineTotal
-    ?? item.lineTotal
-    ?? (displayUnitPrice * item.qty)
-    ?? 0;
 
+  const handleRemove = () => {
+    const key = `${item.sku}__${item.variantCode ?? ""}__${Number(
+      item.sqft_sheet ?? item.sqft ?? 0
+    )}`;
+    dispatch({ type: "REMOVE_ITEM", payload: key });
+  };
 
+  
 
   return (
-    <tr className="border-b border-gray-200 bg-white hover:bg-gray-50">
-      {/* Index */}
-      <td className="px-4 py-3 text-sm font-medium text-gray-600">{index + 1}</td>
-      
-      {/* Name/SKU */}
-      <td className="px-4 py-3">
-        <p className="font-semibold text-xs text-gray-900">{item.name}</p>
-        <p className="text-xs text-gray-500">{item.sku}</p>
-      </td>
-      
-      
-      {/* Qty */}
-      <td className="px-4 py-3" style={{ minWidth: '100px' }}>
-        <input
-          type="number"
-          value={item.qty}
-          onChange={handleQtyChange}
-          className="w-20 rounded-md border border-gray-300 p-1 text-center font-medium shadow-sm"
-          min="1"
-        />
-      </td>
-      
-      {/* Price */}
-      <td className="px-4 py-3 text-start text-sm text-gray-700">
-        {Number(displayUnitPrice).toLocaleString("th-TH")}
-      </td>
+    <>
+      {/* ===== MAIN ROW ===== */}
+      <tr className="border-b bg-white hover:bg-gray-50">
+        <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
 
-      
-      
-      {/* Total */}
-      <td className="px-4 py-3 text-start text-sm font-semibold text-gray-900">
-        {Number(displayLineTotal).toLocaleString("th-TH")}
-      </td>
-      
-      {/* Actions */}
-      <td className="text-center">
-        <button
-          onClick={handleRemove}
-          className="text-red-500 hover:text-red-700"
-        >
-          <TrashIcon />
-        </button>
-      </td>
-    </tr>
+        <td className="px-4 py-3">
+          <p className="font-semibold text-xs">{item.name}</p>
+          <p className="text-xs text-gray-500">{item.sku}</p>
+        </td>
+
+        <td className="px-4 py-3">
+          <input
+            type="number"
+            value={item.qty}
+            min="1"
+            onChange={handleQtyChange}
+            className="w-20 rounded border p-1 text-center"
+          />
+        </td>
+
+        <td className="px-4 py-3 text-sm">
+          <button
+            onClick={() => setOpenPriceHistory(v => !v)}
+            className="font-semibold text-blue-700 hover:underline flex items-center gap-1"
+          >
+            {Number(displayUnitPrice).toLocaleString("th-TH")}
+            <span
+              className={`transition-transform ${
+                openPriceHistory ? "rotate-90" : ""
+              }`}
+            >
+              ❯
+            </span>
+          </button>
+        </td>
+
+        <td className="px-4 py-3 font-semibold">
+          {Number(displayLineTotal).toLocaleString("th-TH")}
+        </td>
+
+        <td className="text-center">
+          <button onClick={handleRemove}>
+            <TrashIcon />
+          </button>
+        </td>
+      </tr>
+
+      {/* ===== EXPAND ROW ===== */}
+      {openPriceHistory &&  (
+        <tr className="bg-gray-100">
+          <td colSpan={6} className="px-6 py-3">
+            {loading && (
+              <div className="text-sm text-gray-500">
+                กำลังโหลดประวัติราคา...
+              </div>
+            )}
+
+            {!loading && prices.length === 0 && (
+              <div className="text-sm text-gray-500">
+                ไม่พบประวัติราคา
+              </div>
+            )}
+
+            {!loading && prices.length > 0 && (
+              <div className="rounded-lg border bg-white">
+                <div className="px-4 py-2 font-semibold text-sm bg-gray-50">
+                  ประวัติราคา
+                </div>
+
+                <div className="divide-y">
+                  {prices.slice(0, 2).map((p, i) => (
+                    <div
+                      key={i}
+                      className="flex justify-between px-4 py-2 text-sm"
+                    >
+                      <div>
+                        <div className="text-gray-600">
+                          {formatThaiDate(p.date)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          #{p.invoiceNo}
+                        </div>
+                      </div>
+
+                      <div className="font-semibold text-emerald-600">
+                        ฿{" "}
+                        {Number(p.price).toLocaleString("th-TH", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
-};
-
-export default CartItemRow;
+}
