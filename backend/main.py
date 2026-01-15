@@ -141,3 +141,4 @@ if __name__ == "__main__":
 
 
 #uvicorn main:app --reload --port 8000
+#npx prettier --write src

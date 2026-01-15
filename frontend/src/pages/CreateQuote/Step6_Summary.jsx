@@ -19,6 +19,8 @@ import ProductImage from "../../components/products/ProductImage.jsx";
 import ProductCategorySelector from "../../components/products/ProductCategorySelector.jsx";
 import DynamicsProductFilter from "../../components/products/DynamicsProductFilter.jsx";
 import CrossSellPanel from "../../components/cross-sell/CrossSellPanel.jsx";
+import CustomDropdown from "../../components/common/CustomDropdown.jsx";
+
 
 import { uiKeyOf, pricingKeyOf, printKeyOf } from "./utils/quoteKeys";
 import { getCustomerCode } from "./utils/customer";
@@ -1216,16 +1218,19 @@ function Step6_Summary({ state, dispatch }) {
               {/* header ไม่ scroll */}
               <table className="min-w-full table-fixed ">
                 <thead className=" bg-gray-50 ">
-                  <tr>
-                    {["#", "สินค้า", "จำนวน", "ราคา/หน่วย (ใหม่)", "ยอดรวม (ใหม่)", ""].map((h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-3 text-xs font-bold uppercase text-gray-500 text-left"
-                      >
-                        {h}
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="w-[40px] px-4 py-3 text-xs font-bold text-gray-500 text-left">#</th>
+                      <th className="w-[240px] px-4 py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
+                      <th className="w-[50px] pl-12 py-3 text-xs text-end font-bold text-gray-500 ">จำนวน</th>
+                      <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-center">
+                        ราคา/หน่วย
                       </th>
-                    ))}
-                  </tr>
+                      <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-left">
+                        ยอดรวม
+                      </th>
+                    </tr>
+                  </thead>
                 </thead>
               </table>
 

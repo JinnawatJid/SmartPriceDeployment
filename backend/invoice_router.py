@@ -65,9 +65,11 @@ def item_price_history(
 
     cur.execute("""
         SELECT
-            "Document No."      AS invoiceNo,
-            "Posting Date"      AS date,
-            "Unit Price"        AS price
+            "Document No."        AS invoiceNo,
+            "Posting Date"        AS date,
+            "Unit Price"          AS price,
+            "Quantity"            AS qty,
+            "Unit of Measure"     AS unit
         FROM "Invoice"
         WHERE "No." = ?
           AND "Sell-to Customer No." = ?
@@ -82,7 +84,9 @@ def item_price_history(
         {
             "invoiceNo": r[0],
             "date": r[1],
-            "price": r[2],
+            "price": float(r[2] or 0),
+            "qty": int(r[3] or 0),
+            "unit": r[4],
         }
         for r in rows
     ]

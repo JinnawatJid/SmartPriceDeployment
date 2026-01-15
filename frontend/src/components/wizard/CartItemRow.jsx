@@ -30,22 +30,14 @@ export default function CartItemRow({
   customerCode,
 }) {
   
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState(item.name || "");
   const [openPriceHistory, setOpenPriceHistory] = useState(false);
 
   const { prices, loading } = useItemPriceHistory({
     sku: item.sku,
     customerCode,
     enabled: openPriceHistory,
-  });
-
-
-  
-  console.log("PRICE HISTORY DEBUG", {
-    sku: item.sku,
-    customerCode,
-    openPriceHistory,
-    prices,
-    loading,
   });
 
   const displayUnitPrice =
@@ -82,6 +74,19 @@ export default function CartItemRow({
     dispatch({ type: "REMOVE_ITEM", payload: key });
   };
 
+  const commitDescription = () => {
+    dispatch({
+      type: "UPDATE_ITEM_DESCRIPTION",
+      payload: {
+        sku: item.sku,
+        variantCode: item.variantCode ?? null,
+        sqft_sheet: Number(item.sqft_sheet ?? item.sqft ?? 0),
+        name: descDraft.trim(),
+      },
+    });
+    setEditingDesc(false);
+  };
+
   
 
   return (
@@ -91,21 +96,44 @@ export default function CartItemRow({
         <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
 
         <td className="px-4 py-3">
-          <p className="font-semibold text-xs">{item.name}</p>
+          {editingDesc ? (
+            <input
+              autoFocus
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              onBlur={commitDescription}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitDescription();
+                if (e.key === "Escape") {
+                  setDescDraft(item.name || "");
+                  setEditingDesc(false);
+                }
+              }}
+              className="w-full rounded border px-2 py-1 text-xs"
+            />
+          ) : (
+            <p
+              className="font-semibold text-xs cursor-pointer hover:underline"
+              onDoubleClick={() => setEditingDesc(true)}
+              title="ดับเบิลคลิกเพื่อแก้ไขชื่อสินค้า"
+            >
+              {item.name}
+            </p>
+          )}
           <p className="text-xs text-gray-500">{item.sku}</p>
         </td>
 
-        <td className="px-4 py-3">
+        <td className="px-2 py-3">
           <input
             type="number"
             value={item.qty}
             min="1"
             onChange={handleQtyChange}
-            className="w-20 rounded border p-1 text-center"
+            className="w-14 rounded border p-1 text-center"
           />
         </td>
 
-        <td className="px-4 py-3 text-sm">
+        <td className="px-2 py-3 text-sm">
           <button
             onClick={() => setOpenPriceHistory(v => !v)}
             className="font-semibold text-blue-700 hover:underline flex items-center gap-1"
@@ -121,11 +149,11 @@ export default function CartItemRow({
           </button>
         </td>
 
-        <td className="px-4 py-3 font-semibold">
+        <td className="px-2 text-sm py-3 font-semibold">
           {Number(displayLineTotal).toLocaleString("th-TH")}
         </td>
 
-        <td className="text-center">
+        <td className="text-start mr-4">
           <button onClick={handleRemove}>
             <TrashIcon />
           </button>
@@ -169,11 +197,18 @@ export default function CartItemRow({
                         </div>
                       </div>
 
-                      <div className="font-semibold text-emerald-600">
-                        ฿{" "}
-                        {Number(p.price).toLocaleString("th-TH", {
-                          minimumFractionDigits: 2,
-                        })}
+                      <div className="text-right">
+                        <div className="font-semibold text-emerald-600">
+                          ฿{" "}
+                          {Number(p.price).toLocaleString("th-TH", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </div>
+
+                        <div className="text-xs text-gray-500">
+                          จำนวน {Number(p.qty || 0).toLocaleString("th-TH")}{" "}
+                          {p.unit || ""}
+                        </div>
                       </div>
                     </div>
                   ))}
