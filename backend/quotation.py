@@ -32,7 +32,7 @@ def _now_iso():
 
 def _generate_quote_no(branch_code: str) -> str:
     """
-    Format:  BSQO-2502/0001
+    Format:  BSQT-2502/0001
     """
     now = datetime.now()
     yy = str(now.year)[-2:]
@@ -75,7 +75,6 @@ def _append_header_to_excel(header: dict):
         if col in headers:
             row[headers.index(col)] = val
 
-    # Map header values
     for key, val in header.items():
         set_col(key, val)
 
@@ -114,16 +113,13 @@ def _append_lines_to_excel(quote_no: str, lines: list):
 
 
 # -----------------------------------------------------
-# ⭐ Normalize keys
+# Normalize keys
 # -----------------------------------------------------
 def normalize_keys(row: dict):
     return {k.strip(): v for k, v in row.items()}
 
+
 def _build_line_from_payload(item: dict) -> dict:
-    """
-    สร้างโครง line ให้ DB จาก payload ของ FE
-    พร้อม normalize ตัวเลข และคำนวณ lineTotal ในฝั่ง backend
-    """
     sku = item["sku"]
     name = item.get("name", "")
     category = (
@@ -135,25 +131,18 @@ def _build_line_from_payload(item: dict) -> dict:
 
     qty = float(item.get("qty", 0) or 0)
     price = float(item.get("price", 0) or 0)
-
     sqft_sheet = float(item.get("sqft_sheet", 0) or 0)
 
-    # กัน qty ติดลบโดยไม่เปลี่ยน behavior ปกติ (ถ้า FE ส่งผิด → เราก็ treat เป็น 0)
     if qty < 0:
         qty = 0
 
-    # lineTotal คำนวณที่ backend (สูตรเดียวกับ FE → ผลลัพธ์ปกติจะเหมือนเดิม)
-        # 1) ถ้า FE ส่ง lineTotal มา (จาก pricing) ให้ใช้ค่านั้นเป็น source of truth
     if item.get("lineTotal") is not None:
         line_total = float(item.get("lineTotal") or 0)
-
     else:
-        # 2) ถ้าไม่มี lineTotal → คำนวณ fallback
         if str(category).upper() == "G":
-            line_total = round(price * sqft_sheet * qty, 2)   # ✅ กระจก
+            line_total = round(price * sqft_sheet * qty, 2)
         else:
-            line_total = round(price * qty, 2)                # ✅ อื่นๆ
-
+            line_total = round(price * qty, 2)
 
     return {
         "ItemCode": sku,
@@ -184,36 +173,29 @@ def create_quotation(payload: dict = Body(...)):
     customer = payload.get("customer") or {}
     branch = employee.get("branchId", "")
 
-     # -------------------------------
-    #  กำหนดค่า default: ผู้ไม่ประสงค์ออกนาม
-    # -------------------------------
     raw_code = (customer.get("code") or "").strip()
     raw_name = (customer.get("name") or "").strip()
-    raw_phone = (customer.get("phone") or "").strip()
 
     if not raw_code and not raw_name:
-        # ไม่กรอกอะไรเกี่ยวกับลูกค้าเลย → ถือว่าเป็นผู้ไม่ประสงค์ออกนาม
         cust_code = "N/A"
         cust_name = "ผู้ไม่ประสงค์ออกนาม"
     else:
-        # มีข้อมูลมาบางส่วน → ใส่ให้ครบ
         cust_code = raw_code or "N/A"
         cust_name = raw_name or "ผู้ไม่ประสงค์ออกนาม"
 
     quote_no = _generate_quote_no(branch)
     now = _now_iso()
 
-    # 🔥 เรียงตามคอลัมน์จริงของ DB
     header = {
         "QuoteNo": quote_no,
         "Status": payload.get("status", "draft"),
-        "CustomerCode": cust_code, 
+        "CustomerCode": cust_code,
         "SalesID": employee.get("id", ""),
         "SalesName": employee.get("name", ""),
         "CreateDate": now,
         "ExpireDate": payload.get("expireDate", ""),
         "ApproveDate": now,
-        "BranchCode": branch,                   # ใช้ชื่อเดียวกับ DB
+        "BranchCode": branch,
         "PaymentTerm": payload.get("paymentTerm", ""),
         "CreditTerm": payload.get("creditTerm", ""),
         "ShippingMethod": payload.get("deliveryType", ""),
@@ -222,27 +204,23 @@ def create_quotation(payload: dict = Body(...)):
         "SubtotalAmount": payload.get("totals", {}).get("exVat", 0),
         "TotalAmount": payload.get("totals", {}).get("grandTotal", 0),
         "NeedsTax": "Y" if payload.get("needTaxInvoice") else "N",
-        "BillTaxName": payload.get("billTaxName", ""),
         "Remark": payload.get("note", ""),
         "LastUpdate": now,
-        "CustomerName": cust_name, 
+        "CustomerName": cust_name,
         "Tel": customer.get("phone", ""),
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
-        
     }
 
-    # 🔥 INSERT ด้วยลำดับคอลัมน์ที่ถูกต้อง 100%
     cur.execute("""
         INSERT INTO Quote_Header (
             QuoteNo, Status, CustomerCode, SalesID, SalesName,
             CreateDate, ExpireDate, ApproveDate, BranchCode,
             PaymentTerm, CreditTerm, ShippingMethod, ShippingCost,
             DiscountAmount, SubtotalAmount, TotalAmount,
-            NeedsTax, BillTaxName, Remark, LastUpdate,
-            CustomerName, Tel , ShippingCustomerPay
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            NeedsTax, Remark, LastUpdate,
+            CustomerName, Tel, ShippingCustomerPay
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, tuple(header.values()))
-
 
     cart = payload.get("cart", [])
     if not cart:
@@ -251,24 +229,25 @@ def create_quotation(payload: dict = Body(...)):
     lines_to_excel = []
 
     for item in cart:
-            line = _build_line_from_payload(item)
+        line = _build_line_from_payload(item)
 
-            cur.execute("""
-                INSERT INTO Quote_Line (
-                    QuoteID, ItemCode, ItemName, Category,
-                    Unit, Quantity, UnitPrice, TotalPrice,
-                    IsGlassCut, CutInfoJson, Remark,Sqft_Sheet,VariantCode, ProductWeight
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                quote_no,
-                line["ItemCode"], line["ItemName"], line["Category"],
-                line["Unit"], line["Quantity"], line["UnitPrice"],
-                line["TotalPrice"], line["IsGlassCut"],
-                line["CutInfoJson"], line["Remark"],line["Sqft_Sheet"],line["VariantCode"],line["ProductWeight"]
-            ))
+        cur.execute("""
+            INSERT INTO Quote_Line (
+                QuoteID, ItemCode, ItemName, Category,
+                Unit, Quantity, UnitPrice, TotalPrice,
+                IsGlassCut, CutInfoJson, Remark,
+                Sqft_Sheet, VariantCode, ProductWeight
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            quote_no,
+            line["ItemCode"], line["ItemName"], line["Category"],
+            line["Unit"], line["Quantity"], line["UnitPrice"],
+            line["TotalPrice"], line["IsGlassCut"],
+            line["CutInfoJson"], line["Remark"],
+            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"]
+        ))
 
-            lines_to_excel.append(line)
-
+        lines_to_excel.append(line)
 
     conn.commit()
     conn.close()
@@ -296,12 +275,8 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
     customer = payload.get("customer") or {}
     now = _now_iso()
 
-    # -------------------------------
-    #  กำหนด default ผู้ไม่ประสงค์ออกนาม ตอนอัปเดต
-    # -------------------------------
     raw_code = (customer.get("code") or "").strip()
     raw_name = (customer.get("name") or "").strip()
-    raw_phone = (customer.get("phone") or "").strip()
 
     if not raw_code and not raw_name:
         cust_code = "N/A"
@@ -310,7 +285,6 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         cust_code = raw_code or "N/A"
         cust_name = raw_name or "ผู้ไม่ประสงค์ออกนาม"
 
-    # 🔥 จัดลำดับ header ตาม DB
     header = {
         "Status": payload.get("status", "draft"),
         "CustomerCode": cust_code,
@@ -327,24 +301,21 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         "SubtotalAmount": payload.get("totals", {}).get("exVat", 0),
         "TotalAmount": payload.get("totals", {}).get("grandTotal", 0),
         "NeedsTax": "Y" if payload.get("needTaxInvoice") else "N",
-        "BillTaxName": payload.get("billTaxName", ""),
         "Remark": payload.get("note", ""),
         "LastUpdate": now,
-        "CustomerName": cust_name, 
+        "CustomerName": cust_name,
         "Tel": customer.get("phone", ""),
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
-
     }
 
-    # 🔥 UPDATE ตามลำดับที่ถูกต้อง 100%
     cur.execute("""
         UPDATE Quote_Header SET
             Status=?, CustomerCode=?, SalesID=?, SalesName=?,
             ExpireDate=?, ApproveDate=?, BranchCode=?,
             PaymentTerm=?, CreditTerm=?, ShippingMethod=?, ShippingCost=?,
             DiscountAmount=?, SubtotalAmount=?, TotalAmount=?,
-            NeedsTax=?, BillTaxName=?, Remark=?, LastUpdate=?,
-            CustomerName=?, Tel=? , ShippingCustomerPay=?
+            NeedsTax=?, Remark=?, LastUpdate=?,
+            CustomerName=?, Tel=?, ShippingCustomerPay=?
         WHERE QuoteNo=?
     """, (
         header["Status"],
@@ -362,15 +333,13 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         header["SubtotalAmount"],
         header["TotalAmount"],
         header["NeedsTax"],
-        header["BillTaxName"],
         header["Remark"],
         header["LastUpdate"],
         header["CustomerName"],
         header["Tel"],
-        header["ShippingCustomerPay"],   # ⭐ FIX สำคัญมาก!
-        quote_no                         # ⭐ ตัวสุดท้าย
+        header["ShippingCustomerPay"],
+        quote_no
     ))
-
 
     cur.execute("DELETE FROM Quote_Line WHERE QuoteID=?", (quote_no,))
 
@@ -386,18 +355,19 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
             INSERT INTO Quote_Line (
                 QuoteID, ItemCode, ItemName, Category,
                 Unit, Quantity, UnitPrice, TotalPrice,
-                IsGlassCut, CutInfoJson, Remark ,Sqft_Sheet,VariantCode, ProductWeight
+                IsGlassCut, CutInfoJson, Remark,
+                Sqft_Sheet, VariantCode, ProductWeight
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             quote_no,
             line["ItemCode"], line["ItemName"], line["Category"],
             line["Unit"], line["Quantity"], line["UnitPrice"],
             line["TotalPrice"], line["IsGlassCut"],
-            line["CutInfoJson"], line["Remark"],line["Sqft_Sheet"],line["VariantCode"],line["ProductWeight"]
+            line["CutInfoJson"], line["Remark"],
+            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"]
         ))
 
         lines_to_excel.append(line)
-
 
     conn.commit()
     conn.close()
@@ -426,13 +396,11 @@ def list_quotations(status: str = None):
             SELECT * FROM Quote_Header
             WHERE Status = ?
             ORDER BY LastUpdate DESC
-            
         """, (status,))
     else:
         cur.execute("""
             SELECT * FROM Quote_Header
             ORDER BY LastUpdate DESC
-            
         """)
 
     headers = [normalize_keys(dict(r)) for r in cur.fetchall()]
@@ -442,12 +410,7 @@ def list_quotations(status: str = None):
         quote_no = h["QuoteNo"]
 
         cur.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
-        raw_rows = cur.fetchall()
-
-
-        lines = [normalize_keys(dict(r)) for r in raw_rows]
-
-
+        lines = [normalize_keys(dict(r)) for r in cur.fetchall()]
 
         result.append({
             "quoteNo": quote_no,
@@ -478,19 +441,9 @@ def list_quotations(status: str = None):
                     "lineTotal": ln["TotalPrice"],
                     "category": ln["Category"],
                     "unit": ln["Unit"],
-                    "sqft_sheet": (
-                        ln.get("Sqft_Sheet")
-                        if ln.get("Sqft_Sheet") is not None
-                        else 0
-                    ),
-                    "product_weight": (
-                        ln.get("ProductWeight")
-                        if ln.get("ProductWeight") is not None
-                        else 0
-                    ),
-
+                    "sqft_sheet": ln.get("Sqft_Sheet") or 0,
+                    "product_weight": ln.get("ProductWeight") or 0,
                     "variantCode": ln.get("VariantCode", ""),
-
                 }
                 for ln in lines
             ]
@@ -529,8 +482,7 @@ def get_quotation(quote_no: str):
                 "variantCode": ln.get("VariantCode", ""),
             }
             for ln in lines
-            ]
-
+        ]
     }
 
 
@@ -542,14 +494,12 @@ def cancel_quotation(quote_no: str):
     conn = get_conn()
     cur = conn.cursor()
 
-    # ตรวจสอบว่ามีใบนี้ไหม
     cur.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
     if not cur.fetchone():
         raise HTTPException(404, "ไม่พบใบเสนอราคา")
 
-    # เปลี่ยนสถานะเป็น cancelled
     cur.execute("""
-        UPDATE Quote_Header 
+        UPDATE Quote_Header
         SET Status = 'cancelled', LastUpdate = ?
         WHERE QuoteNo = ?
     """, (_now_iso(), quote_no))
@@ -558,4 +508,3 @@ def cancel_quotation(quote_no: str):
     conn.close()
 
     return {"cancelled": quote_no}
-

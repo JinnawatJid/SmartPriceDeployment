@@ -152,7 +152,6 @@ function Step6_Summary({ state, dispatch }) {
         },
 
         deliveryType: order.deliveryType ?? "PICKUP",
-        billTaxName: order.billTaxName ?? "",
         note: order.note ?? "",
 
         cart: (order.cart || []).map((it) => ({
@@ -706,7 +705,6 @@ function Step6_Summary({ state, dispatch }) {
         grandTotal: calculation.totals.total ?? null,
         shippingCustomerPay: state.shippingCustomerPay ?? 0,
       },
-      billTaxName: state.billTaxName || "",
       note: state.remark || "",
     };
   };
@@ -1044,12 +1042,24 @@ function Step6_Summary({ state, dispatch }) {
       {/*<ProgressBar currentStepId={4} />8/}
   
   {/* Top: ใบกำกับภาษี + ช่องทางรับสินค้า + ลูกค้า */}
-      <div className="mt-4 flex justify-center mr-4 ">
-        <div>
+      <div className="mt-2 flex justify-center mr-4 ">
+        <div className="flex">
+          <div >
+            <CustomerSearchSection
+              customer={state.customer}
+              onCustomerChange={(cust) => {
+                dispatch({ type: "SET_CUSTOMER", payload: cust });
+              }}
+            />
+            {/* แสดงสถานะลูกค้า / anonymous */}
+            <div className="mt-2 text-sm text-gray-600">
+                  หากไม่เลือกหรือไม่ระบุลูกค้า ระบบจะบันทึกเป็น{" "}
+                  <span className="font-semibold">ผู้ไม่ประสงค์ออกนาม</span>            
+            </div>
+          </div>
           <TaxDeliverySection
             needsTax={state.needsTax}
             deliveryType={state.deliveryType}
-            billTaxName={state.billTaxName}
             onOpenShipping={() => setShippingOpen(true)}
             onChange={(change) => {
               const payload = {
@@ -1058,41 +1068,10 @@ function Step6_Summary({ state, dispatch }) {
                   : state.needsTax,
                 deliveryType: Object.prototype.hasOwnProperty.call(change, "deliveryType")
                   ? change.deliveryType
-                  : state.deliveryType,
-                billTaxName: Object.prototype.hasOwnProperty.call(change, "billTaxName")
-                  ? change.billTaxName
-                  : state.billTaxName || "",
-              };
+                  : state.deliveryType,};
               dispatch({ type: "SET_TAX_DELIVERY", payload });
             }}
           />
-        </div>
-
-        <div className="ml-8">
-          <CustomerSearchSection
-            customer={state.customer}
-            onCustomerChange={(cust) => {
-              dispatch({ type: "SET_CUSTOMER", payload: cust });
-            }}
-          />
-          {/* แสดงสถานะลูกค้า / anonymous */}
-          <div className="mt-2 text-sm text-gray-600">
-            {!getCustomerCode(state.customer || {}) && (
-              <span>
-                หากไม่เลือกหรือไม่ระบุลูกค้า ระบบจะบันทึกเป็น{" "}
-                <span className="font-semibold">ผู้ไม่ประสงค์ออกนาม</span>
-              </span>
-            )}
-
-            {getCustomerCode(state.customer || {}) && (
-              <span>
-                ลูกค้า:{" "}
-                <span className="font-semibold">
-                  {state.customer?.name || "ผู้ไม่ประสงค์ออกนาม"}
-                </span>
-              </span>
-            )}
-          </div>
         </div>
       </div>
 

@@ -52,17 +52,7 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
             onClick={() => update({ needsTax: false })}
           />
         </div>
-        <div className="mt-2 w-full">
-            <p className="text-sm font-semibold">ชื่อผู้เสียภาษี</p>
-            <input
-              type="text"
-              placeholder="กรอกชื่อผู้เสียภาษี"
-              className="w-full rounded-lg border border-gray-300 p-3 text-sm mt-1 shadow-sm "
-              value={billTaxName || ""}                       // ✅ ผูกกับ prop
-              onChange={(e) => update({ billTaxName: e.target.value })}  // ✅ ยิงกลับไปให้ Step6
-            />
-
-        </div>
+        
       </div>
       
 

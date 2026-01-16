@@ -88,7 +88,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
 
 
   return (
-    <div className="w-full rounded-lg bg-gray-50 px-10 py-4">
+    <div className="w-full rounded-lg bg-gray-50 pl-4 pr-8 py-4">
       <p className="text-lg font-bold text-gray-800">ข้อมูลลูกค้า</p>
       {/* ส่วนค้นหา */}
       <div className="mx-auto max-w-lg space-y-3">
@@ -184,6 +184,9 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
               <h4 className="text-sm font-bold text-green-800">พบข้อมูลลูกค้า</h4>
             </div>
             <div className=" pl-9">
+              <p className="text-xs text-gray-700">
+                <strong>รหัส:</strong> {currentCustomer.id}
+              </p>
               <p className="text-xs text-gray-700">
                 <strong>ชื่อ:</strong> {currentCustomer.name}
               </p>

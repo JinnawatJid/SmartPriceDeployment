@@ -26,7 +26,6 @@ const initialState = {
   },
 
   needsTax: false,
-  billTaxName: "",
   remark: "",
   status: "new",
   quoteNo: null,
@@ -47,7 +46,6 @@ function quoteReducer(state, action) {
         ...state,
         needsTax: action.payload.needsTax,
         deliveryType: nextDeliveryType,
-        billTaxName: action.payload.billTaxName,
 
         // ⭐ KEY FIX: ถ้าเป็นรับเอง → ล้างค่าขนส่งทันที
         ...(nextDeliveryType === "PICKUP"
@@ -362,7 +360,6 @@ function quoteReducer(state, action) {
         },
 
         deliveryType: action.payload.deliveryType ?? "PICKUP",
-        billTaxName: action.payload.billTaxName || "",
         remark: action.payload.note || "",
         cart: (action.payload.cart || []).map((it) => {
           const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
