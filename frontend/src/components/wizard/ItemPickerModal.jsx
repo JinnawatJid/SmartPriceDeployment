@@ -35,11 +35,11 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     thickness: null,
   });
   const [accFilter, setAccFilter] = useState({
-  brand: null,
-  group: null,
-  subGroup: null,
-  color: null,
-  character: null,
+    brand: null,
+    group: null,
+    subGroup: null,
+    color: null,
+    character: null,
   });
   const [sealantFilter, setSealantFilter] = useState({
   brand: null,
@@ -255,8 +255,9 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
   return base.filter((it) => {
     const name = String(it.name || it.Name || "").toLowerCase();
     const sku = String(it.sku || it.SKU || "").toLowerCase();
+    const alt = String(it.alternate_names || "").toLowerCase();
     const term = searchTerm.toLowerCase();
-    return name.includes(term) || sku.includes(term);
+    return name.includes(term) || sku.includes(term) || alt.includes(term);
   });
 }, [items, searchTerm, category, aluFilter, clineFilter, accFilter, sealantFilter,gypsumFilter]);
 

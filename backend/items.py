@@ -75,6 +75,17 @@ def load_items_sqlite():
     else:
         df["product_sub_group"] = None
 
+    # --- Alternate Names ---
+    if "AlternateName" in df.columns:
+        df["alternate_names"] = (
+            df["AlternateName"]
+            .astype(str)
+            .str.strip()
+        )
+    else:
+        df["alternate_names"] = None
+
+
 
 
     return df
@@ -118,6 +129,7 @@ def get_items_by_category(category_name: str):
             "sqft_sheet": row.get("Sqft_Sheet"),
             "product_group": row.get("product_group"),
             "product_sub_group": row.get("product_sub_group"),
+            "alternate_names": row.get("alternate_names"),
 
         })
 
@@ -139,7 +151,8 @@ def full_text_search_items(q: str = Query(..., min_length=3)):
         contains(df["name"]) |
         contains(df.get("Description")) |
         contains(df.get("Inventory Posting Group")) |
-        contains(df.get("Base Unit Measure"))
+        contains(df.get("Base Unit Measure")) |
+        contains(df.get("alternate_names"))
     ]
 
     return df.head(50).to_dict("records")  # ⭐ limit 5 ที่ backend

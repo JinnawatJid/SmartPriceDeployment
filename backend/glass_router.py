@@ -105,9 +105,14 @@ def get_glass_list(
             "brand": parsed["brand"],
             "brandName": brandName,
 
+             # ===== internal glass meaning =====
             "type": parsed["type"],
             "typeName": typeName,
 
+            # ===== ✅ mapping ให้ ProductDetail =====
+            "group": parsed["type"],
+            "groupName": typeName,
+            
             "subGroup": parsed["subGroup"],
             "subGroupName": subGroupName,
 

@@ -1357,8 +1357,8 @@ function Step6_Summary({ state, dispatch }) {
             />
           )}
 
-          <div className="grid grid-cols-6 gap-4">
-            <div className="col-span-1">
+          <div className="grid grid-cols-8 gap-4">
+            <div className="col-span-2">
               <ProductList
                 items={productItems}
                 loading={productLoading}
@@ -1368,7 +1368,7 @@ function Step6_Summary({ state, dispatch }) {
               />
             </div>
 
-            <div className="col-span-3">
+            <div className="col-span-4">
               <ProductDetail item={selectedProduct} />
             </div>
 

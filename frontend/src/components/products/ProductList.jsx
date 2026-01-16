@@ -8,7 +8,7 @@ export default function ProductList({ items, onSelect }) {
           className="p-2 cursor-pointer border-b hover:bg-gray-100"
           onClick={() => onSelect(it)}
         >
-          <div className="font-semibold">{it.name}</div>
+          <div className="font-semibold text-sm">{it.name}</div>
           <div className="text-sm text-gray-500">{it.sku}</div>
         </div>
       ))}

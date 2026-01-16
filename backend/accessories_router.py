@@ -101,6 +101,12 @@ def get_accessories_items(
     parsed = df["No."].astype(str).apply(parse_accessories_sku)
     parsed_df = pd.json_normalize(parsed)
     df = pd.concat([df.reset_index(drop=True), parsed_df], axis=1)
+    
+    df["inventory"] = (
+        pd.to_numeric(df["Inventory"], errors="coerce")
+        .fillna(0)
+        .astype(int)
+    )
 
     df = filter_accessories(df, brand, group, subGroup, color, character)
 
@@ -111,10 +117,13 @@ def get_accessories_items(
     char_map = load_mapping(CHAR_TABLE)
 
     results = []
+
+    
     for _, row in df.iterrows():
         results.append({
-            "itemCode": row["No."],
+            "sku": row["No."],
             "name": row["Description"],
+            "alternateName": row.get("AlternateName"),
 
             "brand": row["brand"],
             "brandName": brand_map.get(row["brand"], ""),
@@ -130,6 +139,8 @@ def get_accessories_items(
 
             "character": row["character"],
             "characterName": char_map.get(row["character"], ""),
+
+            "inventory": row["inventory"],
 
             "product_group": row.get("Product Group"),
             "product_sub_group": row.get("Product Sub Group"),

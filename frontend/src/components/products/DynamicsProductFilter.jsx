@@ -4,8 +4,13 @@ import AccessoriesPicker from "../wizard/AccessoriesPicker.jsx";
 import CLinePicker from "../wizard/CLinePicker.jsx";
 import SealantPicker from "../wizard/SealantPicker.jsx";
 import GypsumPicker from "../wizard/GypsumPicker.jsx";
+import GlassPickerModal from "../wizard/GlassPickerModal.jsx";
+import { useState } from "react";
+
 
 export default function DynamicProductFilter({ category, onFilterChange }) {
+  const [openGlass, setOpenGlass] = useState(false);
+  if (typeof onFilterChange !== "function") return null;
   if (!category) return null;
 
   const handleChange = (filters) => {
@@ -30,10 +35,16 @@ export default function DynamicProductFilter({ category, onFilterChange }) {
 
     case "G":
       return (
-        <div className="p-4 border rounded bg-white">
-          <p className="font-semibold mb-2">ฟิลเตอร์กระจก</p>
-        
-        </div>
+        <>
+          <button
+            className="px-4 py-2 border rounded bg-cyan-50 text-cyan-700 font-semibold"
+           
+          >
+            เลือกสินค้ากระจก
+          </button>
+
+          
+        </>
       );
 
     default:

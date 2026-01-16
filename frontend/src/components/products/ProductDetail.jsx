@@ -13,6 +13,12 @@ export default function ProductDetail({ item }) {
       {/* ข้อมูลสินค้า */}
       <div>
         <h2 className="text-2xl font-bold">{item.name}</h2>
+        {item.alternateName && (
+          <div className="text-sm font-semibold text-gray-500">
+            ชื่ออื่น: {item.alternateName}
+          </div>
+        )}
+
         <p className="text-gray-600">SKU: {item.sku}</p>
         {item.brandName && <p>Brand: {item.brandName}</p>}
         {item.groupName && <p>Group: {item.groupName}</p>}
@@ -21,14 +27,6 @@ export default function ProductDetail({ item }) {
         {item.inventory !== undefined && (
           <p>คงเหลือในสต๊อก: {item.inventory}</p>
         )}
-      </div>
-
-      {/* Placeholder ประวัติการซื้อ */}
-      <div className="border-t pt-4">
-        <h3 className="text-lg font-semibold">ประวัติการซื้อของลูกค้า</h3>
-        <p className="text-sm text-gray-400 italic">
-          ยังไม่มีข้อมูล 
-        </p>
       </div>
     </div>
   );
