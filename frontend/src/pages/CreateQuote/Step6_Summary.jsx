@@ -1195,21 +1195,15 @@ function Step6_Summary({ state, dispatch }) {
             {/* กล่องตาราง (grid ไม่เปลี่ยน) */}
             <div className="rounded-lg border border-gray-200 bg-white">
               {/* header ไม่ scroll */}
-              <table className="min-w-full table-fixed ">
-                <thead className=" bg-gray-50 ">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="w-[40px] px-4 py-3 text-xs font-bold text-gray-500 text-left">#</th>
-                      <th className="w-[240px] px-4 py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
-                      <th className="w-[50px] pl-12 py-3 text-xs text-end font-bold text-gray-500 ">จำนวน</th>
-                      <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-center">
-                        ราคา/หน่วย
-                      </th>
-                      <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-left">
-                        ยอดรวม
-                      </th>
-                    </tr>
-                  </thead>
+              <table className="min-w-full table-fixed">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="w-[40px] px-4 py-3 text-xs font-bold text-gray-500 text-left">#</th>
+                    <th className="w-[240px] px-4 py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
+                    <th className="w-[50px] pl-12 py-3 text-xs text-end font-bold text-gray-500">จำนวน</th>
+                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-center">ราคา/หน่วย</th>
+                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-left">ยอดรวม</th>
+                  </tr>
                 </thead>
               </table>
 

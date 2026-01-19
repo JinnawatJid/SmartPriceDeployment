@@ -8,6 +8,8 @@ import Navbar from './components/Navbar.jsx';
 import QuoteDraftListPage from "./pages/QuoteDraftListPage.jsx";
 import ConfirmedQuotesPage from "./pages/ConfirmedQuotesPage";
 import OrderDetailPage from "./pages/OrderDetailPage.jsx";
+import UpdatePrice from "./pages/UpdatePrice";
+
 
 
 // --- Layout 1 (สำหรับ Dashboard) ---
@@ -48,6 +50,7 @@ function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/update-price" element={<UpdatePrice />} />
           <Route path="/quote-drafts" element={<QuoteDraftListPage />} />
           <Route path="/confirmed-quotes" element={<ConfirmedQuotesPage />} />
           <Route path="/order/:id" element={<OrderDetailPage />} />

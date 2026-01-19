@@ -187,6 +187,16 @@ function Dashboard() {
             </div>
           </div>
         </div>
+          <div
+            className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg mt-6"
+            onClick={() => navigate("/update-price")}
+          >
+            <img src="/assets/refresh.png" className="w-16 h-16 mb-4" />
+            <h2 className="text-4xl font-bold">เพิ่ม / อัปเดตราคา</h2>
+            <p className="mt-2 text-lg text-white/70">
+              สำหรับผู้จัดการ
+            </p>
+          </div>
 
           <div 
             className="mt-6 group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#c1c1c1] p-8 text-white shadow-lg transition-all hover:shadow-xl"

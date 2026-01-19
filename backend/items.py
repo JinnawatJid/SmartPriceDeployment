@@ -84,6 +84,16 @@ def load_items_sqlite():
         )
     else:
         df["alternate_names"] = None
+    
+    # --- No. 2 (Secondary SKU / Alternate Code) ---
+    if "No. 2" in df.columns:
+        df["sku2"] = (
+            df["No. 2"]
+            .astype(str)
+            .str.strip()
+        )
+    else:
+        df["sku2"] = None
 
 
 
@@ -130,6 +140,8 @@ def get_items_by_category(category_name: str):
             "product_group": row.get("product_group"),
             "product_sub_group": row.get("product_sub_group"),
             "alternate_names": row.get("alternate_names"),
+            "sku2": row.get("sku2"),
+
 
         })
 
@@ -148,6 +160,7 @@ def full_text_search_items(q: str = Query(..., min_length=3)):
 
     df = df[
         contains(df["sku"]) |
+        contains(df.get("sku2")) |
         contains(df["name"]) |
         contains(df.get("Description")) |
         contains(df.get("Inventory Posting Group")) |
