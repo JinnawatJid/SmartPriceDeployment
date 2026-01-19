@@ -1,23 +1,17 @@
-// src/components/wizard/CustomerSearchSection.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import api from "../../services/api.js";
 import Loader from "../Loader.jsx";
-import { useEffect } from "react";
+import NewCustomerModal from "./NewCustomerModal.jsx";
 
-
-// ไอคอนเฉพาะส่วนค้นหา/ผลลัพธ์
-const SearchIcon = () => (
-  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607z"
-    />
-  </svg>
-);
-
+// ---------------- Icons ----------------
 const CheckCircleIcon = () => (
-  <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+  <svg
+    className="h-5 w-5 text-green-600"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={2}
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -26,12 +20,7 @@ const CheckCircleIcon = () => (
   </svg>
 );
 
-/**
- * CustomerSearchSection
- * props:
- *  - customer: object | null   // ลูกค้าปัจจุบัน (จาก state ภายนอก)
- *  - onCustomerChange: (customer|null) => void
- */
+// ---------------- Component ----------------
 function CustomerSearchSection({ customer, onCustomerChange }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,20 +29,22 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
   const [openDropdown, setOpenDropdown] = useState(false);
   const [selectedFromDropdown, setSelectedFromDropdown] = useState(false);
 
+  const [openNewCustomer, setOpenNewCustomer] = useState(false);
 
   const currentCustomer = customer;
+
+  // โหลดข้อมูลลูกค้าเต็มหลังเลือกจาก dropdown
   const loadCustomerFull = async (customerId) => {
     try {
       const res = await api.get(`/api/customer/search?code=${customerId}`);
-      onCustomerChange(res.data); // ⭐ ตัวนี้คือ object เต็ม
+      onCustomerChange(res.data);
     } catch {
       setError("โหลดข้อมูลลูกค้าไม่สำเร็จ");
     }
   };
 
-
+  // ---------------- Search Effect ----------------
   useEffect(() => {
-    // ❗ ถ้าเพิ่งเลือกจาก dropdown → ไม่ต้อง search
     if (selectedFromDropdown) {
       setSelectedFromDropdown(false);
       return;
@@ -68,11 +59,10 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
     const timer = setTimeout(async () => {
       setLoading(true);
       setError("");
-
       try {
         const encoded = encodeURIComponent(searchTerm.trim());
         const res = await api.get(`/api/customer/search-list?q=${encoded}`);
-        setResults(res.data);
+        setResults(res.data || []);
         setOpenDropdown(true);
       } catch {
         setResults([]);
@@ -83,36 +73,37 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, [searchTerm, selectedFromDropdown]);
 
-
-
+  // ---------------- Render ----------------
   return (
-    <div className="w-full rounded-lg bg-gray-50 pl-4 pr-8 py-4">
-      <p className="text-lg font-bold text-gray-800">ข้อมูลลูกค้า</p>
-      {/* ส่วนค้นหา */}
-      <div className="mx-auto max-w-lg space-y-3">
-        <p className=" text-gray-600">
-          ค้นหาข้อมูลลูกค้าด้วยรหัส, เบอร์โทรศัพท์, หรือชื่อ
-        </p>
-        <div className="relative w-full">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="กรอกรหัส, เบอร์โทร, หรือชื่อ..."
-            className="w-full rounded-lg border border-gray-300 p-3 text-sm shadow-sm"
+    <>
+      {/* กล่องหลัก กว้างคงที่ = ไม่ขยายด้านข้าง */}
+      <div className="mx-auto max-w-lg rounded-lg bg-gray-50 px-4 py-4">
+        <p className="text-lg font-bold text-gray-800 mb-2">ข้อมูลลูกค้า</p>
 
-            
-          />
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            ค้นหาข้อมูลลูกค้าด้วยรหัส, เบอร์โทรศัพท์, หรือชื่อ
+          </p>
 
-          {openDropdown && results.length > 0 && (
-            <div className="relative">
+          {/* ================= SEARCH ================= */}
+          <div className="relative w-full">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="กรอกรหัส, เบอร์โทร, หรือชื่อ..."
+              className="w-full rounded-lg border border-gray-300 p-3 text-sm shadow-sm"
+            />
+
+            {/* Dropdown */}
+            {openDropdown && results.length > 0 && (
               <ul
                 className="
-                  absolute z-20 mt-1 w-full
-                  rounded-md border bg-white shadow-lg
-                  max-h-[220px] overflow-y-auto
+                  absolute left-0 right-0 mt-1
+                  rounded-lg border bg-white shadow-sm
+                  max-h-[220px] overflow-y-auto z-20
                 "
               >
                 {results.map((c) => (
@@ -120,84 +111,93 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
                     key={c.id}
                     className="cursor-pointer px-3 py-2 hover:bg-blue-50"
                     onClick={() => {
-                      setSelectedFromDropdown(true); // ⭐ สำคัญ
+                      setSelectedFromDropdown(true);
                       onCustomerChange(c);
+                      setSearchTerm(c.name);
                       setOpenDropdown(false);
                       setResults([]);
-                      setSearchTerm(c.name);
                       loadCustomerFull(c.id);
-                  }}
+                    }}
                   >
-                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {c.name}
+                    </p>
                     <p className="text-xs text-gray-500">{c.phone}</p>
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
+            )}
+          </div>
 
-
-          
-          
-
-
-        </div>
-          {customer && (
+          {/* ================= ACTION ================= */}
+          <div className="flex items-center justify-between">
             <button
               type="button"
-              title="“ยกเลิกการเลือกลูกค้า ระบบจะบันทึกเป็นผู้ไม่ประสงค์ออกนาม”"
               onClick={() => {
-                onCustomerChange(null);
-
-                // ⭐ reset search state
+                setOpenNewCustomer(true);
                 setSearchTerm("");
                 setResults([]);
                 setOpenDropdown(false);
               }}
-              className="
-                px-3 py-1.5
-                text-xs font-semibold
-                rounded-md
-                bg-red-50
-                text-red-600
-                hover:bg-red-100
-                transition
-              "
+              className="text-sm bg-blue-600 hover:bg-blue-700 p-2 font-semibold rounded-lg text-white "
             >
-              ล้างข้อมูลลูกค้า
+              ลูกค้าใหม่
             </button>
 
-          )}
-
-
-      </div>
-
-      {/* ส่วนผลลัพธ์ */}
-      <div className="mx-auto max-w-lg mt-2">
-        {loading && <Loader />}
-        {error && <p className="text-center text-red-500">{error}</p>}
-
-        {currentCustomer && (
-          <div className="animate-fadeIn rounded-lg border-2 border-green-500 bg-green-50 p-2">
-            <div className="flex items-center space-x-3">
-              <CheckCircleIcon />
-              <h4 className="text-sm font-bold text-green-800">พบข้อมูลลูกค้า</h4>
-            </div>
-            <div className=" pl-9">
-              <p className="text-xs text-gray-700">
-                <strong>รหัส:</strong> {currentCustomer.id}
-              </p>
-              <p className="text-xs text-gray-700">
-                <strong>ชื่อ:</strong> {currentCustomer.name}
-              </p>
-              <p className="text-xs text-gray-700">
-                <strong>เบอร์โทร:</strong> {currentCustomer.phone}
-              </p>
-            </div>
+            {customer && (
+              <button
+                type="button"
+                onClick={() => {
+                  onCustomerChange(null);
+                  setSearchTerm("");
+                  setResults([]);
+                  setOpenDropdown(false);
+                }}
+                className="text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded-md hover:bg-red-100"
+              >
+                ล้างข้อมูลลูกค้า
+              </button>
+            )}
           </div>
-        )}
+
+          {/* ================= STATUS ================= */}
+          {loading && <Loader />}
+          {error && <p className="text-sm text-red-500">{error}</p>}
+
+          {currentCustomer && (
+            <div className="rounded-lg border border-green-300 bg-green-50 p-3">
+              <div className="flex items-center gap-2">
+                <CheckCircleIcon />
+                <span className="text-sm font-semibold text-green-700">
+                  พบข้อมูลลูกค้า
+                </span>
+              </div>
+
+              <div className="mt-1 pl-7 text-xs text-gray-700 space-y-0.5">
+                <p>
+                  <strong>รหัส:</strong> {currentCustomer.id}
+                </p>
+                <p>
+                  <strong>ชื่อ:</strong> {currentCustomer.name}
+                </p>
+                <p>
+                  <strong>เบอร์โทร:</strong> {currentCustomer.phone}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* ================= NEW CUSTOMER MODAL ================= */}
+      <NewCustomerModal
+        open={openNewCustomer}
+        onClose={() => setOpenNewCustomer(false)}
+        onConfirm={(cust) => {
+          onCustomerChange(cust);
+        }}
+      />
+    </>
   );
 }
 

@@ -176,12 +176,14 @@ def create_quotation(payload: dict = Body(...)):
     raw_code = (customer.get("code") or "").strip()
     raw_name = (customer.get("name") or "").strip()
 
-    if not raw_code and not raw_name:
-        cust_code = "N/A"
-        cust_name = "ผู้ไม่ประสงค์ออกนาม"
+    # ลูกค้าใหม่: ไม่มี code แต่มีชื่อ
+    cust_code = raw_code or "N/A"
+
+    if raw_name:
+        cust_name = raw_name
     else:
-        cust_code = raw_code or "N/A"
-        cust_name = raw_name or "ผู้ไม่ประสงค์ออกนาม"
+        cust_name = "ลูกค้าใหม่"
+
 
     quote_no = _generate_quote_no(branch)
     now = _now_iso()
@@ -274,16 +276,16 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
     employee = payload.get("employee") or {}
     customer = payload.get("customer") or {}
     now = _now_iso()
-
     raw_code = (customer.get("code") or "").strip()
     raw_name = (customer.get("name") or "").strip()
 
-    if not raw_code and not raw_name:
-        cust_code = "N/A"
-        cust_name = "ผู้ไม่ประสงค์ออกนาม"
+    cust_code = raw_code or "N/A"
+
+    if raw_name:
+        cust_name = raw_name
     else:
-        cust_code = raw_code or "N/A"
-        cust_name = raw_name or "ผู้ไม่ประสงค์ออกนาม"
+        cust_name = "ลูกค้าใหม่"
+
 
     header = {
         "Status": payload.get("status", "draft"),
