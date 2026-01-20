@@ -479,6 +479,7 @@ function Step6_Summary({ state, dispatch }) {
     return () => clearTimeout(t);
   }, [productSearch]);
 
+  
   // โหลดประวัติการซื้อ
   useEffect(() => {
     const cust = state.customer;
@@ -486,14 +487,16 @@ function Step6_Summary({ state, dispatch }) {
       .toString()
       .trim();
 
-    if (!custCode) {
+    if (!custCode || custCode.toUpperCase() === "N/A") {
       setHistoryOrders([]);
       setHistoryError("");
       setHistoryLoading(false);
       return;
     }
 
-    const currentSkus = new Set((state.cart || []).map((it) => it.sku).filter(Boolean));
+    const currentSkus = new Set(
+      (state.cart || []).map((it) => it.sku).filter(Boolean)
+    );
 
     const fetchHistory = async () => {
       try {
@@ -515,7 +518,10 @@ function Step6_Summary({ state, dispatch }) {
         });
 
         filtered.sort((a, b) =>
-          (a.createdAt || a.updatedAt || "") < (b.createdAt || b.updatedAt || "") ? 1 : -1
+          (a.createdAt || a.updatedAt || "") <
+          (b.createdAt || b.updatedAt || "")
+            ? 1
+            : -1
         );
 
         setHistoryOrders(filtered.slice(0, 5));
@@ -529,6 +535,7 @@ function Step6_Summary({ state, dispatch }) {
 
     fetchHistory();
   }, [state.customer, state.cart]);
+
 
   const handleQuickAdd = (item) => {
     dispatch({
@@ -558,59 +565,56 @@ function Step6_Summary({ state, dispatch }) {
   // Auto-hydrate customer (Draft/Repeat) โดยไม่ยิง pricing ซ้ำ
   // -------------------------------------------------
   useEffect(() => {
-    const cust = state.customer;
-    const custCode = String(getCustomerCode(cust || {}) || "").trim();
+  const cust = state.customer;
+  const custCode = String(getCustomerCode(cust || {}) || "").trim();
 
-    // ไม่มีรหัสลูกค้า → ไม่ต้อง hydrate
-    if (!custCode) return;
+  // ❌ ไม่มีรหัสลูกค้า หรือเป็น N/A → ไม่ hydrate
+  if (!custCode || custCode.toUpperCase() === "N/A") return;
 
-    // ใช้ flag จาก QuoteContext (LOAD_DRAFT / REPEAT_FROM_HISTORY)
-    if (!cust?._needsHydrate) return;
+  if (!cust?._needsHydrate) return;
 
-    let cancelled = false;
+  let cancelled = false;
 
-    (async () => {
-      try {
-        const res = await api.get("/api/customer/search", {
-          params: { code: custCode },
-        });
+  (async () => {
+    try {
+      const res = await api.get("/api/customer/search", {
+        params: { code: custCode },
+      });
 
-        if (cancelled) return;
+      if (cancelled) return;
 
-        const full = res.data || {};
+      const full = res.data || {};
 
-        // merge: ยึดของเดิมไว้ก่อน แล้วเติม scoring fields จาก search
-        // ✅ ไม่แตะ cart → ไม่ทำให้สินค้าที่อยู่แล้วถูก pricing ซ้ำ
+      dispatch({
+        type: "SET_CUSTOMER",
+        payload: {
+          ...(cust || {}),
+          ...full,
+          id: full.id || cust.id || custCode,
+          code: full.id || cust.code || custCode,
+          _needsHydrate: false,
+        },
+      });
+    } catch (err) {
+      console.error("auto hydrate customer failed:", err);
+
+      if (!cancelled) {
         dispatch({
           type: "SET_CUSTOMER",
           payload: {
             ...(cust || {}),
-            ...full,
-            id: full.id || cust.id || custCode,
-            code: full.id || cust.code || custCode,
             _needsHydrate: false,
           },
         });
-      } catch (err) {
-        console.error("auto hydrate customer failed:", err);
-
-        // กัน loop: hydrate ไม่สำเร็จก็ปิด flag ไว้ก่อน
-        if (!cancelled) {
-          dispatch({
-            type: "SET_CUSTOMER",
-            payload: {
-              ...(cust || {}),
-              _needsHydrate: false,
-            },
-          });
-        }
       }
-    })();
+    }
+  })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [state.customer]);
+  return () => {
+    cancelled = true;
+  };
+}, [state.customer]);
+
 
   // sku -> item (ราคาที่คำนวณใหม่)
   const calcMap = useMemo(
@@ -1110,27 +1114,29 @@ function Step6_Summary({ state, dispatch }) {
         <div className="grid gap-4 grid-cols-8 flex-1 border-t-4 border-t-gray-200">
           {/* ซ้าย: ประวัติ+Category */}
           <div className="col-span-2 mt-6 space-y-4">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-3">
-                ประวัติการซื้อสินค้า
-              </h3>
+            {customerCode && customerCode.toUpperCase() !== "N/A" && (
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-3">
+                  ประวัติการซื้อสินค้า
+                </h3>
 
-              {historyLoading && (
-                <p className="text-sm text-gray-500">กำลังโหลดประวัติการซื้อ...</p>
-              )}
-              {historyError && <p className="text-sm text-red-500">{historyError}</p>}
-              {!historyLoading && !historyError && historyOrders.length === 0 && (
-                <p className="text-sm text-gray-500">
-                  ยังไม่พบประวัติการซื้อสำหรับสินค้า/ลูกค้ารายนี้
-                </p>
-              )}
+                {historyLoading && (
+                  <p className="text-sm text-gray-500">กำลังโหลดประวัติการซื้อ...</p>
+                )}
+                {historyError && <p className="text-sm text-red-500">{historyError}</p>}
+                {!historyLoading && !historyError && historyOrders.length === 0 && (
+                  <p className="text-sm text-gray-500">
+                    ยังไม่พบประวัติการซื้อสำหรับสินค้า/ลูกค้ารายนี้
+                  </p>
+                )}
 
-              <div className="space-y-2">
-                {historyOrders.map((ord) => (
-                  <OrderHistoryCard key={ord.id} order={ord} onRepeat={handleRepeatFromHistory} />
-                ))}
+                <div className="space-y-2">
+                  {historyOrders.map((ord) => (
+                    <OrderHistoryCard key={ord.id} order={ord} onRepeat={handleRepeatFromHistory} />
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="col-span-2 relative">
               <input

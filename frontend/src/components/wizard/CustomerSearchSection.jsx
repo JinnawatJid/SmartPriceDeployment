@@ -203,7 +203,11 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
         onClose={() => setOpenNewCustomer(false)}
         onConfirm={(cust) => {
           onCustomerChange(cust);
-          setSearchTerm(cust?.name || "");
+
+          // ✅ ไม่ใส่ชื่อในช่อง search
+          setSearchTerm("");
+          setResults([]);
+          setOpenDropdown(false);
         }}
       />
     </>
