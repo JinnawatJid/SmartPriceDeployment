@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import api from "../../services/api.js";
 import Loader from "../Loader.jsx";
 import NewCustomerModal from "./NewCustomerModal.jsx";
@@ -27,13 +27,15 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
   const [error, setError] = useState("");
   const [results, setResults] = useState([]);
   const [openDropdown, setOpenDropdown] = useState(false);
-  const [selectedFromDropdown, setSelectedFromDropdown] = useState(false);
 
   const [openNewCustomer, setOpenNewCustomer] = useState(false);
 
+  // ⭐ ใช้ ref กัน search loop
+  const skipSearchRef = useRef(false);
+
   const currentCustomer = customer;
 
-  // โหลดข้อมูลลูกค้าเต็มหลังเลือกจาก dropdown
+  // โหลดข้อมูลลูกค้าเต็มหลังเลือก
   const loadCustomerFull = async (customerId) => {
     try {
       const res = await api.get(`/api/customer/search?code=${customerId}`);
@@ -45,8 +47,9 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
 
   // ---------------- Search Effect ----------------
   useEffect(() => {
-    if (selectedFromDropdown) {
-      setSelectedFromDropdown(false);
+    // ⭐ ถ้ามาจากการเลือก dropdown → ข้าม search
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false;
       return;
     }
 
@@ -61,7 +64,9 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
       setError("");
       try {
         const encoded = encodeURIComponent(searchTerm.trim());
-        const res = await api.get(`/api/customer/search-list?q=${encoded}`);
+        const res = await api.get(
+          `/api/customer/search-list?q=${encoded}`
+        );
         setResults(res.data || []);
         setOpenDropdown(true);
       } catch {
@@ -73,12 +78,11 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, selectedFromDropdown]);
+  }, [searchTerm]);
 
   // ---------------- Render ----------------
   return (
     <>
-      {/* กล่องหลัก กว้างคงที่ = ไม่ขยายด้านข้าง */}
       <div className="mx-auto max-w-lg rounded-lg bg-gray-50 px-4 py-4">
         <p className="text-lg font-bold text-gray-800 mb-2">ข้อมูลลูกค้า</p>
 
@@ -111,11 +115,15 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
                     key={c.id}
                     className="cursor-pointer px-3 py-2 hover:bg-blue-50"
                     onClick={() => {
-                      setSelectedFromDropdown(true);
+                      // ⭐ กัน loop search
+                      skipSearchRef.current = true;
+
                       onCustomerChange(c);
                       setSearchTerm(c.name);
-                      setOpenDropdown(false);
+
                       setResults([]);
+                      setOpenDropdown(false);
+
                       loadCustomerFull(c.id);
                     }}
                   >
@@ -139,7 +147,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
                 setResults([]);
                 setOpenDropdown(false);
               }}
-              className="text-sm bg-blue-600 hover:bg-blue-700 p-2 font-semibold rounded-lg text-white "
+              className="text-sm bg-blue-600 hover:bg-blue-700 p-2 font-semibold rounded-lg text-white"
             >
               ลูกค้าใหม่
             </button>
@@ -195,6 +203,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
         onClose={() => setOpenNewCustomer(false)}
         onConfirm={(cust) => {
           onCustomerChange(cust);
+          setSearchTerm(cust?.name || "");
         }}
       />
     </>
