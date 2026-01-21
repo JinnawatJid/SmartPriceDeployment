@@ -15,7 +15,7 @@ export function useCrossSell(products) {
 
     api
       .post("/api/cross-sell", { products })
-      .then(res => setItems(res.data || []))
+      .then((res) => setItems(res.data || []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, [JSON.stringify(products)]);

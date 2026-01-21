@@ -1,13 +1,12 @@
 import React, { useEffect, useRef, useState, useId } from "react";
 
-
 export default function CustomDropdown({
   label,
   value,
   options = [],
   onChange,
   placeholder = "เลือกรายการ",
-  clearLabel = "-- ค่าเริ่มต้น --",   // ⭐ เพิ่ม
+  clearLabel = "-- ค่าเริ่มต้น --", // ⭐ เพิ่ม
   width = 160,
 }) {
   const [open, setOpen] = useState(false);
@@ -22,51 +21,39 @@ export default function CustomDropdown({
     }
   }, [options]);
 
-  const displayOptions =
-    cachedOptionsRef.current.length > 0
-      ? cachedOptionsRef.current
-      : options;
+  const displayOptions = cachedOptionsRef.current.length > 0 ? cachedOptionsRef.current : options;
 
-  const selected =
-    value == null
-      ? null
-      : displayOptions.find((o) => o.code === value);
+  const selected = value == null ? null : displayOptions.find((o) => o.code === value);
 
   const dropdownId = useId();
 
   useEffect(() => {
     const onOtherDropdownOpen = (e) => {
-        if (e.detail !== dropdownId) {
+      if (e.detail !== dropdownId) {
         setOpen(false);
-        }
+      }
     };
 
     window.addEventListener("dropdown-open", onOtherDropdownOpen);
-    return () =>
-        window.removeEventListener("dropdown-open", onOtherDropdownOpen);
-    }, [dropdownId]);
-
+    return () => window.removeEventListener("dropdown-open", onOtherDropdownOpen);
+  }, [dropdownId]);
 
   return (
     <div ref={ref} className="relative text-sm" style={{ width }}>
-      {label && (
-        <label className="block text-lg font-bold mb-1">
-          {label}
-        </label>
-      )}
+      {label && <label className="block text-lg font-bold mb-1">{label}</label>}
 
       {/* Trigger */}
       <button
         type="button"
         onClick={() => {
-            if (!open) {
+          if (!open) {
             window.dispatchEvent(
-                new CustomEvent("dropdown-open", {
+              new CustomEvent("dropdown-open", {
                 detail: dropdownId,
-                })
+              })
             );
-            }
-            setOpen((o) => !o);
+          }
+          setOpen((o) => !o);
         }}
         className="
             w-full
@@ -79,8 +66,7 @@ export default function CustomDropdown({
             focus:outline-none
             focus:ring-1 focus:ring-blue-500
         "
-        >
-
+      >
         <span className={selected ? "text-gray-800" : "text-gray-400"}>
           {selected ? selected.name : placeholder}
         </span>
@@ -104,7 +90,7 @@ export default function CustomDropdown({
           <div
             onMouseDown={(e) => {
               e.stopPropagation();
-              onChange(null);        // ⭐ reset
+              onChange(null); // ⭐ reset
               setOpen(false);
             }}
             className={`
@@ -113,11 +99,7 @@ export default function CustomDropdown({
               flex items-center
               cursor-pointer
               text-sm
-              ${
-                value == null
-                  ? "bg-blue-600 text-white"
-                  : "hover:bg-blue-50"
-              }
+              ${value == null ? "bg-blue-600 text-white" : "hover:bg-blue-50"}
             `}
           >
             {clearLabel}
@@ -139,11 +121,7 @@ export default function CustomDropdown({
                   flex items-center
                   cursor-pointer
                   text-sm
-                  ${
-                    active
-                      ? "bg-blue-600 text-white"
-                      : "hover:bg-blue-50"
-                  }
+                  ${active ? "bg-blue-600 text-white" : "hover:bg-blue-50"}
                 `}
               >
                 {opt.name}

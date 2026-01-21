@@ -1,5 +1,5 @@
 // src/components/wizard/ItemCard.jsx
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 const ItemCard = ({ item, onAdd }) => {
   // ใช้ Local state สำหรับจำนวน
@@ -7,7 +7,7 @@ const ItemCard = ({ item, onAdd }) => {
 
   const handleAddClick = () => {
     if (qty <= 0) {
-      alert('กรุณาใส่จำนวนที่มากกว่า 0');
+      alert("กรุณาใส่จำนวนที่มากกว่า 0");
       return;
     }
     onAdd(item, qty);
@@ -25,7 +25,9 @@ const ItemCard = ({ item, onAdd }) => {
       </div>
 
       <div className="flex-grow space-y-1 py-2 min-w-0">
-        <h4 className="text-lg font-semibold text-gray-800 max-h-[3rem] overflow-hidden">{item.name}</h4>
+        <h4 className="text-lg font-semibold text-gray-800 max-h-[3rem] overflow-hidden">
+          {item.name}
+        </h4>
         <p className="mt-1 text-sm text-gray-500">รหัส: {item.sku}</p>
         <p className="text-sm text-gray-500">{item.description}</p>
         {item.inventory !== undefined && (

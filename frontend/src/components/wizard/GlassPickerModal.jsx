@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 
-
 export default function GlassPickerModal({ open, onClose, onConfirm }) {
-  
   const [loading, setLoading] = useState(false);
   const [glassList, setGlassList] = useState([]);
 
@@ -21,13 +19,11 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [variantCode, setVariantCode] = useState("");
 
-
   // SIZE INPUTS
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [unitW, setUnitW] = useState("inch");
   const [unitH, setUnitH] = useState("inch");
-  
 
   // RESULT
   const [calcResult, setCalcResult] = useState(null);
@@ -42,9 +38,6 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
   const isVariant = !!selectedItem?.isVariant;
 
-  
-
-
   // -------------------------
   // FUNCTIONS
   // -------------------------
@@ -52,10 +45,14 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
     if (!val) return 0;
     val = Number(val);
     switch (unit) {
-      case "cm": return val / 2.54;
-      case "mm": return val / 25.4;
-      case "ft": return val * 12;
-      default: return val;
+      case "cm":
+        return val / 2.54;
+      case "mm":
+        return val / 25.4;
+      case "ft":
+        return val * 12;
+      default:
+        return val;
     }
   }
 
@@ -100,23 +97,19 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
     setHeight("");
   }, [selectedItem]);
 
-
   // -------------------------
   // EFFECT 3: AUTO-CALCULATE
   // -------------------------
   // -------------------------
- useEffect(() => {
-  if (!selectedItem) return;
+  useEffect(() => {
+    if (!selectedItem) return;
 
-  if (isVariant) {
-    if (!width || !height) return;
-  }
+    if (isVariant) {
+      if (!width || !height) return;
+    }
 
-  handleCalculate();
-}, [selectedItem, width, height, qtyCustomer, unitW, unitH, isVariant]);
-
-
-
+    handleCalculate();
+  }, [selectedItem, width, height, qtyCustomer, unitW, unitH, isVariant]);
 
   useEffect(() => {
     if (open) {
@@ -131,125 +124,117 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   }, [open]);
 
   async function handleCalculate() {
-  if (!selectedItem) return;
+    if (!selectedItem) return;
 
-  let wRawInch, hRawInch;
-  let wRound, hRound;
+    let wRawInch, hRawInch;
+    let wRound, hRound;
 
-  // -------------------------
-  // 1️⃣ แยก Variant / Non-Variant
-  // -------------------------
-  if (isVariant) {
-    // 🔹 Variant: ใช้ขนาดที่กรอก
-    wRawInch = convertToInch(width, unitW);
-    hRawInch = convertToInch(height, unitH);
+    // -------------------------
+    // 1️⃣ แยก Variant / Non-Variant
+    // -------------------------
+    if (isVariant) {
+      // 🔹 Variant: ใช้ขนาดที่กรอก
+      wRawInch = convertToInch(width, unitW);
+      hRawInch = convertToInch(height, unitH);
 
-    wRound = roundSize(wRawInch);
-    hRound = roundSize(hRawInch);
-  } else {
-    // 🔹 Non-Variant: ใช้ขนาดจาก SKU
-    wRawInch = Number(selectedItem.width);
-    hRawInch = Number(selectedItem.height);
+      wRound = roundSize(wRawInch);
+      hRound = roundSize(hRawInch);
+    } else {
+      // 🔹 Non-Variant: ใช้ขนาดจาก SKU
+      wRawInch = Number(selectedItem.width);
+      hRawInch = Number(selectedItem.height);
 
-    // ขนาด SKU ถือว่าเป็นขนาดปัดแล้ว
-    wRound = wRawInch;
-    hRound = hRawInch;
+      // ขนาด SKU ถือว่าเป็นขนาดปัดแล้ว
+      wRound = wRawInch;
+      hRound = hRawInch;
+    }
+
+    // -------------------------
+    // 2️⃣ คำนวณพื้นที่
+    // -------------------------
+    const sqftRaw = (wRawInch * hRawInch) / 144;
+    const sqftRounded = (wRound * hRound) / 144;
+
+    const actualSqft = sqftRounded * qtyCustomer; // ✅ คิดแบบปัดตามที่คุณต้องการ
+
+    // -------------------------
+    // 3️⃣ payload ส่งไป backend (ใช้รูปแบบเดียวกัน)
+    // -------------------------
+    const payload = {
+      sku: selectedItem.sku,
+      widthRaw: wRawInch,
+      heightRaw: hRawInch,
+      widthRounded: wRound,
+      heightRounded: hRound,
+      sqftRaw,
+      sqftRounded,
+      qty: 1,
+    };
+
+    try {
+      const res = await api.post("/api/glass/calc", payload);
+
+      setCalcResult({
+        ...res.data,
+        actualSqft,
+      });
+    } catch (err) {
+      console.error("CALC ERROR:", err);
+    }
   }
-
-  // -------------------------
-  // 2️⃣ คำนวณพื้นที่
-  // -------------------------
-  const sqftRaw = (wRawInch * hRawInch) / 144;
-  const sqftRounded = (wRound * hRound) / 144;
-
-  const actualSqft = sqftRounded * qtyCustomer; // ✅ คิดแบบปัดตามที่คุณต้องการ
-
-  // -------------------------
-  // 3️⃣ payload ส่งไป backend (ใช้รูปแบบเดียวกัน)
-  // -------------------------
-  const payload = {
-    sku: selectedItem.sku,
-    widthRaw: wRawInch,
-    heightRaw: hRawInch,
-    widthRounded: wRound,
-    heightRounded: hRound,
-    sqftRaw,
-    sqftRounded,
-    qty: 1,
-  };
-
-  try {
-    const res = await api.post("/api/glass/calc", payload);
-
-    setCalcResult({
-      ...res.data,
-      actualSqft,
-    });
-  } catch (err) {
-    console.error("CALC ERROR:", err);
-  }
-}
 
   // -------------------------
   // CONFIRM
   // -------------------------
   function handleConfirm() {
-  if (!calcResult || !selectedItem) return;
+    if (!calcResult || !selectedItem) return;
 
-  const sqftPerPiece = Number(calcResult.sqft || 0);
+    const sqftPerPiece = Number(calcResult.sqft || 0);
 
-  // 1) คำนวณพื้นที่ตาม SKU × จำนวนแผ่น
-  const skuSqft =
-    ((selectedItem.width * selectedItem.height) / 144) * qtySku;
+    // 1) คำนวณพื้นที่ตาม SKU × จำนวนแผ่น
+    const skuSqft = ((selectedItem.width * selectedItem.height) / 144) * qtySku;
 
-  // 2) เลือก sqft ที่ต้องใช้คิดราคา
-  const sqftToCharge =
-    priceMode === "actual"
-      ? calcResult.actualSqft
-      : skuSqft;
+    // 2) เลือก sqft ที่ต้องใช้คิดราคา
+    const sqftToCharge = priceMode === "actual" ? calcResult.actualSqft : skuSqft;
 
+    // 🔑 4) สร้างชื่อใหม่ (Variant / Non-Variant)
+    const finalName =
+      isVariant && variantCode
+        ? `${selectedItem.description} ${variantCode}`
+        : selectedItem.description;
 
-  // 🔑 4) สร้างชื่อใหม่ (Variant / Non-Variant)
-  const finalName =
-    isVariant && variantCode
-      ? `${selectedItem.description} ${variantCode}`
-      : selectedItem.description;
+    // 5) ส่งกลับ Step6
+    onConfirm({
+      // --- identity ---
+      sku: selectedItem.sku,
+      name: finalName,
+      category: "G",
+      isGlass: true,
+      isVariant,
 
-  // 5) ส่งกลับ Step6
-onConfirm({
-  // --- identity ---
-  sku: selectedItem.sku,
-  name: finalName,
-  category: "G",
-  isGlass: true,
-  isVariant,
+      product_group: selectedItem.product_group ?? null,
+      product_sub_group: selectedItem.product_sub_group ?? null,
 
-  product_group: selectedItem.product_group ?? null,
-  product_sub_group: selectedItem.product_sub_group ?? null,
+      // --- quantity / area ---
+      qty: Number(qtyCustomer), // จำนวนแผ่น
+      sqft_sheet: Number(sqftPerPiece),
+      skuSqft,
+      unit: "แผ่น", // sqft ตาม SKU (เผื่อ audit)
 
+      // --- cut / variant meta ---
+      variantCode: isVariant ? variantCode : null,
+      widthRaw: calcResult.widthRaw,
+      heightRaw: calcResult.heightRaw,
+      widthRounded: calcResult.widthRounded,
+      heightRounded: calcResult.heightRounded,
 
-  // --- quantity / area ---
-  qty: Number(qtyCustomer),          // จำนวนแผ่น
-  sqft_sheet: Number(sqftPerPiece),
-  skuSqft,   
-  unit: "แผ่น",                         // sqft ตาม SKU (เผื่อ audit)
+      // --- flags ---
+      priceMode,
+      isDraftItem: false,
+    });
 
-  // --- cut / variant meta ---
-  variantCode: isVariant ? variantCode : null,
-  widthRaw: calcResult.widthRaw,
-  heightRaw: calcResult.heightRaw,
-  widthRounded: calcResult.widthRounded,
-  heightRounded: calcResult.heightRounded,
-
-  // --- flags ---
-  priceMode,  
-  isDraftItem: false,                       
-});
-
-  onClose();
-}
-
-
+    onClose();
+  }
 
   // -------------------------
   // RENDER UI
@@ -274,35 +259,51 @@ onConfirm({
 
   const isVariantReady = () => {
     if (!isVariant) return true; // non-variant พร้อมเสมอ
-    return (
-      variantCode &&
-      width &&
-      height
-    );
+    return variantCode && width && height;
   };
 
-
   const brandOptions = [...new Set(glassList.map((i) => i.brand))];
-  const typeOptions = [...new Set(glassList.filter((i) => !brandFilter || i.brand === brandFilter).map((i) => i.type))];
-  const subGroupOptions = [...new Set(glassList.filter((i) =>
-    (!brandFilter || i.brand === brandFilter) &&
-    (!typeFilter || i.type === typeFilter)
-  ).map((i) => i.subGroup))];
-  const colorOptions = [...new Set(glassList.filter((i) =>
-    (!brandFilter || i.brand === brandFilter) &&
-    (!typeFilter || i.type === typeFilter) &&
-    (!subGroupFilter || i.subGroup === subGroupFilter)
-  ).map((i) => i.color))];
-  const thicknessOptions = [...new Set(glassList.filter((i) =>
-    (!brandFilter || i.brand === brandFilter) &&
-    (!typeFilter || i.type === typeFilter) &&
-    (!subGroupFilter || i.subGroup === subGroupFilter) &&
-    (!colorFilter || i.color === colorFilter)
-  ).map((i) => i.thickness))];
+  const typeOptions = [
+    ...new Set(glassList.filter((i) => !brandFilter || i.brand === brandFilter).map((i) => i.type)),
+  ];
+  const subGroupOptions = [
+    ...new Set(
+      glassList
+        .filter(
+          (i) => (!brandFilter || i.brand === brandFilter) && (!typeFilter || i.type === typeFilter)
+        )
+        .map((i) => i.subGroup)
+    ),
+  ];
+  const colorOptions = [
+    ...new Set(
+      glassList
+        .filter(
+          (i) =>
+            (!brandFilter || i.brand === brandFilter) &&
+            (!typeFilter || i.type === typeFilter) &&
+            (!subGroupFilter || i.subGroup === subGroupFilter)
+        )
+        .map((i) => i.color)
+    ),
+  ];
+  const thicknessOptions = [
+    ...new Set(
+      glassList
+        .filter(
+          (i) =>
+            (!brandFilter || i.brand === brandFilter) &&
+            (!typeFilter || i.type === typeFilter) &&
+            (!subGroupFilter || i.subGroup === subGroupFilter) &&
+            (!colorFilter || i.color === colorFilter)
+        )
+        .map((i) => i.thickness)
+    ),
+  ];
 
   const brandDropdownOptions = brandOptions.map((code) => ({
-  code,
-  name: glassList.find((x) => x.brand === code)?.brandName || code,
+    code,
+    name: glassList.find((x) => x.brand === code)?.brandName || code,
   }));
 
   const typeDropdownOptions = typeOptions.map((code) => ({
@@ -325,15 +326,15 @@ onConfirm({
     name: `${t} มม.`,
   }));
 
-
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 ">
       <div className="bg-white w-[900px] max-h-[90vh] rounded-lg shadow-lg p-4 overflow-y-auto">
-
         {/* HEADER */}
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold">เลือกสินค้ากระจก</h2>
-          <button className="text-red-600 font-bold" onClick={onClose}>X</button>
+          <button className="text-red-600 font-bold" onClick={onClose}>
+            X
+          </button>
         </div>
 
         {/* SEARCH */}
@@ -385,11 +386,8 @@ onConfirm({
             onChange={(v) => setThickFilter(v || "")}
             width={120}
           />
-
         </div>
 
-
-                
         {/* VARIANT CHECKBOX (เพิ่มใหม่) */}
         <div className="mb-3">
           <label className="flex items-center gap-2 text-sm">
@@ -435,12 +433,8 @@ onConfirm({
                     <td className="col-span-2 p-2 text-center whitespace-nowrap">
                       {item.width} × {item.height}
                     </td>
-                    <td className="col-span-1 p-2 text-center">
-                      {item.thickness}
-                    </td>
-                    <td className="col-span-1 p-2 text-center font-semibold">
-                      {item.inventory}
-                    </td>
+                    <td className="col-span-1 p-2 text-center">{item.thickness}</td>
+                    <td className="col-span-1 p-2 text-center font-semibold">{item.inventory}</td>
                   </tr>
                 ))}
               </tbody>
@@ -448,12 +442,10 @@ onConfirm({
           )}
         </div>
 
-
         {/* SIZE SECTION */}
         {selectedItem && isVariant && (
           <div className="border rounded p-3 mb-3">
             <div className="grid grid-cols-2 gap-4">
-
               {/* VARIANT CODE */}
               <div className="col-span-2">
                 <label>Variant Code</label>
@@ -520,70 +512,63 @@ onConfirm({
                   onChange={(e) => setQtyCustomer(e.target.value)}
                 />
               </div>
-
             </div>
           </div>
         )}
 
-      {/* ---------- NON-VARIANT ---------- */}
-      {selectedItem && !isVariant && (
-        <div className="border rounded p-3 mb-3">
-          <div>
-            <label>จำนวนแผ่น</label>
-            <input
-              className="border p-1 w-full"
-              type="number"
-              min={1}
-              value={qtyCustomer}
-              onChange={(e) => setQtyCustomer(e.target.value)}
-            />
+        {/* ---------- NON-VARIANT ---------- */}
+        {selectedItem && !isVariant && (
+          <div className="border rounded p-3 mb-3">
+            <div>
+              <label>จำนวนแผ่น</label>
+              <input
+                className="border p-1 w-full"
+                type="number"
+                min={1}
+                value={qtyCustomer}
+                onChange={(e) => setQtyCustomer(e.target.value)}
+              />
+            </div>
           </div>
-        </div>
-      )}
-       
-
+        )}
 
         {/* RESULT SECTION */}
         {calcResult && (
           <div className="p-3 border rounded bg-green-50 mb-3">
             <h3 className="font-bold text-green-700 mb-2">ผลการคำนวณ</h3>
 
-            <p>ขนาดปัดลงฟุตแล้ว: {calcResult.width} × {calcResult.height} นิ้ว</p>
             <p>
-              พื้นที่ต่อแผ่น: {calcResult.sqft.toFixed(2)} ตารางฟุต
+              ขนาดปัดลงฟุตแล้ว: {calcResult.width} × {calcResult.height} นิ้ว
             </p>
+            <p>พื้นที่ต่อแผ่น: {calcResult.sqft.toFixed(2)} ตารางฟุต</p>
             <p className="font-bold ">
-              พื้นที่รวม ({qtyCustomer} แผ่น):{" "}
-              {(calcResult.sqft * qtyCustomer).toFixed(2)} ตารางฟุต
+              พื้นที่รวม ({qtyCustomer} แผ่น): {(calcResult.sqft * qtyCustomer).toFixed(2)} ตารางฟุต
             </p>
 
+            {/* CONFIRM ACTION */}
+            {selectedItem && (
+              <div className=" bg-green-50 mt-3">
+                <button
+                  onClick={handleConfirm}
+                  disabled={!isVariantReady()}
+                  className={`px-4 py-2 rounded text-white ${
+                    isVariantReady()
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  เพิ่มลงใบเสนอราคา
+                </button>
 
-             {/* CONFIRM ACTION */}
-        {selectedItem && (
-          <div className=" bg-green-50 mt-3">
-            <button
-              onClick={handleConfirm}
-              disabled={!isVariantReady()}
-              className={`px-4 py-2 rounded text-white ${
-                isVariantReady()
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-gray-400 cursor-not-allowed"
-              }`}
-            >
-              เพิ่มลงใบเสนอราคา
-            </button>
-
-            {isVariant && !isVariantReady() && (
-              <div className="text-xs text-gray-600 mt-2">
-                * กรุณากรอก Variant Code และขนาดให้ครบก่อน
+                {isVariant && !isVariantReady() && (
+                  <div className="text-xs text-gray-600 mt-2">
+                    * กรุณากรอก Variant Code และขนาดให้ครบก่อน
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
-            
-          </div>
-        )}
-
       </div>
     </div>
   );

@@ -15,22 +15,14 @@ const XIcon = () => (
   </svg>
 );
 const TruckIcon = () => (
-  <img
-    src="/assets/fast-delivery.png"
-    alt="Truck Icon"
-    className="w-8 h-8 object-contain"
-  />
+  <img src="/assets/fast-delivery.png" alt="Truck Icon" className="w-8 h-8 object-contain" />
 );
 const BoxIcon = () => (
-  <img
-    src="/assets/pickup.png"
-    alt="Box Icon"
-    className="w-10 h-10 object-contain"
-  />
+  <img src="/assets/pickup.png" alt="Box Icon" className="w-10 h-10 object-contain" />
 );
 
-function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, billTaxName}) {
-    const [shippingOpen, setShippingOpen] = useState(false);
+function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, billTaxName }) {
+  const [shippingOpen, setShippingOpen] = useState(false);
   const update = (change) => {
     if (onChange) onChange(change);
   };
@@ -52,12 +44,10 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
             onClick={() => update({ needsTax: false })}
           />
         </div>
-        
       </div>
-      
 
       {/* ช่องทางการรับสินค้า */}
-    <div className="flex flex-col col-span-2  rounded-lg h-full">
+      <div className="flex flex-col col-span-2  rounded-lg h-full">
         <h3 className="text-lg font-bold text-gray-800">ช่องทางการรับสินค้า</h3>
         <p className="mt-1 text-gray-500">กรุณาเลือกช่องทางการรับสินค้าที่ต้องการ</p>
         <div className="flex mt-2 ">
@@ -74,20 +64,19 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
             onClick={() => update({ deliveryType: "PICKUP" })}
           />
         </div>
-        
-            {deliveryType === "DELIVERY" && (
-            <div className="mt-3">
-                <button
-                onClick={() => onOpenShipping && onOpenShipping()}
-                className="w-ful mt-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white shadow-sm hover:bg-blue-700"
-                >
-                คำนวณค่าขนส่ง
-                </button>
-            </div>
-            )}
+
+        {deliveryType === "DELIVERY" && (
+          <div className="mt-3">
+            <button
+              onClick={() => onOpenShipping && onOpenShipping()}
+              className="w-ful mt-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              คำนวณค่าขนส่ง
+            </button>
+          </div>
+        )}
       </div>
     </div>
-    
   );
 }
 

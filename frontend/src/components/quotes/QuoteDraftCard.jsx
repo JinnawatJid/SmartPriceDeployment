@@ -1,8 +1,6 @@
 // src/components/quotes/QuoteDraftCard.jsx
 import React from "react";
 
-
-
 function formatNumber(value) {
   if (value == null) return "-";
   return value.toLocaleString("th-TH");
@@ -25,34 +23,23 @@ export default function QuoteDraftCard({
       <div className="border-b border-gray-200 px-5 py-3">
         <div className="flex items-start justify-between gap-2">
           {/* เลขที่ใบเสนอราคา */}
-          <p className="text-xl font-extrabold text-[#0084FF]">
-            {quoteNo}
-          </p>
+          <p className="text-xl font-extrabold text-[#0084FF]">{quoteNo}</p>
 
           {/* ปุ่มส่ง LINE */}
-          
+
           <button
             type="button"
             className="flex items-center gap-2 rounded-lg bg-[#06b64c] font-medium  text-white px-3 py-1 text-xs shadow-md  hover:text-white hover:bg-[#05a445] "
             title="ส่งใบเสนอราคาทาง LINE"
           >
-            <img
-            src="/assets/Line_logo.png"
-            alt="LINE"
-            className="h-6 w-6  rounded-md shadow-md"
-          />
+            <img src="/assets/Line_logo.png" alt="LINE" className="h-6 w-6  rounded-md shadow-md" />
             <span>ส่งใบเสนอราคา</span>
           </button>
         </div>
 
-        <p className="mt-1 font-semibold text-gray-800">
-          {customerName}
-        </p>
-        <p className="text-xs text-gray-500">
-          รหัสลูกค้า: {customerCode}
-        </p>
+        <p className="mt-1 font-semibold text-gray-800">{customerName}</p>
+        <p className="text-xs text-gray-500">รหัสลูกค้า: {customerCode}</p>
       </div>
-
 
       {/* Body */}
       <div className="flex-1 px-5 py-3 space-y-2 text-xs md:text-sm">
@@ -66,42 +53,32 @@ export default function QuoteDraftCard({
         </div>
         <div className="flex justify-between border-t border-gray-100 pt-2 mt-1">
           <span className="text-gray-500">มูลค่าโดยประมาณ:</span>
-          <span className="font-semibold text-emerald-600">
-            ฿ {formatNumber(totalAmount)}
-          </span>
+          <span className="font-semibold text-emerald-600">฿ {formatNumber(totalAmount)}</span>
         </div>
 
         {/* รายการสินค้า */}
         <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
-            {items.map((it, idx) => {
-                const qty = Number(it.qty ?? 0);
-                const unitPrice = Number(it.price ?? 0);               // ✅ ราคาต่อหน่วย
-                const lineTotal =
-                it.lineTotal != null
-                    ? Number(it.lineTotal)
-                    : unitPrice * qty;                                  // backup เผื่อไม่มี lineTotal
+          {items.map((it, idx) => {
+            const qty = Number(it.qty ?? 0);
+            const unitPrice = Number(it.price ?? 0); // ✅ ราคาต่อหน่วย
+            const lineTotal = it.lineTotal != null ? Number(it.lineTotal) : unitPrice * qty; // backup เผื่อไม่มี lineTotal
 
-                return (
-                <div
-                    key={idx}
-                    className="grid grid-cols-4 items-center text-xs font-semibold"
-                >
-                    <div className="flex-1 pr-2 text-gray-700 truncate">
-                    {it.name}
-                    </div>
+            return (
+              <div key={idx} className="grid grid-cols-4 items-center text-xs font-semibold">
+                <div className="flex-1 pr-2 text-gray-700 truncate">{it.name}</div>
 
-                    <div className="flex col-span-2 justify-center text-right mx-1 text-gray-500">
-                        <div>฿{formatNumber(unitPrice)} </div>    {/* ✅ ราคาต่อชิ้น */}
-                        <div>x{formatNumber(qty)}</div>
-                    </div>
-
-                    <div className="flex justify-end text-emerald-600 font-semibold">
-                    ฿{formatNumber(lineTotal)}                        {/* ✅ ยอดรวม */}
-                    </div>
+                <div className="flex col-span-2 justify-center text-right mx-1 text-gray-500">
+                  <div>฿{formatNumber(unitPrice)} </div> {/* ✅ ราคาต่อชิ้น */}
+                  <div>x{formatNumber(qty)}</div>
                 </div>
-                );
-            })}
-            </div>
+
+                <div className="flex justify-end text-emerald-600 font-semibold">
+                  ฿{formatNumber(lineTotal)} {/* ✅ ยอดรวม */}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Footer buttons */}

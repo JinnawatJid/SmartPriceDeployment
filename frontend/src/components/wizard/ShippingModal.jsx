@@ -3,19 +3,10 @@ import React, { useEffect, useRef, useState } from "react";
 import api from "../../services/api"; // Import centralized api service
 
 const TruckIcon = () => (
-  <img
-    src="/assets/fast-delivery.png"
-    alt="Truck Icon"
-    className="w-8 h-8 object-contain"
-  />
+  <img src="/assets/fast-delivery.png" alt="Truck Icon" className="w-8 h-8 object-contain" />
 );
 
-export default function ShippingModal({
-  open = false,
-  initial = {},
-  onClose,
-  onConfirm,
-}) {
+export default function ShippingModal({ open = false, initial = {}, onClose, onConfirm }) {
   const dialogRef = useRef(null);
   const [vehicleType, setVehicleType] = useState(initial.vehicleType || "");
   const [distanceKm, setDistanceKm] = useState(initial.distanceKm ?? "");
@@ -116,7 +107,6 @@ export default function ShippingModal({
                 <option value="10 ล้อ">10 ล้อ</option>
               </select>
             </div>
-            
           </div>
 
           {/* รายละเอียดการขนส่ง */}

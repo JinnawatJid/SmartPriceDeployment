@@ -22,7 +22,7 @@ export default function GlassSemiSizeModal({
   const [filters, setFilters] = useState(defaultFilters);
   const [sizes, setSizes] = useState([]);
   const [selectedSkus, setSelectedSkus] = useState([]);
-  const [loading, setLoading] = useState(false);        // โหลดรายการไซส์ semi
+  const [loading, setLoading] = useState(false); // โหลดรายการไซส์ semi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,14 +52,7 @@ export default function GlassSemiSizeModal({
     setError("");
     setSizes([]);
     setSelectedSkus([]);
-  }, [
-    isOpen,
-    defaultBrand,
-    defaultType,
-    defaultSubType,
-    defaultColor,
-    defaultThickness,
-  ]);
+  }, [isOpen, defaultBrand, defaultType, defaultSubType, defaultColor, defaultThickness]);
 
   // -------------------------
   // 2) โหลด master options จาก /api/glass/master สำหรับ dropdown
@@ -76,8 +69,7 @@ export default function GlassSemiSizeModal({
         if (filters.type) params.type = filters.type;
         if (filters.subType) params.subType = filters.subType;
         if (filters.color) params.color = filters.color;
-        if (filters.thickness)
-          params.thickness = Number(filters.thickness) || undefined;
+        if (filters.thickness) params.thickness = Number(filters.thickness) || undefined;
 
         const { data } = await api.get("/api/glass/master", { params });
 
@@ -95,14 +87,7 @@ export default function GlassSemiSizeModal({
     };
 
     run();
-  }, [
-    isOpen,
-    filters.brand,
-    filters.type,
-    filters.subType,
-    filters.color,
-    filters.thickness,
-  ]);
+  }, [isOpen, filters.brand, filters.type, filters.subType, filters.color, filters.thickness]);
 
   // -------------------------
   // 3) โหลดไซส์จาก backend ตาม filter (semi options)
@@ -131,9 +116,7 @@ export default function GlassSemiSizeModal({
           type: filters.type || undefined,
           subType: filters.subType || undefined,
           color: filters.color || undefined,
-          thickness: filters.thickness
-            ? Number(filters.thickness)
-            : undefined,
+          thickness: filters.thickness ? Number(filters.thickness) : undefined,
         };
         const res = await api.get("/api/glass/semi/options", {
           params,
@@ -189,9 +172,7 @@ export default function GlassSemiSizeModal({
       return;
     }
     if (!selectedSkus.length) {
-      const ok = window.confirm(
-        "ยังไม่ได้เลือกไซส์กึ่งมาตรฐานเลย ต้องการดำเนินการต่อหรือไม่?"
-      );
+      const ok = window.confirm("ยังไม่ได้เลือกไซส์กึ่งมาตรฐานเลย ต้องการดำเนินการต่อหรือไม่?");
       if (!ok) return;
     }
 
@@ -242,17 +223,11 @@ export default function GlassSemiSizeModal({
         <div className="flex-1 overflow-y-auto flex">
           {/* Left: Filters */}
           <div className="w-72 border-r border-gray-200 p-4 space-y-3">
-            {masterErr && (
-              <div className="mb-2 text-[11px] text-red-600">
-                {masterErr}
-              </div>
-            )}
+            {masterErr && <div className="mb-2 text-[11px] text-red-600">{masterErr}</div>}
 
             {/* Brand */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                ยี่ห้อ (Brand)
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">ยี่ห้อ (Brand)</label>
               <select
                 className="w-full border rounded-lg p-3 text-sm"
                 value={filters.brand}
@@ -278,9 +253,7 @@ export default function GlassSemiSizeModal({
 
             {/* Type */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                ประเภท (Type)
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">ประเภท (Type)</label>
               <select
                 className="w-full border rounded-lg p-3 text-sm"
                 value={filters.type}
@@ -329,9 +302,7 @@ export default function GlassSemiSizeModal({
 
             {/* Color */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                สี (Color)
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">สี (Color)</label>
               <select
                 className="w-full border rounded-lg p-3 text-sm"
                 value={filters.color}
@@ -386,13 +357,9 @@ export default function GlassSemiSizeModal({
             {/* Size grid */}
             <div className="p-4 border-b border-gray-200">
               {loading ? (
-                <div className="text-sm text-gray-500">
-                  กำลังโหลดรายการไซส์...
-                </div>
+                <div className="text-sm text-gray-500">กำลังโหลดรายการไซส์...</div>
               ) : sizes.length === 0 ? (
-                <div className="text-sm text-gray-500">
-                  ยังไม่มีข้อมูลไซส์จากเงื่อนไขนี้
-                </div>
+                <div className="text-sm text-gray-500">ยังไม่มีข้อมูลไซส์จากเงื่อนไขนี้</div>
               ) : (
                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                   {sizes.map((s) => {
@@ -415,8 +382,8 @@ export default function GlassSemiSizeModal({
                           {s.isStandard
                             ? "มาตรฐานบริษัท"
                             : s.isSemi
-                            ? "กึ่งมาตรฐาน (ตั้งไว้แล้ว)"
-                            : "\u00A0"}
+                              ? "กึ่งมาตรฐาน (ตั้งไว้แล้ว)"
+                              : "\u00A0"}
                         </span>
                       </button>
                     );
@@ -424,15 +391,12 @@ export default function GlassSemiSizeModal({
                 </div>
               )}
             </div>
-            
           </div>
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-          <div className="text-xs text-red-600 h-4">
-            {error || "\u00A0"}
-          </div>
+          <div className="text-xs text-red-600 h-4">{error || "\u00A0"}</div>
           <div className="flex gap-3">
             <button
               type="button"

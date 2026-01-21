@@ -5,11 +5,10 @@ import CrossSellItem from "./CrossSellItem";
 export default function CrossSellPanel({ onAddRequest }) {
   const { state } = useQuote();
 
-  const products = state.cart.map(it => ({
+  const products = state.cart.map((it) => ({
     productGroup: it.product_group ?? null,
     productSubGroup: it.product_sub_group ?? null,
   }));
-
 
   const { items, loading } = useCrossSell(products);
 
@@ -21,9 +20,7 @@ export default function CrossSellPanel({ onAddRequest }) {
 
   return (
     <div className="border rounded p-3 bg-gray-50 mt-4">
-      <div className="font-semibold text-sm mb-2">
-        สินค้าแนะนำ
-      </div>
+      <div className="font-semibold text-sm mb-2">สินค้าแนะนำ</div>
 
       <div
         className="grid grid-cols-3 gap-2 overflow-y-auto"
@@ -32,11 +29,7 @@ export default function CrossSellPanel({ onAddRequest }) {
         }}
       >
         {items.map((it, idx) => (
-          <CrossSellItem
-            key={`${it.displayName}-${idx}`}
-            item={it}
-            onAdd={onAddRequest}
-          />
+          <CrossSellItem key={`${it.displayName}-${idx}`} item={it} onAdd={onAddRequest} />
         ))}
       </div>
     </div>

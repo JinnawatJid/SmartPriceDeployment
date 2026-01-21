@@ -11,8 +11,7 @@ export default function UpdatePrice() {
 
   useEffect(() => {
     if (!version) return;
-    api.get(`/api/item-update/preview/${version.version_id}`)
-       .then(res => setRows(res.data));
+    api.get(`/api/item-update/preview/${version.version_id}`).then((res) => setRows(res.data));
   }, [version]);
 
   return (

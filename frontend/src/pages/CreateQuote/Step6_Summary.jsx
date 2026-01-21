@@ -21,7 +21,6 @@ import DynamicsProductFilter from "../../components/products/DynamicsProductFilt
 import CrossSellPanel from "../../components/cross-sell/CrossSellPanel.jsx";
 import CustomDropdown from "../../components/common/CustomDropdown.jsx";
 
-
 import { uiKeyOf, pricingKeyOf, printKeyOf } from "./utils/quoteKeys";
 import { getCustomerCode } from "./utils/customer";
 import { fmtTHB } from "./utils/format";
@@ -111,7 +110,6 @@ function Step6_Summary({ state, dispatch }) {
     loading: true,
     error: null,
   });
-
 
   const handleCrossSellAdd = (ruleItem) => {
     // TODO: เปิด modal ค้นหาสินค้า
@@ -479,7 +477,6 @@ function Step6_Summary({ state, dispatch }) {
     return () => clearTimeout(t);
   }, [productSearch]);
 
-  
   // โหลดประวัติการซื้อ
   useEffect(() => {
     const cust = state.customer;
@@ -494,9 +491,7 @@ function Step6_Summary({ state, dispatch }) {
       return;
     }
 
-    const currentSkus = new Set(
-      (state.cart || []).map((it) => it.sku).filter(Boolean)
-    );
+    const currentSkus = new Set((state.cart || []).map((it) => it.sku).filter(Boolean));
 
     const fetchHistory = async () => {
       try {
@@ -518,10 +513,7 @@ function Step6_Summary({ state, dispatch }) {
         });
 
         filtered.sort((a, b) =>
-          (a.createdAt || a.updatedAt || "") <
-          (b.createdAt || b.updatedAt || "")
-            ? 1
-            : -1
+          (a.createdAt || a.updatedAt || "") < (b.createdAt || b.updatedAt || "") ? 1 : -1
         );
 
         setHistoryOrders(filtered.slice(0, 5));
@@ -535,7 +527,6 @@ function Step6_Summary({ state, dispatch }) {
 
     fetchHistory();
   }, [state.customer, state.cart]);
-
 
   const handleQuickAdd = (item) => {
     dispatch({
@@ -565,56 +556,55 @@ function Step6_Summary({ state, dispatch }) {
   // Auto-hydrate customer (Draft/Repeat) โดยไม่ยิง pricing ซ้ำ
   // -------------------------------------------------
   useEffect(() => {
-  const cust = state.customer;
-  const custCode = String(getCustomerCode(cust || {}) || "").trim();
+    const cust = state.customer;
+    const custCode = String(getCustomerCode(cust || {}) || "").trim();
 
-  // ❌ ไม่มีรหัสลูกค้า หรือเป็น N/A → ไม่ hydrate
-  if (!custCode || custCode.toUpperCase() === "N/A") return;
+    // ❌ ไม่มีรหัสลูกค้า หรือเป็น N/A → ไม่ hydrate
+    if (!custCode || custCode.toUpperCase() === "N/A") return;
 
-  if (!cust?._needsHydrate) return;
+    if (!cust?._needsHydrate) return;
 
-  let cancelled = false;
+    let cancelled = false;
 
-  (async () => {
-    try {
-      const res = await api.get("/api/customer/search", {
-        params: { code: custCode },
-      });
+    (async () => {
+      try {
+        const res = await api.get("/api/customer/search", {
+          params: { code: custCode },
+        });
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      const full = res.data || {};
+        const full = res.data || {};
 
-      dispatch({
-        type: "SET_CUSTOMER",
-        payload: {
-          ...(cust || {}),
-          ...full,
-          id: full.id || cust.id || custCode,
-          code: full.id || cust.code || custCode,
-          _needsHydrate: false,
-        },
-      });
-    } catch (err) {
-      console.error("auto hydrate customer failed:", err);
-
-      if (!cancelled) {
         dispatch({
           type: "SET_CUSTOMER",
           payload: {
             ...(cust || {}),
+            ...full,
+            id: full.id || cust.id || custCode,
+            code: full.id || cust.code || custCode,
             _needsHydrate: false,
           },
         });
+      } catch (err) {
+        console.error("auto hydrate customer failed:", err);
+
+        if (!cancelled) {
+          dispatch({
+            type: "SET_CUSTOMER",
+            payload: {
+              ...(cust || {}),
+              _needsHydrate: false,
+            },
+          });
+        }
       }
-    }
-  })();
+    })();
 
-  return () => {
-    cancelled = true;
-  };
-}, [state.customer]);
-
+    return () => {
+      cancelled = true;
+    };
+  }, [state.customer]);
 
   // sku -> item (ราคาที่คำนวณใหม่)
   const calcMap = useMemo(
@@ -1034,11 +1024,7 @@ function Step6_Summary({ state, dispatch }) {
   };
   console.log("=== STEP6 STATE AFTER LOAD_DRAFT ===", state);
 
-  const customerCode = useMemo(
-    () => getCustomerCode(state.customer),
-    [state.customer]
-  );
-
+  const customerCode = useMemo(() => getCustomerCode(state.customer), [state.customer]);
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-lg flex flex-col animate-fadeIn">
@@ -1048,7 +1034,7 @@ function Step6_Summary({ state, dispatch }) {
   {/* Top: ใบกำกับภาษี + ช่องทางรับสินค้า + ลูกค้า */}
       <div className="mt-2 flex justify-center mr-4 ">
         <div className="flex">
-          <div >
+          <div>
             <CustomerSearchSection
               customer={state.customer}
               onCustomerChange={(cust) => {
@@ -1057,8 +1043,8 @@ function Step6_Summary({ state, dispatch }) {
             />
             {/* แสดงสถานะลูกค้า / anonymous */}
             <div className="mt-2 text-sm text-gray-600">
-                  หากไม่เลือกหรือไม่ระบุลูกค้า ระบบจะบันทึกเป็น{" "}
-                  <span className="font-semibold">ผู้ไม่ประสงค์ออกนาม</span>            
+              หากไม่เลือกหรือไม่ระบุลูกค้า ระบบจะบันทึกเป็น{" "}
+              <span className="font-semibold">ผู้ไม่ประสงค์ออกนาม</span>
             </div>
           </div>
           <TaxDeliverySection
@@ -1072,7 +1058,8 @@ function Step6_Summary({ state, dispatch }) {
                   : state.needsTax,
                 deliveryType: Object.prototype.hasOwnProperty.call(change, "deliveryType")
                   ? change.deliveryType
-                  : state.deliveryType,};
+                  : state.deliveryType,
+              };
               dispatch({ type: "SET_TAX_DELIVERY", payload });
             }}
           />
@@ -1204,11 +1191,21 @@ function Step6_Summary({ state, dispatch }) {
               <table className="min-w-full table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="w-[40px] px-4 py-3 text-xs font-bold text-gray-500 text-left">#</th>
-                    <th className="w-[240px] px-4 py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
-                    <th className="w-[50px] pl-12 py-3 text-xs text-end font-bold text-gray-500">จำนวน</th>
-                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-center">ราคา/หน่วย</th>
-                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-left">ยอดรวม</th>
+                    <th className="w-[40px] px-4 py-3 text-xs font-bold text-gray-500 text-left">
+                      #
+                    </th>
+                    <th className="w-[240px] px-4 py-3 text-xs font-bold text-gray-500 text-left">
+                      สินค้า
+                    </th>
+                    <th className="w-[50px] pl-12 py-3 text-xs text-end font-bold text-gray-500">
+                      จำนวน
+                    </th>
+                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-center">
+                      ราคา/หน่วย
+                    </th>
+                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-left">
+                      ยอดรวม
+                    </th>
                   </tr>
                 </thead>
               </table>

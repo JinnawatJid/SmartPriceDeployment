@@ -21,7 +21,6 @@ export default function CrossSellItem({ item, onAdd }) {
 
   return (
     <div className="flex items-center gap-3 border rounded p-2 bg-white">
-      
       {/* รูป / fallback */}
       {!imgError ? (
         <img
@@ -37,9 +36,7 @@ export default function CrossSellItem({ item, onAdd }) {
       )}
 
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm line-clamp-2">
-          {item.displayName}
-        </div>
+        <div className="font-medium text-sm line-clamp-2">{item.displayName}</div>
         <div className="text-xs text-gray-500">
           {item.ruleType === "main" ? "รายการหลัก" : "อุปกรณ์เสริม"}
         </div>

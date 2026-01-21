@@ -1,6 +1,6 @@
 // src/components/wizard/CustomerDisplay.jsx
-import React from 'react';
-import { useQuote } from '../../hooks/useQuote.js';
+import React from "react";
+import { useQuote } from "../../hooks/useQuote.js";
 
 const CustomerDisplay = () => {
   const { state, dispatch } = useQuote();
@@ -11,7 +11,7 @@ const CustomerDisplay = () => {
       <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
         <p className="text-gray-500">ยังไม่ได้เลือกข้อมูลลูกค้า</p>
         <button
-          onClick={() => dispatch({ type: 'SET_STEP', payload: 3 })}
+          onClick={() => dispatch({ type: "SET_STEP", payload: 3 })}
           className="mt-2 text-sm font-semibold text-blue-600 hover:underline"
         >
           ไปที่หน้าเลือกลูกค้า &rarr;

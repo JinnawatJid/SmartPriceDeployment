@@ -124,10 +124,8 @@ export default function AluminiumPicker({ onSelect }) {
     emitFilters(next);
   };
 
-
   return (
     <div className="flex items-end justify-between p-3 border rounded-xl bg-gray-50 mt-3">
-
       <CustomDropdown
         label="Brand"
         value={brand}

@@ -119,7 +119,6 @@ export default function GypsumPicker({ onSelect }) {
 
   return (
     <div className="grid grid-cols-3 gap-3 p-3 border rounded-xl bg-gray-50 mt-3">
-
       <CustomDropdown
         label="Brand"
         value={brand}
@@ -149,7 +148,7 @@ export default function GypsumPicker({ onSelect }) {
         value={color}
         options={options.colors}
         onChange={handleColorChange}
-        width={180}   // สี = สั้น
+        width={180} // สี = สั้น
       />
 
       <CustomDropdown
@@ -157,9 +156,8 @@ export default function GypsumPicker({ onSelect }) {
         value={thickness}
         options={options.thickness}
         onChange={handleThicknessChange}
-        width={180}   // ความหนา = ตัวเลข
+        width={180} // ความหนา = ตัวเลข
       />
-
     </div>
   );
 }

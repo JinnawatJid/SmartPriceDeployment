@@ -7,10 +7,7 @@ export default function ActivateVersionButton({ versionId }) {
   };
 
   return (
-    <button
-      onClick={activate}
-      className="mt-4 px-6 py-2 bg-green-600 text-white rounded"
-    >
+    <button onClick={activate} className="mt-4 px-6 py-2 bg-green-600 text-white rounded">
       ยืนยัน
     </button>
   );

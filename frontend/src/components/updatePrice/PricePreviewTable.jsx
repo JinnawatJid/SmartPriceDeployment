@@ -11,7 +11,7 @@ export default function PricePreviewTable({ rows }) {
         </tr>
       </thead>
       <tbody>
-        {rows.map(r => (
+        {rows.map((r) => (
           <tr key={r.id} className="border-t grid grid-cols-7">
             <td className="col-span-3">{r.sku}</td>
             <td className="text-center">{r.old_R1}</td>

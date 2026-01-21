@@ -5,9 +5,8 @@ import api from "../services/api.js";
 import { useNavigate } from "react-router-dom";
 import { useQuote } from "../context/QuoteContext";
 
-
 export default function QuoteDraftListPage() {
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState("");
   const [salesFilter, setSalesFilter] = useState("");
   const [drafts, setDrafts] = useState([]);
@@ -41,102 +40,88 @@ export default function QuoteDraftListPage() {
     const salesName = q.employee?.name?.toLowerCase() || "";
 
     const byText =
-      !text ||
-      quoteNo.includes(text) ||
-      customerName.includes(text) ||
-      customerCode.includes(text);
+      !text || quoteNo.includes(text) || customerName.includes(text) || customerCode.includes(text);
 
-    const bySales =
-      !salesFilter ||
-      salesName.includes(salesFilter.toLowerCase());
+    const bySales = !salesFilter || salesName.includes(salesFilter.toLowerCase());
 
     return byText && bySales;
   });
   const { dispatch } = useQuote();
   const handleEditDraft = async (q) => {
-  const res = await api.get(`/api/quotation/${encodeURIComponent(q.quoteNo)}`);
-  const h = res.data.header;
-  const lines = res.data.lines;
+    const res = await api.get(`/api/quotation/${encodeURIComponent(q.quoteNo)}`);
+    const h = res.data.header;
+    const lines = res.data.lines;
 
-  // 2) แปลง Quote_Line เป็น cart ที่ Step6 ใช้
-  const cart = lines.map(ln => ({
-    sku: ln.ItemCode,
-    name: ln.ItemName,
-    qty: ln.Quantity,
-    price: ln.UnitPrice,
-    lineTotal: ln.TotalPrice,
-    category: ln.Category,
-    unit: ln.Unit,
-    sqft: ln.Sqft_Sheet, 
-    sqft_sheet: ln.Sqft_Sheet,
-    product_weight: ln.ProductWeight ?? 0,   // ⭐ เพิ่ม
-    variantCode: ln.VariantCode ?? "", 
-    isGlass: ln.Category === "G",
-    _key: `${ln.ItemCode}__${Number(ln.Sqft_Sheet ?? 0)}`,
-  }));
+    // 2) แปลง Quote_Line เป็น cart ที่ Step6 ใช้
+    const cart = lines.map((ln) => ({
+      sku: ln.ItemCode,
+      name: ln.ItemName,
+      qty: ln.Quantity,
+      price: ln.UnitPrice,
+      lineTotal: ln.TotalPrice,
+      category: ln.Category,
+      unit: ln.Unit,
+      sqft: ln.Sqft_Sheet,
+      sqft_sheet: ln.Sqft_Sheet,
+      product_weight: ln.ProductWeight ?? 0, // ⭐ เพิ่ม
+      variantCode: ln.VariantCode ?? "",
+      isGlass: ln.Category === "G",
+      _key: `${ln.ItemCode}__${Number(ln.Sqft_Sheet ?? 0)}`,
+    }));
 
-  // 3) Dispatch → โหลดเข้าสู่ Context
-  dispatch({
-  type: "LOAD_DRAFT",
-  payload: {
-    id: q.quoteNo,
-    quoteNo: q.quoteNo,
+    // 3) Dispatch → โหลดเข้าสู่ Context
+    dispatch({
+      type: "LOAD_DRAFT",
+      payload: {
+        id: q.quoteNo,
+        quoteNo: q.quoteNo,
 
-    customer: {
-      id: h.CustomerCode,
-      code: h.CustomerCode,
-      name: h.CustomerName,
-      phone: h.Tel || ""
-    },
+        customer: {
+          id: h.CustomerCode,
+          code: h.CustomerCode,
+          name: h.CustomerName,
+          phone: h.Tel || "",
+        },
 
-    deliveryType: h.ShippingMethod,
-    billTaxName: h.BillTaxName,
-    note: h.Remark,
-    needTaxInvoice: h.NeedsTax === "Y",
+        deliveryType: h.ShippingMethod,
+        billTaxName: h.BillTaxName,
+        note: h.Remark,
+        needTaxInvoice: h.NeedsTax === "Y",
 
-    cart,
+        cart,
 
-    // เพิ่มตรงนี้: ให้เข้า QuoteContext โดยตรง
-    shippingCost: h.ShippingCost ?? 0,
-    shippingCustomerPay: h.ShippingCustomerPay ?? 0,
-    shippingCompanyPay: h.ShippingCompanyPay ?? 0,
+        // เพิ่มตรงนี้: ให้เข้า QuoteContext โดยตรง
+        shippingCost: h.ShippingCost ?? 0,
+        shippingCustomerPay: h.ShippingCustomerPay ?? 0,
+        shippingCompanyPay: h.ShippingCompanyPay ?? 0,
 
-    totals: {
-      exVat: h.SubtotalAmount,
-      vat: h.SubtotalAmount * 0.07,
-      grandTotal: h.TotalAmount,
-      shippingRaw: h.ShippingCost ?? 0,
-      shippingCustomerPay: h.ShippingCustomerPay ?? 0,
-      shippingCompanyPay: h.ShippingCompanyPay ?? 0
-    }
-  }
-  
-});
+        totals: {
+          exVat: h.SubtotalAmount,
+          vat: h.SubtotalAmount * 0.07,
+          grandTotal: h.TotalAmount,
+          shippingRaw: h.ShippingCost ?? 0,
+          shippingCustomerPay: h.ShippingCustomerPay ?? 0,
+          shippingCompanyPay: h.ShippingCompanyPay ?? 0,
+        },
+      },
+    });
 
-
-
-
-
-  // 4) นำไป Step6
-  navigate("/create?step=6");
-};
+    // 4) นำไป Step6
+    navigate("/create?step=6");
+  };
   const handleDeleteDraft = async (quoteNo) => {
-  const ok = window.confirm(`ต้องการลบใบเสนอราคาเลขที่ ${quoteNo}?`);
-  if (!ok) return;
+    const ok = window.confirm(`ต้องการลบใบเสนอราคาเลขที่ ${quoteNo}?`);
+    if (!ok) return;
 
-  try {
-    await api.delete(`/api/quotation/${quoteNo}`);
+    try {
+      await api.delete(`/api/quotation/${quoteNo}`);
 
-    // ใช้ quoteNo เป็น key ในการลบ
-    setDrafts(prev => prev.filter(q => q.quoteNo !== quoteNo));
-
-  } catch (err) {
-    alert("ลบไม่ได้");
-  }
-};
-
-
-
+      // ใช้ quoteNo เป็น key ในการลบ
+      setDrafts((prev) => prev.filter((q) => q.quoteNo !== quoteNo));
+    } catch (err) {
+      alert("ลบไม่ได้");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -153,9 +138,7 @@ export default function QuoteDraftListPage() {
           <div className="flex flex-col md:flex-row gap-3 md:items-end">
             {/* ช่องค้นหา */}
             <div className="flex-1">
-              <label className="block font-medium text-gray-600 mb-1">
-                ค้นหา
-              </label>
+              <label className="block font-medium text-gray-600 mb-1">ค้นหา</label>
               <input
                 type="text"
                 value={searchText}
@@ -167,9 +150,7 @@ export default function QuoteDraftListPage() {
 
             {/* พนักงานขาย */}
             <div className="w-full md:w-64">
-              <label className="block font-medium text-gray-600 mb-1">
-                พนักงานขาย
-              </label>
+              <label className="block font-medium text-gray-600 mb-1">พนักงานขาย</label>
               <input
                 type="text"
                 value={salesFilter}
@@ -191,27 +172,18 @@ export default function QuoteDraftListPage() {
         </div>
 
         {/* Grid cards */}
-        {loading && (
-          <p className="text-sm text-gray-500">กำลังโหลดข้อมูล...</p>
-        )}
-        {error && (
-          <p className="text-sm text-red-500 mb-2">{error}</p>
-        )}
+        {loading && <p className="text-sm text-gray-500">กำลังโหลดข้อมูล...</p>}
+        {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 ">
           {!loading && filtered.length === 0 && (
-            <p className="text-sm text-gray-500 col-span-full">
-              ยังไม่มีใบเสนอราคาแบบร่าง
-            </p>
+            <p className="text-sm text-gray-500 col-span-full">ยังไม่มีใบเสนอราคาแบบร่าง</p>
           )}
 
           {filtered.map((q) => {
             const totalAmount =
               q.totals?.grandTotal ??
-              q.cart?.reduce(
-                (sum, it) => sum + Number(it.lineTotal || 0),
-                0
-              );
+              q.cart?.reduce((sum, it) => sum + Number(it.lineTotal || 0), 0);
 
             return (
               <QuoteDraftCard
@@ -231,16 +203,11 @@ export default function QuoteDraftListPage() {
                   "ผู้ไม่ประสงค์ออกนาม"
                 }
                 salesName={q.employee?.name || "-"}
-                dueDateText={
-                  q.createdAt
-                    ? new Date(q.createdAt).toLocaleString("th-TH")
-                    : "-"
-                }
+                dueDateText={q.createdAt ? new Date(q.createdAt).toLocaleString("th-TH") : "-"}
                 totalAmount={totalAmount || 0}
                 items={q.cart || []}
                 onEdit={() => handleEditDraft(q)}
                 onDelete={() => handleDeleteDraft(q.quoteNo)}
- 
               />
             );
           })}

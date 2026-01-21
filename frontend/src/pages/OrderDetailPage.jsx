@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useQuote } from "../hooks/useQuote";
 
-
 export default function OrderDetailPage() {
   const { id } = useParams();
   const { dispatch } = useQuote();
@@ -53,7 +52,6 @@ export default function OrderDetailPage() {
             sqft_sheet: ln.Sqft_Sheet ?? ln.sqft ?? ln.GlassSqft ?? 0,
             product_weight: ln.ProductWeight ?? 0,
             variantCode: ln.VariantCode ?? "",
-
           })),
         };
 
@@ -78,48 +76,47 @@ export default function OrderDetailPage() {
     try {
       setPrinting(true);
 
-    const payload = {
-      quoteNo: order.quoteNo || "",
-      date: new Date(order.createdAt).toLocaleDateString("th-TH"),
-      sales: order.sales || "",
-      customer: {
-        code: order.customer?.id || "",
-        name: order.customer?.name || "ผู้ไม่ประสงค์ออกนาม",
-        phone: order.customer?.phone || "",
-      },
-      items: order.cart.map((it) => {
-        const isGlass =
-          it.category === "G" || Number(it.sqft_sheet || 0) > 0;
+      const payload = {
+        quoteNo: order.quoteNo || "",
+        date: new Date(order.createdAt).toLocaleDateString("th-TH"),
+        sales: order.sales || "",
+        customer: {
+          code: order.customer?.id || "",
+          name: order.customer?.name || "ผู้ไม่ประสงค์ออกนาม",
+          phone: order.customer?.phone || "",
+        },
+        items: order.cart.map((it) => {
+          const isGlass = it.category === "G" || Number(it.sqft_sheet || 0) > 0;
 
-        const pricePerSheet =
-          isGlass && it.qty > 0
-            ? Number(it.lineTotal || 0) / Number(it.qty || 1)
-            : Number(it.price || 0);
+          const pricePerSheet =
+            isGlass && it.qty > 0
+              ? Number(it.lineTotal || 0) / Number(it.qty || 1)
+              : Number(it.price || 0);
 
-        return {
-          code: it.sku,
-          name: it.name,
-          qty: it.qty,
-          unit: it.unit && it.unit.trim() !== "" ? it.unit : "-",
+          return {
+            code: it.sku,
+            name: it.name,
+            qty: it.qty,
+            unit: it.unit && it.unit.trim() !== "" ? it.unit : "-",
 
-          // ✅ ถ้าเป็นกระจก → แสดงราคาต่อแผ่น
-          price: Math.round(pricePerSheet * 100) / 100,
+            // ✅ ถ้าเป็นกระจก → แสดงราคาต่อแผ่น
+            price: Math.round(pricePerSheet * 100) / 100,
 
-          // ✅ ยอดรวมยังใช้ของจริงจาก DB
-          amount: Number(it.lineTotal || 0),
-        };
-      }),
+            // ✅ ยอดรวมยังใช้ของจริงจาก DB
+            amount: Number(it.lineTotal || 0),
+          };
+        }),
 
-      comment: order.note || "",
-      shipping: Number(order.totals.shippingCustomerPay || 0),
-      amountText: "", // backend เติม
-      total: order.totals.grandTotal, 
-      discount: 0,
-      afterDiscount: order.totals.grandTotal,
-      exVat: order.totals.exVat,
-      vat: order.totals.vat,
-      netTotal: order.totals.grandTotal,
-    };
+        comment: order.note || "",
+        shipping: Number(order.totals.shippingCustomerPay || 0),
+        amountText: "", // backend เติม
+        total: order.totals.grandTotal,
+        discount: 0,
+        afterDiscount: order.totals.grandTotal,
+        exVat: order.totals.exVat,
+        vat: order.totals.vat,
+        netTotal: order.totals.grandTotal,
+      };
 
       // Use relative path for print endpoint to work in both Docker (Nginx proxy) and Native (Backend serve)
       // Use api.post for consistent base URL handling, OR ensure path includes /api
@@ -161,9 +158,7 @@ export default function OrderDetailPage() {
           </div>
           <div>
             <p className="text-gray-600">วันที่</p>
-            <p className="font-semibold">
-              {new Date(order.createdAt).toLocaleDateString("th-TH")}
-            </p>
+            <p className="font-semibold">{new Date(order.createdAt).toLocaleDateString("th-TH")}</p>
           </div>
           <div>
             <p className="text-gray-600">รหัสลูกค้า</p>
@@ -194,9 +189,7 @@ export default function OrderDetailPage() {
                   <br />
                   <span className="text-gray-500 text-sm">{item.sku}</span>
                 </td>
-                <td className="p-3 text-center">
-                  {item.qty} 
-                </td>
+                <td className="p-3 text-center">{item.qty}</td>
                 <td className="p-3 text-right">
                   {(() => {
                     const isGlass =
@@ -205,8 +198,8 @@ export default function OrderDetailPage() {
                     const sqft = Number(item.sqft_sheet ?? 0);
                     const displayPrice =
                       isGlass && sqft > 0
-                        ? item.price * sqft   // บาท / แผ่น
-                        : item.price;         // หน่วยปกติ
+                        ? item.price * sqft // บาท / แผ่น
+                        : item.price; // หน่วยปกติ
 
                     return fmt(displayPrice);
                   })()}
@@ -225,9 +218,7 @@ export default function OrderDetailPage() {
 
         <div className="flex justify-between">
           <span>ค่าขนส่ง</span>
-          <span className="font-semibold">
-            ฿{fmt(order.totals.shippingCustomerPay)}
-          </span>
+          <span className="font-semibold">฿{fmt(order.totals.shippingCustomerPay)}</span>
         </div>
 
         <div className="flex justify-between mt-2">
@@ -274,7 +265,7 @@ export default function OrderDetailPage() {
                   deliveryType: order.deliveryType ?? "PICKUP",
                   billTaxName: order.billTaxName ?? "",
                   note: order.note ?? "",
-                  cart: (order.cart || []).map(it => ({
+                  cart: (order.cart || []).map((it) => ({
                     sku: it.sku,
                     name: it.name,
                     qty: Number(it.qty ?? 0),
@@ -302,13 +293,11 @@ export default function OrderDetailPage() {
                     shippingRaw: 0,
                     shippingCustomerPay: 0,
                     shippingCompanyPay: 0,
-                  }
-                }
+                  },
+                },
               });
               navigate("/create?step=6");
-
             }}
-
           >
             สั่งซื้อซ้ำ
           </button>

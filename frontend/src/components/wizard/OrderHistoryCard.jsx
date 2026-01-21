@@ -24,11 +24,7 @@ export default function OrderHistoryCard({ order, onRepeat }) {
     );
   }
 
-  const total =
-    order.totals?.grandTotal ??
-    order.totals?.total ??
-    order.totals?.netTotal ??
-    0;
+  const total = order.totals?.grandTotal ?? order.totals?.total ?? order.totals?.netTotal ?? 0;
 
   const cart = order.cart || [];
 
@@ -41,13 +37,7 @@ export default function OrderHistoryCard({ order, onRepeat }) {
       >
         {/* ซ้าย: icon + วันที่ + เลขที่ */}
         <div className="flex items-center gap-2">
-          <span
-            className={
-              "text-lg transition-transform " + (open ? "rotate-90" : "")
-            }
-          >
-            ❯
-          </span>
+          <span className={"text-lg transition-transform " + (open ? "rotate-90" : "")}>❯</span>
           <div className="flex flex-col text-left">
             <span className="text-xs text-gray-500">
               {formatThaiDate(order.confirmedAt || order.createdAt)}
@@ -82,18 +72,11 @@ export default function OrderHistoryCard({ order, onRepeat }) {
         <div className="bg-gray-200 px-4 py-2 text-sm">
           <div className="font-semibold mb-1">รายการสินค้า</div>
           {cart.length === 0 ? (
-            <div className="text-xs text-gray-500">
-              ไม่พบรายการสินค้าในบิลนี้
-            </div>
+            <div className="text-xs text-gray-500">ไม่พบรายการสินค้าในบิลนี้</div>
           ) : (
             cart.map((item, idx) => (
-              <div
-                key={item.sku || item.id || idx}
-                className="flex items-center justify-between"
-              >
-                <span className="truncate">
-                  • {item.name || item.description || item.itemName}
-                </span>
+              <div key={item.sku || item.id || idx} className="flex items-center justify-between">
+                <span className="truncate">• {item.name || item.description || item.itemName}</span>
                 <span className="ml-2 whitespace-nowrap">
                   x{item.qty || item.quantity || item.Qty}
                 </span>

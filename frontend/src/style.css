@@ -3,10 +3,9 @@
 @tailwind components;
 @tailwind utilities;
 
-
 body {
   @apply font-sans;
 }
 body {
-  font-family: 'Prompt', sans-serif;
+  font-family: "Prompt", sans-serif;
 }

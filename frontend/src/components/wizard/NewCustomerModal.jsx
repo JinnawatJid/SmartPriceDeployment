@@ -9,9 +9,7 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">
-          เพิ่มลูกค้าใหม่
-        </h3>
+        <h3 className="text-lg font-bold text-gray-800 mb-4">เพิ่มลูกค้าใหม่</h3>
 
         <div className="space-y-3">
           <input

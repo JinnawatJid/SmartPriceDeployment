@@ -21,9 +21,7 @@ api.interceptors.request.use(
         const { token } = JSON.parse(raw) || {};
         if (token) config.headers.Authorization = `Bearer ${token}`;
       }
-    } catch {
-      
-    }
+    } catch {}
     return config;
   },
   (error) => Promise.reject(error)

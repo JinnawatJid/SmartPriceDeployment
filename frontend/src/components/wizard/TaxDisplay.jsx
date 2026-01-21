@@ -1,12 +1,12 @@
 // src/components/wizard/TaxDisplay.jsx
-import React from 'react';
-import { useQuote } from '../../hooks/useQuote.js';
+import React from "react";
+import { useQuote } from "../../hooks/useQuote.js";
 
 const TaxDisplay = () => {
   const { state, dispatch } = useQuote();
 
-  const taxLabel = state.needsTax ? 'รับใบกำกับภาษี' : 'ไม่รับ';
-  const deliveryLabel = state.deliveryType === 'DELIVERY' ? 'จัดส่ง' : 'รับเอง';
+  const taxLabel = state.needsTax ? "รับใบกำกับภาษี" : "ไม่รับ";
+  const deliveryLabel = state.deliveryType === "DELIVERY" ? "จัดส่ง" : "รับเอง";
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

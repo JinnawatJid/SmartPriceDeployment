@@ -4,29 +4,27 @@ const pad3 = (n) => String(n).padStart(3, "0");
 
 // Fallback ชื่อสี (ใช้เมื่อ API ไม่ส่งชื่อมา)
 export const COLOR_MAP = {
-  "00": { code:"00", name:"อื่นๆ", nameEn:"Others" },
-  "01": { code:"01", name:"สีใส", nameEn:"Clear" },
-  "02": { code:"02", name:"สีชาดำ", nameEn:"Dark Bronze" },
-  "03": { code:"03", name:"สีเขียว", nameEn:"Green" },
-  "04": { code:"04", name:"สีฟ้า", nameEn:"Blue" },
-  "05": { code:"05", name:"สี Gray", nameEn:"Gray" },
-  "06": { code:"06", name:"สี Bronze", nameEn:"Bronze" },
-  "07": { code:"07", name:"สีน้ำเงิน", nameEn:"Navy Blue" },
-  "08": { code:"08", name:"สีม่วง", nameEn:"Purple" },
-  "09": { code:"09", name:"สีเหลือง", nameEn:"Yellow" },
-  "10": { code:"10", name:"สีชมพู", nameEn:"Pink" },
-  "11": { code:"11", name:"สีทองแดง", nameEn:"Copper" },
-  "12": { code:"12", name:"สีขาว", nameEn:"White" },
-  "13": { code:"13", name:"สีดำ", nameEn:"Black" },
+  "00": { code: "00", name: "อื่นๆ", nameEn: "Others" },
+  "01": { code: "01", name: "สีใส", nameEn: "Clear" },
+  "02": { code: "02", name: "สีชาดำ", nameEn: "Dark Bronze" },
+  "03": { code: "03", name: "สีเขียว", nameEn: "Green" },
+  "04": { code: "04", name: "สีฟ้า", nameEn: "Blue" },
+  "05": { code: "05", name: "สี Gray", nameEn: "Gray" },
+  "06": { code: "06", name: "สี Bronze", nameEn: "Bronze" },
+  "07": { code: "07", name: "สีน้ำเงิน", nameEn: "Navy Blue" },
+  "08": { code: "08", name: "สีม่วง", nameEn: "Purple" },
+  "09": { code: "09", name: "สีเหลือง", nameEn: "Yellow" },
+  10: { code: "10", name: "สีชมพู", nameEn: "Pink" },
+  11: { code: "11", name: "สีทองแดง", nameEn: "Copper" },
+  12: { code: "12", name: "สีขาว", nameEn: "White" },
+  13: { code: "13", name: "สีดำ", nameEn: "Black" },
 };
 
 /**
  * G + BB(2) + TT(2) + SSS(3) + CC(2) + TH(2) + WWW(3) + LLL(3)
  * เช่น G01010010106024060
  */
-export function buildGlassSku({
-  brand, type, subType, color, thicknessMM, widthIn, lengthIn,
-}) {
+export function buildGlassSku({ brand, type, subType, color, thicknessMM, widthIn, lengthIn }) {
   const b = pad2(brand);
   const t = pad2(type);
   const s = String(subType).padStart(3, "0");
@@ -43,7 +41,10 @@ export function parseGlassSku(sku) {
   if (!m) return null;
   const [, brand, type, subType, color, thickness2, width3, length3] = m;
   return {
-    brand, type, subType, color,
+    brand,
+    type,
+    subType,
+    color,
     thicknessMM: Number(thickness2),
     widthIn: Number(width3),
     lengthIn: Number(length3),

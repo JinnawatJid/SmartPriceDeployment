@@ -64,9 +64,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
       setError("");
       try {
         const encoded = encodeURIComponent(searchTerm.trim());
-        const res = await api.get(
-          `/api/customer/search-list?q=${encoded}`
-        );
+        const res = await api.get(`/api/customer/search-list?q=${encoded}`);
         setResults(res.data || []);
         setOpenDropdown(true);
       } catch {
@@ -127,9 +125,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
                       loadCustomerFull(c.id);
                     }}
                   >
-                    <p className="text-sm font-medium text-gray-800">
-                      {c.name}
-                    </p>
+                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
                     <p className="text-xs text-gray-500">{c.phone}</p>
                   </li>
                 ))}
@@ -176,9 +172,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
             <div className="rounded-lg border border-green-300 bg-green-50 p-3">
               <div className="flex items-center gap-2">
                 <CheckCircleIcon />
-                <span className="text-sm font-semibold text-green-700">
-                  พบข้อมูลลูกค้า
-                </span>
+                <span className="text-sm font-semibold text-green-700">พบข้อมูลลูกค้า</span>
               </div>
 
               <div className="mt-1 pl-7 text-xs text-gray-700 space-y-0.5">

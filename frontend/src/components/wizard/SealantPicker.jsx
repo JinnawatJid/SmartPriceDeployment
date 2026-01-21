@@ -96,7 +96,6 @@ export default function SealantPicker({ onSelect }) {
 
   return (
     <div className="flex justify-between p-3 border rounded-xl bg-gray-50 mt-3">
-
       <CustomDropdown
         label="Brand"
         value={brand}
@@ -126,9 +125,8 @@ export default function SealantPicker({ onSelect }) {
         value={color}
         options={options.colors}
         onChange={handleColorChange}
-        width={200}   
+        width={200}
       />
-
     </div>
   );
 }

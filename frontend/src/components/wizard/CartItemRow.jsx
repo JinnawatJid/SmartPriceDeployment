@@ -15,21 +15,10 @@ function formatThaiDate(dt) {
 }
 
 const TrashIcon = () => (
-  <img
-    src="/assets/delete.png"
-    alt="delete"
-    className="h-5 w-5 mr-4 mt-1 object-contain"
-  />
+  <img src="/assets/delete.png" alt="delete" className="h-5 w-5 mr-4 mt-1 object-contain" />
 );
 
-export default function CartItemRow({
-  item,
-  index,
-  calculatedItem,
-  dispatch,
-  customerCode,
-}) {
-  
+export default function CartItemRow({ item, index, calculatedItem, dispatch, customerCode }) {
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState(item.name || "");
   const [openPriceHistory, setOpenPriceHistory] = useState(false);
@@ -49,10 +38,7 @@ export default function CartItemRow({
     0;
 
   const displayLineTotal =
-    calculatedItem?._LineTotal ??
-    item.lineTotal ??
-    displayUnitPrice * item.qty ??
-    0;
+    calculatedItem?._LineTotal ?? item.lineTotal ?? displayUnitPrice * item.qty ?? 0;
 
   const handleQtyChange = (e) => {
     dispatch({
@@ -86,8 +72,6 @@ export default function CartItemRow({
     });
     setEditingDesc(false);
   };
-
-  
 
   return (
     <>
@@ -135,17 +119,11 @@ export default function CartItemRow({
 
         <td className="px-2 py-3 text-sm">
           <button
-            onClick={() => setOpenPriceHistory(v => !v)}
+            onClick={() => setOpenPriceHistory((v) => !v)}
             className="font-semibold text-blue-700 hover:underline flex items-center gap-1"
           >
             {Number(displayUnitPrice).toLocaleString("th-TH")}
-            <span
-              className={`transition-transform ${
-                openPriceHistory ? "rotate-90" : ""
-              }`}
-            >
-              ❯
-            </span>
+            <span className={`transition-transform ${openPriceHistory ? "rotate-90" : ""}`}>❯</span>
           </button>
         </td>
 
@@ -161,40 +139,25 @@ export default function CartItemRow({
       </tr>
 
       {/* ===== EXPAND ROW ===== */}
-      {openPriceHistory &&  (
+      {openPriceHistory && (
         <tr className="bg-gray-100">
           <td colSpan={6} className="px-6 py-3">
-            {loading && (
-              <div className="text-sm text-gray-500">
-                กำลังโหลดประวัติราคา...
-              </div>
-            )}
+            {loading && <div className="text-sm text-gray-500">กำลังโหลดประวัติราคา...</div>}
 
             {!loading && prices.length === 0 && (
-              <div className="text-sm text-gray-500">
-                ไม่พบประวัติราคา
-              </div>
+              <div className="text-sm text-gray-500">ไม่พบประวัติราคา</div>
             )}
 
             {!loading && prices.length > 0 && (
               <div className="rounded-lg border bg-white">
-                <div className="px-4 py-2 font-semibold text-sm bg-gray-50">
-                  ประวัติราคา
-                </div>
+                <div className="px-4 py-2 font-semibold text-sm bg-gray-50">ประวัติราคา</div>
 
                 <div className="divide-y">
                   {prices.slice(0, 2).map((p, i) => (
-                    <div
-                      key={i}
-                      className="flex justify-between px-4 py-2 text-sm"
-                    >
+                    <div key={i} className="flex justify-between px-4 py-2 text-sm">
                       <div>
-                        <div className="text-gray-600">
-                          {formatThaiDate(p.date)}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          #{p.invoiceNo}
-                        </div>
+                        <div className="text-gray-600">{formatThaiDate(p.date)}</div>
+                        <div className="text-xs text-gray-500">#{p.invoiceNo}</div>
                       </div>
 
                       <div className="text-right">
@@ -206,8 +169,7 @@ export default function CartItemRow({
                         </div>
 
                         <div className="text-xs text-gray-500">
-                          จำนวน {Number(p.qty || 0).toLocaleString("th-TH")}{" "}
-                          {p.unit || ""}
+                          จำนวน {Number(p.qty || 0).toLocaleString("th-TH")} {p.unit || ""}
                         </div>
                       </div>
                     </div>

@@ -7,7 +7,6 @@ import GypsumPicker from "../wizard/GypsumPicker.jsx";
 import GlassPickerModal from "../wizard/GlassPickerModal.jsx";
 import { useState } from "react";
 
-
 export default function DynamicProductFilter({ category, onFilterChange }) {
   const [openGlass, setOpenGlass] = useState(false);
   if (typeof onFilterChange !== "function") return null;
@@ -36,14 +35,9 @@ export default function DynamicProductFilter({ category, onFilterChange }) {
     case "G":
       return (
         <>
-          <button
-            className="px-4 py-2 border rounded bg-cyan-50 text-cyan-700 font-semibold"
-           
-          >
+          <button className="px-4 py-2 border rounded bg-cyan-50 text-cyan-700 font-semibold">
             เลือกสินค้ากระจก
           </button>
-
-          
         </>
       );
 
