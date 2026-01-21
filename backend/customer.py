@@ -1,105 +1,215 @@
-# customer.py  --- ใช้ SQLite เต็มรูปแบบ
+# customer.py  — SQLite Version (Derived Metrics from Invoice)
 from fastapi import APIRouter, Query, HTTPException
 import pandas as pd
+from datetime import datetime, timedelta
 from db_sqlite import get_conn
 
 router = APIRouter(prefix="/customer")
 
+# =====================================================
+# Helpers
+# =====================================================
+def clean(x):
+    if x is None:
+        return ""
+    if pd.isna(x):
+        return ""
+    return str(x).strip()
 
-# ----------------------------------------
-#  GET /customers  → ลูกค้าทั้งหมด
-# ----------------------------------------
+
+def classify_group(no):
+    """
+    ใช้ตัวอักษรตัวแรกของ SKU
+    G A S Y C E
+    """
+    if not isinstance(no, str) or len(no) == 0:
+        return None
+    return no[0].upper()
+
+
+def load_customer_table(conn):
+    return pd.read_sql_query('SELECT * FROM "Customer"', conn)
+
+
+def load_invoice_by_customer(conn, customer_code):
+    df = pd.read_sql_query(
+        'SELECT * FROM "Invoice" WHERE "Sell-to Customer No." = ?',
+        conn,
+        params=[customer_code],
+    )
+    if not df.empty:
+        df.columns = [c.strip() for c in df.columns]
+    return df
+
+
+# =====================================================
+# GET /customer  → ลูกค้าทั้งหมด (master only)
+# =====================================================
 @router.get("/")
 def get_customers():
     conn = get_conn()
-    df = pd.read_sql_query('SELECT * FROM "Customer"', conn)
+    df = load_customer_table(conn)
     conn.close()
     return df.to_dict(orient="records")
 
 
-# ----------------------------------------
-#  /customers/search → ค้นหาด้วย code / phone / name
-# ----------------------------------------
+# =====================================================
+# GET /customer/search → ค้นหาลูกค้า + คำนวณ metric จาก Invoice
+# =====================================================
 @router.get("/search")
 def search_customer(
     code: str | None = Query(None),
     phone: str | None = Query(None),
-    name: str | None = Query(None)
+    name: str | None = Query(None),
 ):
     if not code and not phone and not name:
-        raise HTTPException(status_code=400, detail="กรุณาระบุ code, phone หรือ name อย่างน้อย 1 ค่า")
+        raise HTTPException(
+            status_code=400,
+            detail="กรุณาระบุ code, phone หรือ name อย่างน้อย 1 ค่า",
+        )
 
     conn = get_conn()
 
-    # --- Load entire table (ง่ายที่สุด และรองรับ column ที่มี space) ---
-    df = pd.read_sql_query('SELECT * FROM "Customer"', conn)
-    conn.close()
+    # ---------- Load Customer master ----------
+    df_cust = load_customer_table(conn)
 
-    if df.empty:
+    if df_cust.empty:
+        conn.close()
         raise HTTPException(status_code=500, detail="Customer table is empty")
 
-    def clean(x):
-        if x is None:
-            return ""
-        if pd.isna(x):
-            return ""
-        return str(x).strip()
-
-    # -------- 1) ค้นด้วยรหัสลูกค้า ------------
     found = pd.DataFrame()
-    if code:
-        found = df[df["Customer"].astype(str).str.strip() == str(code).strip()]
 
-    # -------- 2) ค้นด้วยเบอร์โทร ------------
+    # 1) search by code
+    if code:
+        found = df_cust[df_cust["Customer"].astype(str).str.strip() == str(code).strip()]
+
+    # 2) search by phone
     if found.empty and phone:
         def normalize_phone(x):
-            x = clean(x)
-            return "".join(ch for ch in x if ch.isdigit())
+            return "".join(ch for ch in clean(x) if ch.isdigit())
 
         target = normalize_phone(phone)
-        mask = df["Tel"].apply(lambda x: normalize_phone(x) == target)
-        found = df[mask]
+        found = df_cust[
+            df_cust["Tel"].apply(lambda x: normalize_phone(x) == target)
+        ]
 
-    # -------- 3) ค้นด้วยชื่อ ------------
+    # 3) search by name
     if found.empty and name:
-        search_name = name.strip().lower()
-        mask = df["Name"].astype(str).str.strip().str.lower().str.contains(search_name)
-        found = df[mask]
+        q = name.strip().lower()
+        found = df_cust[
+            df_cust["Name"].astype(str).str.strip().str.lower().str.contains(q)
+        ]
 
     if found.empty:
+        conn.close()
         raise HTTPException(status_code=404, detail="ไม่พบข้อมูลลูกค้า")
 
     r = found.iloc[0]
+    customer_code = clean(r["Customer"])
 
-    # --------  ส่งข้อมูลกลับแบบ JSON  --------
-        # --------  ส่งข้อมูลกลับแบบ JSON  --------
+    # =====================================================
+    # Load Invoice (Fact)
+    # =====================================================
+    inv = load_invoice_by_customer(conn, customer_code)
+    print("========== CUSTOMER METRIC DEBUG ==========")
+    print("Customer:", customer_code)
+    print("Invoice rows (all):", len(inv))
+
+    if not inv.empty:
+        print("Invoice Document No sample:")
+        print(inv["Document No."].value_counts().head())
+
+        print("Posting Date range:")
+        print(inv["Posting Date"].min(), "→", inv["Posting Date"].max())
+
+    # ---------- default metric ----------
+    accum_6m = 0.0
+    frequency = 0
+    sales_g = sales_a = sales_s = sales_y = sales_c = sales_e = 0.0
+    inv6 = inv.iloc[0:0]
+
+    if not inv.empty:
+        # parse date
+        inv["Posting Date"] = pd.to_datetime(inv["Posting Date"], errors="coerce")
+
+        anchor = inv["Posting Date"].max()
+        if pd.isna(anchor):
+            inv6 = inv.iloc[0:0]
+        else:
+            cutoff = anchor - timedelta(days=180)
+            inv6 = inv[inv["Posting Date"] >= cutoff]
+
+
+        if not inv6.empty:
+            # Accum6m
+            accum_6m = float(inv6["Amount Including VAT"].fillna(0).sum())
+
+            # Frequency (count invoice)
+            frequency = int(inv6["Document No."].nunique())
+
+            # Group by SKU prefix
+            inv6["group"] = inv6["No."].apply(classify_group)
+
+            grp = (
+                inv6
+                .groupby("group")["Amount Including VAT"]
+                .sum()
+                .to_dict()
+            )
+
+            sales_g = float(grp.get("G", 0))
+            sales_a = float(grp.get("A", 0))
+            sales_s = float(grp.get("S", 0))
+            sales_y = float(grp.get("Y", 0))
+            sales_c = float(grp.get("C", 0))
+            sales_e = float(grp.get("E", 0))
+
+    print("Invoice rows (6M):", len(inv6))
+    print("Frequency (distinct Document No.):", frequency)
+    print("Accum6m:", accum_6m)
+
+    print("Group sales:")
+    print({
+        "G": sales_g,
+        "A": sales_a,
+        "S": sales_s,
+        "Y": sales_y,
+        "C": sales_c,
+        "E": sales_e,
+    })
+    print("==========================================")
+
+
+    # =====================================================
+    # Response (shape เดิม 100%)
+    # =====================================================
     base = {
-        "id": clean(r["Customer"]),
+        "id": customer_code,
         "name": clean(r["Name"]),
-        "tax_no": clean(r["Tax No."]),
-        "phone": clean(r["Tel"]),
-        "gen_bus": clean(r["Gen Bus"]),
-        "customer_date": clean(r["Customer Date"]),
-        "payment_terms": clean(r["Payment Terms Code"]),
-        "accum_6m": clean(r["Accum6m"]),
-        "frequency": clean(r["Frequency"]),
+        "tax_no": clean(r.get("Tax No.")),
+        "phone": clean(r.get("Tel")),
+        "gen_bus": clean(r.get("Gen Bus")),
+        "customer_date": clean(r.get("Customer Date")),
+        "payment_terms": clean(r.get("Payment Terms Code")),
 
-        # sales แบบเดิม
-        "sales_g_cust": clean(r["G"]),
-        "sales_a_cust": clean(r["A"]),
-        "sales_s_cust": clean(r["S"]),
-        "sales_y_cust": clean(r["Y"]),
-        "sales_c_cust": clean(r["C"]),
-        "sales_e_cust": clean(r["E"]),
-        "price_level": clean(r["E"]),
+        # ---- Derived metrics (แทน Excel เดิม) ----
+        "accum_6m": accum_6m,
+        "frequency": frequency,
+
+        "sales_g_cust": sales_g,
+        "sales_a_cust": sales_a,
+        "sales_s_cust": sales_s,
+        "sales_y_cust": sales_y,
+        "sales_c_cust": sales_c,
+        "sales_e_cust": sales_e,
+
+        # เดิมใช้ E เป็น price level
+        "price_level": sales_e,
     }
 
-    # ---------------------------------
-    # ⭐ เพิ่ม Normalize Customer (ของใหม่)
-    # ---------------------------------
+    # alias สำหรับ Pricing Model (เหมือนเดิม)
     base["creditTerm"] = base["payment_terms"]
 
-    # alias สำหรับ Pricing Model
     base["sales_g"] = base["sales_g_cust"]
     base["sales_a"] = base["sales_a_cust"]
     base["sales_s"] = base["sales_s_cust"]
@@ -107,44 +217,38 @@ def search_customer(
     base["sales_c"] = base["sales_c_cust"]
     base["sales_e"] = base["sales_e_cust"]
 
-    # relevantSales (ค่าที่มากที่สุด)
+    # relevantSales
     try:
-        vals = [
-            float(base["sales_g"] or 0),
-            float(base["sales_a"] or 0),
-            float(base["sales_s"] or 0),
-            float(base["sales_y"] or 0),
-            float(base["sales_c"] or 0),
-            float(base["sales_e"] or 0),
-        ]
-        base["relevantSales"] = max(vals)
-    except:
+        base["relevantSales"] = max(
+            base["sales_g"],
+            base["sales_a"],
+            base["sales_s"],
+            base["sales_y"],
+            base["sales_c"],
+            base["sales_e"],
+        )
+    except Exception:
         base["relevantSales"] = 0.0
 
     return base
 
-# ----------------------------------------
-#  /customer/search-list → ค้นหาแบบคืนหลายรายการ (สำหรับ dropdown)
-# ----------------------------------------
+
+# =====================================================
+# GET /customer/search-list → dropdown
+# =====================================================
 @router.get("/search-list")
 def search_customer_list(
-    q: str = Query(..., min_length=1)
+    q: str = Query(..., min_length=1),
 ):
     conn = get_conn()
-    df = pd.read_sql_query('SELECT * FROM "Customer"', conn)
+    df = load_customer_table(conn)
     conn.close()
 
     if df.empty:
         return []
 
-    def clean(x):
-        if x is None or pd.isna(x):
-            return ""
-        return str(x).strip()
-
     q_clean = q.strip().lower()
 
-    # normalize phone
     def normalize_phone(x):
         return "".join(ch for ch in clean(x) if ch.isdigit())
 
@@ -156,17 +260,14 @@ def search_customer_list(
         | df["Tel"].apply(lambda x: normalize_phone(x).startswith(q_phone) if q_phone else False)
     )
 
-    found = df[mask].head(15)  # จำกัด 10 รายการ
+    found = df[mask].head(15)
 
-    results = []
-    for _, r in found.iterrows():
-        results.append({
+    return [
+        {
             "id": clean(r["Customer"]),
             "name": clean(r["Name"]),
             "phone": clean(r["Tel"]),
-            "tax_no": clean(r["Tax No."]),
-        })
-
-    return results
-
-
+            "tax_no": clean(r.get("Tax No.")),
+        }
+        for _, r in found.iterrows()
+    ]

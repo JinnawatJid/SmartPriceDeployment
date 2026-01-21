@@ -2,6 +2,7 @@
 import React from "react";
 
 
+
 function formatNumber(value) {
   if (value == null) return "-";
   return value.toLocaleString("th-TH");
@@ -22,12 +23,36 @@ export default function QuoteDraftCard({
     <div className="flex flex-col  rounded-2xl border border-gray-200 bg-white shadow-md transition-shadow">
       {/* Header */}
       <div className="border-b border-gray-200 px-5 py-3">
-        <p className="text-2xl font-bold text-[#0084FF]">{quoteNo}</p>
+        <div className="flex items-start justify-between gap-2">
+          {/* เลขที่ใบเสนอราคา */}
+          <p className="text-xl font-extrabold text-[#0084FF]">
+            {quoteNo}
+          </p>
+
+          {/* ปุ่มส่ง LINE */}
+          
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-lg bg-[#06b64c] font-medium  text-white px-3 py-1 text-xs shadow-md  hover:text-white hover:bg-[#05a445] "
+            title="ส่งใบเสนอราคาทาง LINE"
+          >
+            <img
+            src="/assets/Line_logo.png"
+            alt="LINE"
+            className="h-6 w-6  rounded-md shadow-md"
+          />
+            <span>ส่งใบเสนอราคา</span>
+          </button>
+        </div>
+
         <p className="mt-1 font-semibold text-gray-800">
           {customerName}
         </p>
-        <p className="text-xs text-gray-500">รหัสลูกค้า: {customerCode}</p>
+        <p className="text-xs text-gray-500">
+          รหัสลูกค้า: {customerCode}
+        </p>
       </div>
+
 
       {/* Body */}
       <div className="flex-1 px-5 py-3 space-y-2 text-xs md:text-sm">

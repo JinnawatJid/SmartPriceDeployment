@@ -21,6 +21,7 @@ from utils.baht_text import baht_text
 from cross_sell_router import cross_sell_router
 from invoice_router import router as invoice_router
 from item_update import router as item_update_router
+from customer_analytics import router as customer_analytics_router
 
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
@@ -71,6 +72,8 @@ app.include_router(gypsum_router,prefix="/api")
 app.include_router(cross_sell_router,prefix="/api")
 app.include_router(invoice_router)
 app.include_router(item_update_router, prefix="/api")
+app.include_router(customer_analytics_router)
+
 
 
 
