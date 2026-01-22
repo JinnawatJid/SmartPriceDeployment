@@ -62,6 +62,13 @@ function quoteReducer(state, action) {
           : {}),
       };
     }
+    case "SET_QUOTE_META":
+      return {
+        ...state,
+        id: action.payload.id,
+        quoteNo: action.payload.quoteNo,
+        status: action.payload.status,
+      };
 
     case "SET_SHIPPING":
       return {
@@ -252,6 +259,60 @@ function quoteReducer(state, action) {
 
             lineTotal: rawUnitPrice * newQty,
             needsPricing: it.source === "ui",
+          };
+        }),
+      };
+    }
+    // -------------------------
+    // UPDATE CART PRICE (MANUAL)
+    // -------------------------
+    case "UPDATE_CART_PRICE": {
+      const { sku, variantCode = null, sqft_sheet = 0, unitPrice } = action.payload;
+
+      const targetVariant = variantCode ?? null;
+      const targetSqft = Number(sqft_sheet ?? 0);
+
+      return {
+        ...state,
+        cart: state.cart.map((it) => {
+          const itVariant = it.variantCode ?? null;
+          const itSqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
+
+          const isTarget =
+            it.sku === sku && itVariant === targetVariant && itSqft === targetSqft;
+
+          if (!isTarget) return it;
+
+          const qty = Number(it.qty ?? 0);
+          const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
+          const isGlass = cat === "G";
+
+          // -------------------------
+          // 🔒 manual price wins
+          // -------------------------
+          if (isGlass && itSqft > 0) {
+            const pricePerSheet = unitPrice;
+
+            return {
+              ...it,
+              UnitPrice: unitPrice / itSqft, // truth (บาท/ตรฟ)
+              price_per_sheet: pricePerSheet, // display (บาท/แผ่น)
+              price: undefined,
+              lineTotal: pricePerSheet * qty,
+              priceSource: "manual",        // ⭐ สำคัญ
+              needsPricing: false,          // ⭐ กัน pricing override
+            };
+          }
+
+          // ===== non-glass =====
+          return {
+            ...it,
+            UnitPrice: unitPrice,
+            price: unitPrice,
+            price_per_sheet: undefined,
+            lineTotal: unitPrice * qty,
+            priceSource: "manual",          // ⭐ สำคัญ
+            needsPricing: false,
           };
         }),
       };
@@ -449,6 +510,12 @@ function quoteReducer(state, action) {
         ...state,
         shippingDirty: state.deliveryType === "DELIVERY",
         cart: state.cart.map((it) => {
+
+          // ⭐ FIX 1: ถ้าเป็นราคาที่ user แก้เอง → ห้าม override
+          if (it.priceSource === "manual") {
+            return it;
+          }
+
           const sqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
           const itKey = `${it.sku}__${sqft}`;
           if (itKey !== key) return it;
@@ -462,8 +529,8 @@ function quoteReducer(state, action) {
           // -------------------------
           // ราคา (แยก truth / display)
           // -------------------------
-          let price; // ใช้กับ non-glass
-          let price_per_sheet; // ใช้กับ glass
+          let price; // non-glass
+          let price_per_sheet; // glass
           let lineTotal;
 
           if (isGlass && sqft > 0) {

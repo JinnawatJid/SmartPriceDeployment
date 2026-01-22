@@ -21,6 +21,7 @@ import DynamicsProductFilter from "../../components/products/DynamicsProductFilt
 import CrossSellPanel from "../../components/cross-sell/CrossSellPanel.jsx";
 import CustomDropdown from "../../components/common/CustomDropdown.jsx";
 
+
 import { uiKeyOf, pricingKeyOf, printKeyOf } from "./utils/quoteKeys";
 import { getCustomerCode } from "./utils/customer";
 import { fmtTHB } from "./utils/format";
@@ -102,6 +103,12 @@ function Step6_Summary({ state, dispatch }) {
   const [catLoading, setCatLoading] = useState(true);
   const [catError, setCatError] = useState("");
   const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [sendingToBC, setSendingToBC] = useState(false);
+
+  const sumCartLineTotal = (cart) =>
+    cart.reduce((sum, it) => sum + Number(it.lineTotal ?? 0), 0);
+
+
 
   // ราคาที่ได้จาก backend
   const [calculation, setCalculation] = useState({
@@ -110,6 +117,7 @@ function Step6_Summary({ state, dispatch }) {
     loading: true,
     error: null,
   });
+
 
   const handleCrossSellAdd = (ruleItem) => {
     // TODO: เปิด modal ค้นหาสินค้า
@@ -477,6 +485,7 @@ function Step6_Summary({ state, dispatch }) {
     return () => clearTimeout(t);
   }, [productSearch]);
 
+  
   // โหลดประวัติการซื้อ
   useEffect(() => {
     const cust = state.customer;
@@ -491,7 +500,9 @@ function Step6_Summary({ state, dispatch }) {
       return;
     }
 
-    const currentSkus = new Set((state.cart || []).map((it) => it.sku).filter(Boolean));
+    const currentSkus = new Set(
+      (state.cart || []).map((it) => it.sku).filter(Boolean)
+    );
 
     const fetchHistory = async () => {
       try {
@@ -513,7 +524,10 @@ function Step6_Summary({ state, dispatch }) {
         });
 
         filtered.sort((a, b) =>
-          (a.createdAt || a.updatedAt || "") < (b.createdAt || b.updatedAt || "") ? 1 : -1
+          (a.createdAt || a.updatedAt || "") <
+          (b.createdAt || b.updatedAt || "")
+            ? 1
+            : -1
         );
 
         setHistoryOrders(filtered.slice(0, 5));
@@ -527,6 +541,7 @@ function Step6_Summary({ state, dispatch }) {
 
     fetchHistory();
   }, [state.customer, state.cart]);
+
 
   const handleQuickAdd = (item) => {
     dispatch({
@@ -556,61 +571,131 @@ function Step6_Summary({ state, dispatch }) {
   // Auto-hydrate customer (Draft/Repeat) โดยไม่ยิง pricing ซ้ำ
   // -------------------------------------------------
   useEffect(() => {
-    const cust = state.customer;
-    const custCode = String(getCustomerCode(cust || {}) || "").trim();
+  const cust = state.customer;
+  const custCode = String(getCustomerCode(cust || {}) || "").trim();
 
-    // ❌ ไม่มีรหัสลูกค้า หรือเป็น N/A → ไม่ hydrate
-    if (!custCode || custCode.toUpperCase() === "N/A") return;
+  // ❌ ไม่มีรหัสลูกค้า หรือเป็น N/A → ไม่ hydrate
+  if (!custCode || custCode.toUpperCase() === "N/A") return;
 
-    if (!cust?._needsHydrate) return;
+  if (!cust?._needsHydrate) return;
 
-    let cancelled = false;
+  let cancelled = false;
 
-    (async () => {
-      try {
-        const res = await api.get("/api/customer/search", {
-          params: { code: custCode },
-        });
+  (async () => {
+    try {
+      const res = await api.get("/api/customer/search", {
+        params: { code: custCode },
+      });
 
-        if (cancelled) return;
+      if (cancelled) return;
 
-        const full = res.data || {};
+      const full = res.data || {};
 
+      dispatch({
+        type: "SET_CUSTOMER",
+        payload: {
+          ...(cust || {}),
+          ...full,
+          id: full.id || cust.id || custCode,
+          code: full.id || cust.code || custCode,
+          _needsHydrate: false,
+        },
+      });
+    } catch (err) {
+      console.error("auto hydrate customer failed:", err);
+
+      if (!cancelled) {
         dispatch({
           type: "SET_CUSTOMER",
           payload: {
             ...(cust || {}),
-            ...full,
-            id: full.id || cust.id || custCode,
-            code: full.id || cust.code || custCode,
             _needsHydrate: false,
           },
         });
-      } catch (err) {
-        console.error("auto hydrate customer failed:", err);
-
-        if (!cancelled) {
-          dispatch({
-            type: "SET_CUSTOMER",
-            payload: {
-              ...(cust || {}),
-              _needsHydrate: false,
-            },
-          });
-        }
       }
-    })();
+    }
+  })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [state.customer]);
+  return () => {
+    cancelled = true;
+  };
+}, [state.customer]);
+
 
   // sku -> item (ราคาที่คำนวณใหม่)
   const calcMap = useMemo(
     () => Object.fromEntries((calculation.cart || []).map((it) => [pricingKeyOf(it), it])),
     [calculation.cart]
   );
+
+  const _round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+
+  const computeEffectiveTotals = (cart, pricedMap) => {
+    const shipping = Number(
+      state.deliveryType === "DELIVERY" ? (state.shippingCustomerPay || 0) : 0
+    );
+
+    const subtotal = (cart || []).reduce((sum, it) => {
+      const key = pricingKeyOf(it);
+      const priced = pricedMap?.[key];
+
+      // manual → ใช้ lineTotal ใน state เป็นหลัก
+      if (it.priceSource === "manual") {
+        const lt = Number(it.lineTotal ?? 0);
+        if (lt > 0) return sum + lt;
+
+        // fallback ถ้า lineTotal ว่าง
+        const qty = Number(it.qty ?? 0);
+        const sqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
+        const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
+        const isGlass = cat === "G";
+        const unit = isGlass
+          ? Number(it.price_per_sheet ?? Number(it.UnitPrice ?? 0) * sqft)
+          : Number(it.UnitPrice ?? it.price ?? 0);
+        return sum + unit * qty;
+      }
+
+      // not manual → ใช้ pricing ถ้ามี
+      const lt = Number(priced?._LineTotal ?? priced?.lineTotal ?? it.lineTotal ?? 0);
+      if (lt > 0) return sum + lt;
+
+      // fallback
+      const qty = Number(it.qty ?? 0);
+      const unit = Number(
+        priced?.price_per_sheet ??
+          priced?.UnitPrice ??
+          it.price_per_sheet ??
+          it.UnitPrice ??
+          it.price ??
+          0
+      );
+      return sum + unit * qty;
+    }, 0);
+
+    const grossBeforeVat = Number(subtotal) + shipping;
+    const vat = _round2(grossBeforeVat * 0.07);
+    const exVat = _round2(grossBeforeVat - vat);
+    const total = _round2(grossBeforeVat);
+
+    return {
+      exVat,
+      vat,
+      total,
+      exVatFmt: fmtTHB(exVat),
+      vatFmt: fmtTHB(vat),
+      totalFmt: fmtTHB(total),
+    };
+  };
+
+  // ⭐ ทำให้ Summary + payload totals เปลี่ยนตามเมื่อ user แก้ราคา/qty
+  useEffect(() => {
+    const next = computeEffectiveTotals(state.cart, calcMap);
+    setCalculation((prev) => ({
+      ...prev,
+      totals: { ...prev.totals, ...next },
+    }));
+  }, [state.cart, state.deliveryType, state.shippingCustomerPay, calcMap]);
+
 
   const [saving, setSaving] = useState(false);
 
@@ -632,7 +717,11 @@ function Step6_Summary({ state, dispatch }) {
       const isGlass = (it.category || "").toUpperCase() === "G";
 
       if (isEditDraft) {
-        const rawUnitPrice = Number(it.UnitPrice ?? it.price ?? 0); // บาท/ตรฟ
+        const rawUnitPrice =
+          it.priceSource === "manual"
+            ? Number(it.UnitPrice ?? it.price ?? 0)
+            : Number(calc?.UnitPrice ?? it.UnitPrice ?? it.price ?? 0);
+        // บาท/ตรฟ
 
         if (isGlass && sqft > 0) {
           const pricePerSheet = rawUnitPrice * sqft;
@@ -644,7 +733,11 @@ function Step6_Summary({ state, dispatch }) {
           lineTotal = Number(it.lineTotal ?? rawUnitPrice * Number(it.qty ?? 0));
         }
       } else {
-        const rawUnitPrice = Number(calc?.UnitPrice ?? it.UnitPrice ?? it.price ?? 0);
+        const rawUnitPrice =
+          it.priceSource === "manual"
+            ? Number(it.UnitPrice ?? it.price ?? 0)
+            : Number(calc?.UnitPrice ?? it.UnitPrice ?? it.price ?? 0);
+
 
         if (isGlass && sqft > 0) {
           const pricePerSheet = rawUnitPrice * sqft;
@@ -657,6 +750,15 @@ function Step6_Summary({ state, dispatch }) {
         }
       }
 
+      // ⭐ ราคาจากระบบ (ไม่ว่าผู้ใช้จะแก้หรือไม่)
+      const systemUnitPrice = Number(
+        calc?.UnitPrice ??
+        it.UnitPrice ??
+        it.price ??
+        0
+      );
+
+
       // ✅ 4) คืน payload ที่ใช้ "effective value"
       return {
         sku: it.sku,
@@ -667,6 +769,8 @@ function Step6_Summary({ state, dispatch }) {
         price: unitPrice,
         lineTotal: lineTotal,
 
+        Price_System: systemUnitPrice,
+        
         UnitPrice: unitPrice, // optional
         LineTotal: lineTotal, // optional
 
@@ -681,6 +785,10 @@ function Step6_Summary({ state, dispatch }) {
       };
     });
 
+    // ⭐ ใช้ logic เดียวกับ Summary หน้า Step6
+    const effectiveTotals = computeEffectiveTotals(state.cart, calcMap);
+
+
     return {
       status,
       employee: employee
@@ -694,11 +802,13 @@ function Step6_Summary({ state, dispatch }) {
       deliveryType: state.deliveryType || null,
       cart: cartPayload,
       totals: {
-        exVat: calculation.totals.exVat ?? null,
-        vat: calculation.totals.vat ?? null,
-        grandTotal: calculation.totals.total ?? null,
+        exVat: effectiveTotals.exVat,
+        vat: effectiveTotals.vat,
+        grandTotal: effectiveTotals.total,
         shippingCustomerPay: state.shippingCustomerPay ?? 0,
       },
+
+
       note: state.remark || "",
     };
   };
@@ -822,21 +932,32 @@ function Step6_Summary({ state, dispatch }) {
       const isGlass = item.category === "G";
 
       const unitPrice = Number(
-        calculatedItem?.price_per_sheet ??
-          calculatedItem?.UnitPrice ??
-          item.price ??
-          item.UnitPrice ??
-          0
+        item.priceSource === "manual"
+          ? item.price_per_sheet ?? item.price ?? item.UnitPrice ?? 0
+          : calculatedItem?.price_per_sheet ??
+            calculatedItem?.UnitPrice ??
+            item.price ??
+            item.UnitPrice ??
+            0
       );
 
+
       const lineTotal = Number(
-        calculatedItem?._LineTotal ?? calculatedItem?.lineTotal ?? item.lineTotal ?? 0
+        item.priceSource === "manual"
+          ? item.lineTotal ?? unitPrice * qty
+          : calculatedItem?._LineTotal ?? calculatedItem?.lineTotal ?? item.lineTotal ?? 0
       );
 
       // =========================
       // GLASS PRICE NORMALIZATION
       // =========================
       let priceToSend = unitPrice;
+
+      // ⭐ FIX: manual glass → ใช้ lineTotal เป็น truth
+      if (isGlass && item.priceSource === "manual" && item.lineTotal > 0 && qty > 0) {
+        priceToSend = Number(item.lineTotal) / qty; // ต่อแผ่น
+      }
+
 
       if (isGlass) {
         // 1) NewQuote → pricing ส่ง price_per_sheet มาแล้ว
@@ -876,20 +997,29 @@ function Step6_Summary({ state, dispatch }) {
   const handleSaveQuotation = async (status) => {
     try {
       setSaving(true);
-      const payload = buildQuotationPayload(status);
-      await saveQuotation(payload, state);
 
-      dispatch({ type: "RESET_QUOTE" });
+      const payload = buildQuotationPayload(status);
+      const res = await saveQuotation(payload, state);
+
+      // ⭐ สำคัญที่สุด
+      if (res?.data) {
+        dispatch({
+          type: "SET_QUOTE_META",
+          payload: {
+            id: res.data.id,
+            quoteNo: res.data.quoteNo,
+            status: res.data.status,
+          },
+        });
+      }
 
       if (status === "open") {
         navigate("/quote-drafts");
-      } else {
-        if (state.id) {
-          navigate("/confirmed-quotes");
-        } else {
-          alert("บันทึกใบเสนอราคา (สถานะ Complete) เรียบร้อยแล้ว");
-        }
+        return;
       }
+
+      alert("บันทึกใบเสนอราคาเรียบร้อยแล้ว กรุณาตรวจสอบก่อนส่งเข้า BC");
+
     } catch (err) {
       console.error(err);
       alert("บันทึกใบเสนอราคาไม่สำเร็จ");
@@ -897,6 +1027,40 @@ function Step6_Summary({ state, dispatch }) {
       setSaving(false);
     }
   };
+
+
+  const handleSendToBC = async () => {
+    try {
+      setSendingToBC(true);
+
+      const payload = buildQuotationPayload("complete");
+
+      const bcPayload = {
+        customerNo: payload.customer.code,
+        quoteNo: payload.quoteNo || payload.id || "",
+        items: payload.cart.map((it) => ({
+          itemNo: it.sku,
+          qty: Number(it.qty || 0),
+          price: Number(it.price || 0),
+        })),
+      };
+
+      await api.post("/api/sq/quote", bcPayload);
+
+      alert("ส่งข้อมูลเข้า Dynamics 365 เรียบร้อยแล้ว");
+
+      // ✅ RESET ตรงนี้แทน
+      dispatch({ type: "RESET_QUOTE" });
+      navigate("/confirmed-quotes");
+
+    } catch (err) {
+      console.error(err);
+      alert("ส่งข้อมูลเข้า Dynamics 365 ไม่สำเร็จ");
+    } finally {
+      setSendingToBC(false);
+    }
+  };
+
 
   const handleGoBack = () => dispatch({ type: "SET_STEP", payload: 3 });
   const handlePrint = async () => {
@@ -933,18 +1097,25 @@ function Step6_Summary({ state, dispatch }) {
         const isGlass = (original.category || it.category) === "G";
 
         const price = Number(
-          it.price_per_sheet ?? it.UnitPrice ?? it.price ?? original?.price ?? 0
+          original?.priceSource === "manual"
+            ? original.price_per_sheet ?? original.price ?? original.UnitPrice ?? 0
+            : it.price_per_sheet ?? it.UnitPrice ?? it.price ?? original?.price ?? 0
         );
 
-        const amount = Number(it._LineTotal ?? it.lineTotal ?? price * Number(it.qty || 0));
+
+        const amount =
+          original?.priceSource === "manual"
+            ? Number(original.lineTotal ?? 0)
+            : Number(it._LineTotal ?? it.lineTotal ?? price * Number(it.qty || 0));
+
 
         return {
           code: it.sku,
           name: original.name || it.name || "",
           qty: Number(it.qty || 0),
           unit,
-          price: Number(it.price_per_sheet ?? it.UnitPrice ?? it.price ?? original?.price ?? 0),
-          amount: Number(it._LineTotal ?? it.lineTotal ?? 0),
+          price: price,
+          amount: amount,
         };
       }),
 
@@ -1024,7 +1195,11 @@ function Step6_Summary({ state, dispatch }) {
   };
   console.log("=== STEP6 STATE AFTER LOAD_DRAFT ===", state);
 
-  const customerCode = useMemo(() => getCustomerCode(state.customer), [state.customer]);
+  const customerCode = useMemo(
+    () => getCustomerCode(state.customer),
+    [state.customer]
+  );
+
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-lg flex flex-col animate-fadeIn">
@@ -1034,7 +1209,7 @@ function Step6_Summary({ state, dispatch }) {
   {/* Top: ใบกำกับภาษี + ช่องทางรับสินค้า + ลูกค้า */}
       <div className="mt-2 flex justify-center mr-4 ">
         <div className="flex">
-          <div>
+          <div >
             <CustomerSearchSection
               customer={state.customer}
               onCustomerChange={(cust) => {
@@ -1043,8 +1218,8 @@ function Step6_Summary({ state, dispatch }) {
             />
             {/* แสดงสถานะลูกค้า / anonymous */}
             <div className="mt-2 text-sm text-gray-600">
-              หากไม่เลือกหรือไม่ระบุลูกค้า ระบบจะบันทึกเป็น{" "}
-              <span className="font-semibold">ผู้ไม่ประสงค์ออกนาม</span>
+                  หากไม่เลือกหรือไม่ระบุลูกค้า ระบบจะบันทึกเป็น{" "}
+                  <span className="font-semibold">ผู้ไม่ประสงค์ออกนาม</span>            
             </div>
           </div>
           <TaxDeliverySection
@@ -1058,8 +1233,7 @@ function Step6_Summary({ state, dispatch }) {
                   : state.needsTax,
                 deliveryType: Object.prototype.hasOwnProperty.call(change, "deliveryType")
                   ? change.deliveryType
-                  : state.deliveryType,
-              };
+                  : state.deliveryType,};
               dispatch({ type: "SET_TAX_DELIVERY", payload });
             }}
           />
@@ -1191,21 +1365,11 @@ function Step6_Summary({ state, dispatch }) {
               <table className="min-w-full table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="w-[40px] px-4 py-3 text-xs font-bold text-gray-500 text-left">
-                      #
-                    </th>
-                    <th className="w-[240px] px-4 py-3 text-xs font-bold text-gray-500 text-left">
-                      สินค้า
-                    </th>
-                    <th className="w-[50px] pl-12 py-3 text-xs text-end font-bold text-gray-500">
-                      จำนวน
-                    </th>
-                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-center">
-                      ราคา/หน่วย
-                    </th>
-                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-left">
-                      ยอดรวม
-                    </th>
+                    <th className="w-[40px] px-4 py-3 text-xs font-bold text-gray-500 text-left">#</th>
+                    <th className="w-[240px] px-4 py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
+                    <th className="w-[50px] pl-12 py-3 text-xs text-end font-bold text-gray-500">จำนวน</th>
+                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-center">ราคา/หน่วย</th>
+                    <th className="w-[80px] px-2 py-3 text-xs font-bold text-gray-500 text-left">ยอดรวม</th>
                   </tr>
                 </thead>
               </table>
@@ -1301,10 +1465,20 @@ function Step6_Summary({ state, dispatch }) {
                 <button
                   disabled={calculation.loading || !!calculation.error}
                   onClick={() => handleSaveQuotation("complete")}
-                  className="flex w-full items-center justify-center rounded-lg bg-[#DC2626] px-6 py-3 font-semibold text-white shadow-md hover:bg-gray-700 disabled:opacity-50"
+                  className="flex w-full items-center justify-center rounded-lg bg-[#DC2626] px-6 py-3 font-semibold text-white shadow-md hover:bg-[#c42222] disabled:opacity-50"
                 >
                   <SaveIcon /> ยืนยัน
                 </button>
+                {state.status === "complete" && (
+                  <button
+                    disabled={sendingToBC}
+                    onClick={handleSendToBC}
+                    className="flex w-full items-center justify-center rounded-lg bg-[#2563EB] px-6 py-3 font-semibold text-white shadow-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {sendingToBC ? "กำลังส่งเข้า BC..." : "ส่งเข้า Dynamics 365"}
+                  </button>
+                )}
+
               </div>
             </div>
           </div>

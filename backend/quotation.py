@@ -128,6 +128,7 @@ def _build_line_from_payload(item: dict) -> dict:
     )
 
     unit = item.get("unit", "")
+    price_system = float(item.get("Price_System", 0) or 0)
 
     qty = float(item.get("qty", 0) or 0)
     price = float(item.get("price", 0) or 0)
@@ -150,6 +151,7 @@ def _build_line_from_payload(item: dict) -> dict:
         "Category": category,
         "Unit": unit,
         "Quantity": qty,
+        "Price_System": price_system,
         "UnitPrice": price,
         "TotalPrice": line_total,
         "IsGlassCut": "Y" if item.get("isGlassCut") else "N",
@@ -236,14 +238,14 @@ def create_quotation(payload: dict = Body(...)):
         cur.execute("""
             INSERT INTO Quote_Line (
                 QuoteID, ItemCode, ItemName, Category,
-                Unit, Quantity, UnitPrice, TotalPrice,
+                Unit, Quantity,Price_System, UnitPrice, TotalPrice,
                 IsGlassCut, CutInfoJson, Remark,
                 Sqft_Sheet, VariantCode, ProductWeight
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             quote_no,
             line["ItemCode"], line["ItemName"], line["Category"],
-            line["Unit"], line["Quantity"], line["UnitPrice"],
+            line["Unit"], line["Quantity"],line["Price_System"], line["UnitPrice"],
             line["TotalPrice"], line["IsGlassCut"],
             line["CutInfoJson"], line["Remark"],
             line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"]
@@ -257,7 +259,12 @@ def create_quotation(payload: dict = Body(...)):
     _append_header_to_excel(header)
     _append_lines_to_excel(quote_no, lines_to_excel)
 
-    return {"quoteNo": quote_no, "status": "created"}
+    return {
+        "id": quote_no,              # ใช้ quoteNo เป็น id
+        "quoteNo": quote_no,
+        "status": payload.get("status", "draft")
+    }
+
 
 
 # -----------------------------------------------------
@@ -356,10 +363,10 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         cur.execute("""
             INSERT INTO Quote_Line (
                 QuoteID, ItemCode, ItemName, Category,
-                Unit, Quantity, UnitPrice, TotalPrice,
+                Unit, Quantity,Price_System, UnitPrice, TotalPrice,
                 IsGlassCut, CutInfoJson, Remark,
                 Sqft_Sheet, VariantCode, ProductWeight
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             quote_no,
             line["ItemCode"], line["ItemName"], line["Category"],
@@ -382,7 +389,12 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
     _append_header_to_excel(updated_header)
     _append_lines_to_excel(quote_no, lines_to_excel)
 
-    return {"quoteNo": quote_no, "status": "updated"}
+    return {
+        "id": quote_no,
+        "quoteNo": quote_no,
+        "status": header["Status"]
+    }
+
 
 
 # -----------------------------------------------------
@@ -440,6 +452,7 @@ def list_quotations(status: str = None):
                     "name": ln["ItemName"],
                     "qty": ln["Quantity"],
                     "price": ln["UnitPrice"],
+                    "Price_System": ln.get("Price_System", 0),
                     "lineTotal": ln["TotalPrice"],
                     "category": ln["Category"],
                     "unit": ln["Unit"],
@@ -480,6 +493,7 @@ def get_quotation(quote_no: str):
         "lines": [
             {
                 **ln,
+                "Price_System": ln.get("Price_System", 0),
                 "product_weight": ln.get("ProductWeight", 0),
                 "variantCode": ln.get("VariantCode", ""),
             }

@@ -8,7 +8,7 @@ import axios from "axios";
 //    - Native: Backend (8000) serve frontend + api
 //    - Dev: Vite proxy /api -> backend:8000
 const api = axios.create({
-  baseURL: import.meta.env?.VITE_API_BASE_URL || "",
+  baseURL: "http://localhost:8000", 
   timeout: 3000000,
 });
 

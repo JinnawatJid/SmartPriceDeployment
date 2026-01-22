@@ -19,9 +19,47 @@ const TrashIcon = () => (
 );
 
 export default function CartItemRow({ item, index, calculatedItem, dispatch, customerCode }) {
+  
+  const cat = (item.category || String(item.sku || "").slice(0, 1)).toUpperCase();
+  const isGlass = cat === "G";
+
+  // ✅ unit price to display
+  // - glass: show บาท/แผ่น (price_per_sheet)
+  // - others: show บาท/หน่วย (UnitPrice/price)
+  const displayUnitPrice =
+    item.priceSource === "manual"
+      ? isGlass
+        ? Number(
+            item.price_per_sheet ??
+              Number(item.UnitPrice ?? 0) * Number(item.sqft_sheet ?? item.sqft ?? 0)
+          )
+        : Number(item.UnitPrice ?? item.price ?? 0)
+      : Number(
+          (isGlass
+            ? calculatedItem?.price_per_sheet ?? item.price_per_sheet
+            : calculatedItem?.UnitPrice ?? item.UnitPrice ?? item.price) ?? 0
+        );
+
+  // ✅ line total
+  // - manual: trust item.lineTotal (set by reducer) else fallback compute
+  // - non-manual: prefer pricing _LineTotal
+  const displayLineTotal =
+    item.priceSource === "manual"
+      ? Number(item.lineTotal ?? displayUnitPrice * Number(item.qty || 0))
+      : Number(
+          calculatedItem?._LineTotal ??
+            item.lineTotal ??
+            displayUnitPrice * Number(item.qty || 0)
+        );
+
+
+
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState(item.name || "");
   const [openPriceHistory, setOpenPriceHistory] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceDraft, setPriceDraft] = useState(displayUnitPrice);
+
 
   const { prices, loading } = useItemPriceHistory({
     sku: item.sku,
@@ -29,16 +67,6 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
     enabled: openPriceHistory,
   });
 
-  const displayUnitPrice =
-    calculatedItem?.price_per_sheet ??
-    calculatedItem?.UnitPrice ??
-    item.price_per_sheet ??
-    item.UnitPrice ??
-    item.price ??
-    0;
-
-  const displayLineTotal =
-    calculatedItem?._LineTotal ?? item.lineTotal ?? displayUnitPrice * item.qty ?? 0;
 
   const handleQtyChange = (e) => {
     dispatch({
@@ -71,6 +99,28 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
       },
     });
     setEditingDesc(false);
+  };
+  const commitPrice = () => {
+    const newPrice = Number(priceDraft);
+
+    if (isNaN(newPrice) || newPrice < 0) {
+      setPriceDraft(displayUnitPrice);
+      setEditingPrice(false);
+      return;
+    }
+
+    dispatch({
+      type: "UPDATE_CART_PRICE",
+      payload: {
+        sku: item.sku,
+        variantCode: item.variantCode ?? null,
+        sqft_sheet: Number(item.sqft_sheet ?? item.sqft ?? 0),
+        unitPrice: newPrice,
+        from: "manual",
+      },
+    });
+
+    setEditingPrice(false);
   };
 
   return (
@@ -118,14 +168,43 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
         </td>
 
         <td className="px-2 py-3 text-sm">
-          <button
-            onClick={() => setOpenPriceHistory((v) => !v)}
-            className="font-semibold text-blue-700 hover:underline flex items-center gap-1"
-          >
-            {Number(displayUnitPrice).toLocaleString("th-TH")}
-            <span className={`transition-transform ${openPriceHistory ? "rotate-90" : ""}`}>❯</span>
-          </button>
+          {editingPrice ? (
+            <input
+              type="number"
+              autoFocus
+              value={priceDraft}
+              onChange={(e) => setPriceDraft(e.target.value)}
+              onBlur={commitPrice}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitPrice();
+                if (e.key === "Escape") {
+                  setPriceDraft(displayUnitPrice);
+                  setEditingPrice(false);
+                }
+              }}
+              className="w-24 rounded border px-2 py-1 text-right text-sm"
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <span
+                className="font-semibold cursor-pointer hover:underline text-blue-700"
+                onDoubleClick={() => setEditingPrice(true)}
+                title="ดับเบิลคลิกเพื่อแก้ไขราคา"
+              >
+                {Number(displayUnitPrice).toLocaleString("th-TH")}
+              </span>
+
+              <button
+                onClick={() => setOpenPriceHistory((v) => !v)}
+                className="text-gray-400 hover:text-gray-600"
+                title="ดูประวัติราคา"
+              >
+                ❯
+              </button>
+            </div>
+          )}
         </td>
+
 
         <td className="px-2 text-sm py-3 font-semibold">
           {Number(displayLineTotal).toLocaleString("th-TH")}
