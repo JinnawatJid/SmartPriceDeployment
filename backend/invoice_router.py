@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 import pandas as pd
-from db_sqlite import get_conn
+from config.db_sqlite import get_conn
+
 
 # ✅ ประกาศ prefix ที่ router เลย (เหมือน pricing / shipping)
 router = APIRouter(

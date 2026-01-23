@@ -1,7 +1,8 @@
 # items.py — FINAL VERSION FOR YOUR DATABASE
 from fastapi import APIRouter, Query, HTTPException
 import pandas as pd
-from db_sqlite import get_conn
+from config.db_sqlite import get_conn
+
 
 router = APIRouter(prefix="/items", tags=["items"])
 TABLE_NAME = "Items_Test"

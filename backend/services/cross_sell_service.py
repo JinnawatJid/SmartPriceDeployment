@@ -1,4 +1,5 @@
-from db_sqlite import get_conn
+from config.db_sqlite import get_conn
+
 
 def match_rule(rule, product):
     pg = rule["Product Group"]

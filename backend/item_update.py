@@ -1,7 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import pandas as pd
 from datetime import datetime
-from db_sqlite import get_conn
+from config.db_sqlite import get_conn
+
 
 router = APIRouter(prefix="/item-update", tags=["item-update"])
 

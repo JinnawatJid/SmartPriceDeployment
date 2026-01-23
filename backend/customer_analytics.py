@@ -9,7 +9,13 @@
 from fastapi import APIRouter, Query, HTTPException
 import pandas as pd
 from datetime import datetime, timedelta
-from db_sqlite import get_conn
+import requests
+from config.config_external_api import (
+    INVOICE_API_URL,
+    INVOICE_API_HEADERS,
+)
+
+
 
 router = APIRouter(
     prefix="/api/customer-analytics",
@@ -30,15 +36,78 @@ def classify_group(no):
     return no[0].upper()
 
 
-def load_invoice_by_customer(conn, customer_code: str) -> pd.DataFrame:
-    df = pd.read_sql_query(
-        'SELECT * FROM "Invoice" WHERE "Sell-to Customer No." = ?',
-        conn,
-        params=[customer_code],
-    )
-    if not df.empty:
-        df.columns = [c.strip() for c in df.columns]
+def load_invoice_by_customer_api(
+    customer_code: str,
+    months: int,
+    anchor_date: str | None,
+) -> pd.DataFrame:
+    rows = []
+
+    page = 1
+    size = 500
+    max_page = 10
+
+    if anchor_date:
+        anchor = pd.to_datetime(anchor_date)
+    else:
+        anchor = datetime.today()
+
+    date_to = anchor.date().isoformat()
+    date_from = (anchor - timedelta(days=30 * months)).date().isoformat()
+
+    while True:
+        payload = {
+            "page": page,
+            "size": size,
+
+            # ✅ D365 filter syntax
+            "customer_code": {"$eq": customer_code},
+            "Posting Date": {
+                "$gte": date_from,
+                "$lte": date_to,
+            },
+        }
+
+        resp = requests.post(
+            INVOICE_API_URL,
+            json=payload,
+            headers=INVOICE_API_HEADERS,
+            timeout=30,
+        )
+        resp.raise_for_status()
+
+        data = resp.json()
+        items = data.get("data") or []
+
+        if not items:
+            break
+
+        rows.extend(items)
+
+        if len(items) < size:
+            break
+
+        page += 1
+        if page > max_page:
+            break
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+
+    # ---- normalize column ให้เหมือน SQLite เดิม ----
+    rename_map = {
+        "sku": "No.",
+    }
+    for src, dst in rename_map.items():
+        if src in df.columns:
+            df[dst] = df[src]
+
+    df["Posting Date"] = pd.to_datetime(df["Posting Date"], errors="coerce")
+
     return df
+
 
 
 def resolve_anchor_and_cutoff(inv: pd.DataFrame, months: int, anchor_date: str | None):
@@ -97,9 +166,12 @@ def customer_monthly_summary(
     ====================================================
     """
 
-    conn = get_conn()
-    inv = load_invoice_by_customer(conn, customer_code)
-    conn.close()
+    inv = load_invoice_by_customer_api(
+        customer_code=customer_code,
+        months=months,
+        anchor_date=anchor_date,
+    )
+
 
     if inv.empty:
         return {
@@ -175,9 +247,12 @@ def customer_category_summary(
     ====================================================
     """
 
-    conn = get_conn()
-    inv = load_invoice_by_customer(conn, customer_code)
-    conn.close()
+    inv = load_invoice_by_customer_api(
+        customer_code=customer_code,
+        months=months,
+        anchor_date=anchor_date,
+    )
+
 
     if inv.empty:
         return {

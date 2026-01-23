@@ -1,7 +1,8 @@
 # accessories_router.py — เวอร์ชัน SQLite + API ใหม่ + JSON เดิม
 from fastapi import APIRouter, HTTPException, Query
 import pandas as pd
-from db_sqlite import get_conn
+from config.db_sqlite import get_conn
+
 
 router = APIRouter(prefix="/accessories", tags=["accessories"])
 

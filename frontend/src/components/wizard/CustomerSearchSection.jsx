@@ -38,7 +38,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
   // โหลดข้อมูลลูกค้าเต็มหลังเลือก
   const loadCustomerFull = async (customerId) => {
     try {
-      const res = await api.get(`/api/customer/search?code=${customerId}`);
+      const res = await api.post(`/api/customer/search?code=${customerId}`);
       onCustomerChange(res.data);
     } catch {
       setError("โหลดข้อมูลลูกค้าไม่สำเร็จ");
@@ -64,7 +64,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
       setError("");
       try {
         const encoded = encodeURIComponent(searchTerm.trim());
-        const res = await api.get(`/api/customer/search-list?q=${encoded}`);
+        const res = await api.post(`/api/customer/search-list?q=${encoded}`);
         setResults(res.data || []);
         setOpenDropdown(true);
       } catch {

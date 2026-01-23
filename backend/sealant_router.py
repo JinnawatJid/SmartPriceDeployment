@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Query
 import pandas as pd
 from typing import Optional
-from db_sqlite import get_conn
+from config.db_sqlite import get_conn
+
 
 router = APIRouter(prefix="/sealant", tags=["sealant"])
 

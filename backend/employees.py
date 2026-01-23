@@ -5,7 +5,8 @@ import math
 import pandas as pd
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
-from db_sqlite import get_conn   # ← ใช้ SQLite
+from config.db_sqlite import get_conn
+  # ← ใช้ SQLite
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 

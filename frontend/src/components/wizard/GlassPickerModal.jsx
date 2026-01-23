@@ -328,7 +328,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 ">
-      <div className="bg-white w-[900px] max-h-[90vh] rounded-lg shadow-lg p-4 overflow-y-auto">
+      <div className="bg-white w-[900px] max-h-[90vh] rounded-xl shadow-lg p-8 overflow-y-auto">
         {/* HEADER */}
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold">เลือกสินค้ากระจก</h2>

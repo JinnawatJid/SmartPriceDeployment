@@ -127,9 +127,9 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
     <>
       {/* ===== MAIN ROW ===== */}
       <tr className="border-b bg-white hover:bg-gray-50">
-        <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
+        <td className="w-[40px] px-4 py-3 text-sm text-gray-600">{index + 1}</td>
 
-        <td className="px-4 py-3">
+        <td className="px-4 py-3 w-[240px]">
           {editingDesc ? (
             <input
               autoFocus
@@ -157,7 +157,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
           <p className="text-xs text-gray-500">{item.sku}</p>
         </td>
 
-        <td className="px-2 py-3">
+        <td className="px-2 py-3 ">
           <input
             type="number"
             value={item.qty}
@@ -167,7 +167,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
           />
         </td>
 
-        <td className="px-2 py-3 text-sm">
+        <td className="px-2 py-3 text-sm w-[80px]">
           {editingPrice ? (
             <input
               type="number"
@@ -206,7 +206,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
         </td>
 
 
-        <td className="px-2 text-sm py-3 font-semibold">
+        <td className="px-2 text-sm py-3 font-semibold ">
           {Number(displayLineTotal).toLocaleString("th-TH")}
         </td>
 
