@@ -59,7 +59,7 @@ app.add_middleware(
 )
 
 app.include_router(quotation_router, prefix="/api")
-app.include_router(customer_router, prefix="/api")
+app.include_router(customer_router)
 app.include_router(items_router,prefix="/api")
 app.include_router(employees_router,prefix="/api")
 app.include_router(login_router,prefix="/api")
@@ -122,8 +122,13 @@ if os.path.exists(dist_path):
     @app.get("/{catchall:path}")
     async def serve_react_app(catchall: str):
         # Allow API calls to pass through
-        if catchall.startswith("api/") or catchall.startswith("print/"):
-             return Response(status_code=404)
+        if (
+            catchall.startswith("api/")
+            or catchall.startswith("print/")
+            or catchall.startswith("login")
+        ):
+            return Response(status_code=404)
+
 
         # Check if file exists in dist
         file_path = os.path.join(dist_path, catchall)

@@ -11,7 +11,7 @@ from config.config_external_api import (
     INVOICE_API_HEADERS,
 )
 
-router = APIRouter(prefix="/customer")
+router = APIRouter(prefix="/api/customer")
 
 # =====================================================
 # Helpers
