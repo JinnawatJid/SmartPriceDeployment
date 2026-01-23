@@ -709,48 +709,52 @@ function Step6_Summary({ state, dispatch }) {
       // ✅ 2) ดึง calculated item (pricing result)
       const calc = calcMap?.[key];
 
-      let unitPrice = 0;
-      let lineTotal = 0;
-
-      // ✅ 3) ราคา
+      // ===============================
+      // PRICE / LINETOTAL RESOLUTION
+      // ===============================
       const sqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
       const isGlass = (it.category || "").toUpperCase() === "G";
 
-      if (isEditDraft) {
-        const rawUnitPrice =
-          it.priceSource === "manual"
-            ? Number(it.UnitPrice ?? it.price ?? 0)
-            : Number(calc?.UnitPrice ?? it.UnitPrice ?? it.price ?? 0);
-        // บาท/ตรฟ
+      // -------------------------------
+      // 1) UNIT PRICE (บาท / หน่วย)
+      // -------------------------------
+      let unitPrice;
 
-        if (isGlass && sqft > 0) {
-          const pricePerSheet = rawUnitPrice * sqft;
-
-          unitPrice = rawUnitPrice; // 🔒 truth
-          lineTotal = Number(it.lineTotal ?? pricePerSheet * Number(it.qty ?? 0));
-        } else {
-          unitPrice = rawUnitPrice;
-          lineTotal = Number(it.lineTotal ?? rawUnitPrice * Number(it.qty ?? 0));
-        }
+      if (it.priceSource === "manual") {
+        // ⭐ manual = ใช้ค่าที่ user ใส่
+        unitPrice = Number(it.UnitPrice ?? it.price ?? 0);
       } else {
-        const rawUnitPrice =
-          it.priceSource === "manual"
-            ? Number(it.UnitPrice ?? it.price ?? 0)
-            : Number(calc?.UnitPrice ?? it.UnitPrice ?? it.price ?? 0);
+        // system pricing
+        unitPrice = Number(
+          calc?.UnitPrice ??
+          it.UnitPrice ??
+          it.price ??
+          0
+        );
+      }
 
+      // -------------------------------
+      // 2) LINE TOTAL (source of truth)
+      // -------------------------------
+      let lineTotal;
 
+      if (it.priceSource === "manual") {
+        // ⭐⭐ สำคัญที่สุด
+        // manual → ใช้ lineTotal ที่ user แก้ ห้ามคำนวณใหม่เด็ดขาด
+        lineTotal = Number(it.lineTotal || 0);
+      } else {
+        // system pricing
         if (isGlass && sqft > 0) {
-          const pricePerSheet = rawUnitPrice * sqft;
-
-          unitPrice = rawUnitPrice;
-          lineTotal = Number(calc?._LineTotal ?? pricePerSheet * Number(it.qty ?? 0));
+          // กระจก: unitPrice = บาท/ตรฟ → แปลงเป็นต่อแผ่น
+          lineTotal = unitPrice * sqft * Number(it.qty ?? 0);
         } else {
-          unitPrice = rawUnitPrice;
-          lineTotal = Number(calc?._LineTotal ?? rawUnitPrice * Number(it.qty ?? 0));
+          lineTotal = unitPrice * Number(it.qty ?? 0);
         }
       }
 
-      // ⭐ ราคาจากระบบ (ไม่ว่าผู้ใช้จะแก้หรือไม่)
+      // -------------------------------
+      // 3) SYSTEM PRICE (reference)
+      // -------------------------------
       const systemUnitPrice = Number(
         calc?.UnitPrice ??
         it.UnitPrice ??
@@ -758,36 +762,34 @@ function Step6_Summary({ state, dispatch }) {
         0
       );
 
-
-      // ✅ 4) คืน payload ที่ใช้ "effective value"
+      // -------------------------------
+      // 4) RETURN CART PAYLOAD ITEM
+      // -------------------------------
       return {
         sku: it.sku,
         name: it.name,
         qty: Number(it.qty ?? 0),
 
-        // ⭐ ราคา (source of truth)
+        // ⭐ ราคาที่ใช้จริง
         price: unitPrice,
         lineTotal: lineTotal,
 
+        // ⭐ ราคาอ้างอิงจากระบบ
         Price_System: systemUnitPrice,
-        
-        UnitPrice: unitPrice, // optional
-        LineTotal: lineTotal, // optional
 
-        // ⭐ meta (สำคัญ)
+        UnitPrice: unitPrice,   // optional
+        LineTotal: lineTotal,   // optional
+
         unit: calc?.unit ?? it.unit ?? "",
-
         product_weight: calc?.product_weight ?? it.product_weight ?? 0,
-
         category: it.category ?? "",
-        sqft_sheet: Number(it.sqft_sheet ?? it.sqft ?? 0),
+        sqft_sheet: sqft,
         variantCode: it.variantCode ?? "",
       };
     });
 
     // ⭐ ใช้ logic เดียวกับ Summary หน้า Step6
     const effectiveTotals = computeEffectiveTotals(state.cart, calcMap);
-
 
     return {
       status,
@@ -807,8 +809,6 @@ function Step6_Summary({ state, dispatch }) {
         grandTotal: effectiveTotals.total,
         shippingCustomerPay: state.shippingCustomerPay ?? 0,
       },
-
-
       note: state.remark || "",
     };
   };
