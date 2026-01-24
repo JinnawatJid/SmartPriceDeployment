@@ -15,6 +15,9 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
 
   // ⭐ state สำหรับ multi-add summary
   const [selectedItems, setSelectedItems] = useState([]);
+  // ⭐ item ที่ user คลิกอยู่
+  const [activeItem, setActiveItem] = useState(null);
+
 
   // ---------------- Filters ----------------
   const [aluFilter, setAluFilter] = useState({
@@ -219,8 +222,18 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     gypsumFilter,
   ]);
 
+  const relatedItems = useMemo(() => {
+    if (!activeItem?.product_group) return [];
+
+    return items.filter((it) => {
+      if ((it.sku || it.SKU) === (activeItem.sku || activeItem.SKU)) return false;
+      return it.product_group === activeItem.product_group;
+    });
+  }, [activeItem, items]);
+
   // ---------------- Add to summary (แทนการปิด modal) ----------------
   const handleAdd = (item, qty) => {
+    setActiveItem(item);
     const normalizedItem = {
       ...item,
       unit: item.unit || item["Base Unit Measure"] || item.saleUnit || item.uom || "-",
@@ -243,6 +256,18 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     });
   };
 
+  // ---------------- Remove one from summary ----------------
+  const handleRemoveSelected = (sku) => {
+    setSelectedItems((prev) => prev.filter((x) => x.sku !== sku));
+  };
+
+  // ---------------- Clear all (and reset related) ----------------
+  const handleClearAll = () => {
+    setSelectedItems([]);
+    setActiveItem(null);
+  };
+
+
   // ---------------- Confirm all ----------------
   const handleConfirmAll = () => {
     if (!onConfirm || selectedItems.length === 0) return;
@@ -258,75 +283,185 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div
-        className="w-full max-w-5xl bg-white rounded-xl shadow-xl p-8"
+  <div className="fixed inset-0 z-50 bg-black/50 p-4 flex">
+    <div
+        className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl
+                  max-h-[90vh] flex flex-col p-6
+                  mx-auto "
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex justify-between items-center pb-3 border-b">
-          <h2 className="text-xl font-bold">เลือกสินค้า: {category}</h2>
-          <button onClick={onClose}>✕</button>
-        </div>
 
-        <div className="mt-4 space-y-4">
-          <input
-            type="search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={`ค้นหาในหมวด ${category}`}
-            className="w-full rounded-lg border p-3"
-          />
+      {/* ================= HEADER ================= */}
+      <div className="flex justify-between items-center pb-4 border-b shrink-0">
+        <h2 className="text-xl font-bold">
+          เลือกสินค้า <span className="text-gray-400">({category})</span>
+        </h2>
+        <button
+          onClick={() => {
+            handleClearAll();
+            onClose();
+          }}
 
+          className="text-gray-500 hover:text-black"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* ================= BODY ================= */}
+      <div className="mt-4 flex-1 min-h-0 flex flex-col gap-4">
+        {/* SEARCH */}
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder={`ค้นหาในหมวด ${category}`}
+          className="w-full rounded-xl border px-4 py-3
+                     focus:ring-2 focus:ring-blue-200 outline-none"
+        />
+
+        {/* FILTERS */}
+        <div className="shrink-0">
           {category === "A" && <AluminiumPicker onSelect={setAluFilter} />}
           {category === "C" && <CLinePicker onSelect={setClineFilter} />}
           {category === "E" && <AccessoriesPicker onSelect={setAccFilter} />}
           {category === "S" && <SealantPicker onSelect={setSealantFilter} />}
           {category === "Y" && <GypsumPicker onSelect={setGypsumFilter} />}
+        </div>
 
+        {/* CONTENT */}
+        <div className="flex-1 min-h-0 overflow-hidden">
           {loading && <Loader />}
 
           {!loading && (
-            <div className="max-h-[480px] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                {filteredItems.map((item, idx) => (
-                  <ItemCard
-                    key={`${item.sku || item.SKU}-${idx}`}
-                    item={item}
-                    onAdd={handleAdd}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+            <div className="grid grid-cols-2 gap-5 h-full min-h-0 overflow-hidden">
+              {/* ================= LEFT ================= */}
+              <div className="flex flex-col bg-gray-50 rounded-xl border overflow-hidden">
+                <div className="px-4 py-2 text-sm font-semibold text-gray-700 border-b bg-white">
+                  รายการสินค้า
+                </div>
 
-          {/* ⭐ Summary Bar */}
-          {selectedItems.length > 0 && (
-            <div className="pt-3 border-t flex justify-between items-center">
-              <div className="text-sm text-gray-700">
-                เลือกแล้ว {selectedItems.length} รายการ • รวม{" "}
-                {selectedItems.reduce((s, x) => s + x.qty, 0)} หน่วย
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    {filteredItems.map((item, idx) => (
+                      <ItemCard
+                        key={`${item.sku || item.SKU}-${idx}`}
+                        item={item}
+                        onAdd={handleAdd}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedItems([])}
-                  className="px-3 py-2 border rounded-lg"
-                >
-                  ล้าง
-                </button>
-                <button
-                  onClick={handleConfirmAll}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg"
-                >
-                  ยืนยันรายการ
-                </button>
+
+              {/* ================= RIGHT ================= */}
+              <div className="flex flex-col bg-gray-50 rounded-xl border overflow-hidden">
+                <div className="px-4 py-2 text-sm font-semibold text-gray-700 border-b bg-white">
+                  สินค้าในกลุ่มเดียวกัน
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  {!activeItem && (
+                    <div className="text-sm text-gray-400 text-center mt-10">
+                      เลือกสินค้าเพื่อดูรายการที่เกี่ยวข้อง
+                    </div>
+                  )}
+
+                  {activeItem && relatedItems.length === 0 && (
+                    <div className="text-sm text-gray-400 text-center mt-10">
+                      ไม่พบสินค้าใน Product Group เดียวกัน
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-4">
+                    {relatedItems.map((item, idx) => (
+                      <ItemCard
+                        key={`related-${item.sku || item.SKU}-${idx}`}
+                        item={item}
+                        onAdd={handleAdd}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* ================= ADDED ITEMS LIST ================= */}
+      {selectedItems.length > 0 && (
+        <div className="border rounded-xl bg-gray-50">
+          <div className="px-4 py-2 border-b bg-white rounded-t-xl flex items-center justify-between">
+            <div className="text-sm font-semibold text-gray-700">
+              รายการที่เพิ่มแล้ว ({selectedItems.length})
+            </div>
+            <button
+              onClick={handleClearAll}
+              className="text-xs px-3 py-1 border rounded-lg hover:bg-gray-50"
+            >
+              ล้างทั้งหมด
+            </button>
+          </div>
+
+          <div className="max-h-[160px] overflow-y-auto p-3 space-y-2">
+            {selectedItems.map(({ sku, item, qty }) => (
+              <div
+                key={sku}
+                className="flex items-center justify-between bg-white border rounded-lg px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">
+                    {item?.name || "-"}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    SKU: {sku} • Qty: {qty} {item?.unit ? item.unit : ""}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleRemoveSelected(sku)}
+                  className="ml-3 text-sm px-3 py-1 border rounded-lg hover:bg-red-50 hover:border-red-200"
+                  title="ลบรายการนี้"
+                >
+                  ลบ
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+
+      {/* ================= SUMMARY BAR ================= */}
+      {selectedItems.length > 0 && (
+        <div className="pt-4 border-t flex justify-between items-center shrink-0 bg-white">
+          <div className="text-sm text-gray-700">
+            เลือกแล้ว {selectedItems.length} รายการ • รวม{" "}
+            {selectedItems.reduce((s, x) => s + x.qty, 0)} หน่วย
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleClearAll}
+              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+            >
+              ล้าง
+            </button>
+            <button
+              onClick={handleConfirmAll}
+              className="px-5 py-2 bg-green-600 text-white rounded-lg
+                         hover:bg-green-700 shadow"
+            >
+              ยืนยันรายการ
+            </button>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
+
+
 }
 
 export default ItemPickerModal;
