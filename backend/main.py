@@ -24,6 +24,7 @@ from item_update import router as item_update_router
 from customer_analytics import router as customer_analytics_router
 from api.router_sq import router as sq_router
 
+from config.config_external_api import CUSTOMER_API_KEY
 
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
@@ -147,6 +148,12 @@ if __name__ == "__main__":
     # Enable logging for debugging
     # We use line buffering instead of redirecting to file, so the .bat pause can capture it.
     print("--- Starting Server ---")
+
+    if not CUSTOMER_API_KEY:
+        print("\n" + "="*60)
+        print(" [WARNING] CUSTOMER_API_KEY is not set or empty!")
+        print(" Please create a .env file with your API keys.")
+        print("="*60 + "\n")
 
     # Pass the app object directly instead of the import string "main:app"
     # This prevents "Could not import module 'main'" errors in frozen (PyInstaller) environments

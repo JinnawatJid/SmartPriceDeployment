@@ -31,7 +31,7 @@ hidden_imports = [
 ]
 
 datas = [
-    (backend_path + '/data', 'data'), # Database and excel files
+    (backend_path + '/config/data', 'config/data'), # Database and excel files
     (frontend_dist_path, 'dist'),    # Frontend static files
     (backend_path + '/quotation.html', '.'), # Templates
     (backend_path + '/Sarabun-Regular.ttf', '.'), # Fonts
