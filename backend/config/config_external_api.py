@@ -11,7 +11,7 @@ CUSTOMER_API_URL = os.getenv(
     "CUSTOMER_API_URL",
     "http://192.192.0.37:8280/customer/1.0.0",
 )
-CUSTOMER_API_KEY = os.getenv("CUSTOMER_API_KEY")
+CUSTOMER_API_KEY = os.getenv("CUSTOMER_API_KEY", "").strip()
 
 CUSTOMER_API_HEADERS = {
     "apikey": CUSTOMER_API_KEY,
@@ -26,7 +26,7 @@ INVOICE_API_URL = os.getenv(
     "INVOICE_API_URL",
     "http://192.192.0.37:8280/invoice-sp681/1.0.0",
 )
-INVOICE_API_KEY = os.getenv("INVOICE_API_KEY")
+INVOICE_API_KEY = os.getenv("INVOICE_API_KEY", "").strip()
 
 INVOICE_API_HEADERS = {
     "apikey": INVOICE_API_KEY,

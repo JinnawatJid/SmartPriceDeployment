@@ -36,7 +36,12 @@ Copy the following files to your USB drive or transfer them to the offline serve
    ```powershell
    docker-compose up -d
    ```
-5. Access the application at: **http://localhost:3200**
+5. **(Optional) Configure API Keys:**
+   - Create a file named `.env` in the same folder as `docker-compose.yml`.
+   - Add your API keys (see *Configuration* section below).
+   - Restart the containers: `docker-compose up -d`
+
+6. Access the application at: **http://localhost:3200**
    *(Note: The Frontend listens on port 3200, which talks to the Backend on port 8000 internally.)*
 
 ---
@@ -62,12 +67,32 @@ Copy the entire `dist\smart_pricing\` folder to the offline server.
    - Download and install the **GTK3 Runtime for Windows** (64-bit recommended).
    - *If you don't have the installer, download it on the online machine from [here](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer) and transfer it.*
 2. Open the `smart_pricing` folder you copied.
-3. Run the server launcher:
+3. **(Recommended) Configure API Keys:**
+   - Create a file named `.env` in this folder (next to `smart_pricing.exe`).
+   - Open it with Notepad and paste your API keys (see *Configuration* section below).
+
+4. Run the server launcher:
    ```cmd
    start_server.bat
    ```
-4. Access the application at: **http://localhost:8000**
+5. Access the application at: **http://localhost:8000**
    *(Note: In Native mode, the backend directly serves the frontend on port 8000.)*
+
+---
+
+## 🔑 Configuration (.env)
+
+If you need to connect to external APIs (e.g. D365), create a `.env` file next to the application executable or `docker-compose.yml` with the following content:
+
+```ini
+# Customer API
+CUSTOMER_API_URL=http://...
+CUSTOMER_API_KEY=...
+
+# Invoice API
+INVOICE_API_URL=http://...
+INVOICE_API_KEY=...
+```
 
 ---
 
