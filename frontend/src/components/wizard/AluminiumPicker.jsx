@@ -131,6 +131,7 @@ export default function AluminiumPicker({ onSelect }) {
         value={brand}
         options={options.brands}
         onChange={(v) => handleBrandChange(v)}
+        width={200}
       />
 
       <CustomDropdown
@@ -138,6 +139,7 @@ export default function AluminiumPicker({ onSelect }) {
         value={group}
         options={options.groups}
         onChange={(v) => handleGroupChange(v)}
+        width={200}
       />
 
       <CustomDropdown
@@ -152,6 +154,7 @@ export default function AluminiumPicker({ onSelect }) {
         value={color}
         options={options.colors}
         onChange={(v) => handleColorChange(v)}
+        width={170}
       />
 
       <CustomDropdown

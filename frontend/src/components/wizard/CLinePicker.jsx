@@ -118,7 +118,7 @@ export default function CLinePicker({ onSelect }) {
   };
 
   return (
-    <div className="flex items-end justify-between p-3 border rounded-xl bg-gray-50 mt-3">
+    <div className="flex items-end justify-between gap-2 p-3 border rounded-xl bg-gray-50 mt-3">
       <CustomDropdown
         label="Brand"
         value={brand}
@@ -131,6 +131,7 @@ export default function CLinePicker({ onSelect }) {
         value={group}
         options={options.groups}
         onChange={handleGroupChange}
+        width={240}
       />
 
       <CustomDropdown
@@ -138,6 +139,7 @@ export default function CLinePicker({ onSelect }) {
         value={subGroup}
         options={options.subGroups}
         onChange={handleSubGroupChange}
+        width={360}
       />
 
       <CustomDropdown

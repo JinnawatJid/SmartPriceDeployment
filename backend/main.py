@@ -10,12 +10,6 @@ from employees import router as employees_router
 from login import router as login_router
 from pricing_router import router as pricing_router
 from shipping import router as shipping_router
-from glass_router import router as glass_router
-from aluminium_router import router as aluminium_router
-from cline_router import router as cline_router
-from accessories_router import router as accessories_router
-from sealant_router import router as sealant_router
-from gypsum_router import router as gypsum_router
 from quotation import router as quotation_router
 from utils.baht_text import baht_text
 from cross_sell_router import cross_sell_router
@@ -23,6 +17,7 @@ from invoice_router import router as invoice_router
 from item_update import router as item_update_router
 from customer_analytics import router as customer_analytics_router
 from api.router_sq import router as sq_router
+from products_router import api_router
 
 from config.config_external_api import CUSTOMER_API_KEY
 
@@ -66,17 +61,12 @@ app.include_router(employees_router,prefix="/api")
 app.include_router(login_router,prefix="/api")
 app.include_router(pricing_router) # Router defines /api/pricing prefix internally
 app.include_router(shipping_router) # Router defines /api/shipping prefix internally
-app.include_router(glass_router,prefix="/api")
-app.include_router(aluminium_router,prefix="/api")
-app.include_router(cline_router,prefix="/api")
-app.include_router(accessories_router,prefix="/api")
-app.include_router(sealant_router,prefix="/api")
-app.include_router(gypsum_router,prefix="/api")
 app.include_router(cross_sell_router,prefix="/api")
 app.include_router(invoice_router)
 app.include_router(item_update_router, prefix="/api")
 app.include_router(customer_analytics_router)
 app.include_router(sq_router, prefix="/api")
+app.include_router(api_router, prefix="/api")
 
 
 

@@ -3,8 +3,10 @@ import React, { useState } from "react";
 
 const ItemCard = ({ item, onAdd }) => {
   const [qty, setQty] = useState(1);
+  const [open, setOpen] = useState(false); // ⭐ dropdown state
 
-  const handleAddClick = () => {
+  const handleAddClick = (e) => {
+    e.stopPropagation(); // กัน trigger dropdown
     if (qty <= 0) {
       alert("กรุณาใส่จำนวนที่มากกว่า 0");
       return;
@@ -13,12 +15,15 @@ const ItemCard = ({ item, onAdd }) => {
   };
 
   return (
-    <div className="flex flex-col rounded-xl border border-gray-200 bg-white shadow-md transition-all duration-300 hover:shadow-lg w-full p-4 gap-4">
-      
-      {/* ===== แถวบน : รูป + รายละเอียด ===== */}
-      <div className="flex flex-row gap-4">
-        {/* รูปสินค้า */}
-        <div className="flex-shrink-0 w-28 h-28 rounded-lg overflow-hidden bg-white border">
+    <div
+      className="rounded-xl border border-gray-200 bg-white shadow-sm
+                 hover:shadow-md transition cursor-pointer"
+      onClick={() => setOpen((v) => !v)}
+    >
+      {/* ================= HEADER (COMPACT) ================= */}
+      <div className="flex gap-3 p-3 items-center">
+        {/* รูป */}
+        <div className="w-16 h-16 flex-shrink-0 rounded-lg border bg-white overflow-hidden">
           <img
             src={item.image_url || "/assets/placeholder.png"}
             alt={item.name}
@@ -26,57 +31,81 @@ const ItemCard = ({ item, onAdd }) => {
           />
         </div>
 
-        {/* รายละเอียด */}
-        <div className="flex-grow space-y-1 py-1 min-w-0">
-          <h4 className="text-lg font-semibold text-gray-800 max-h-[3rem] overflow-hidden">
+        {/* ชื่อ + SKU */}
+        <div className="flex-grow min-w-0">
+          <div className="font-semibold text-sm text-gray-800 truncate">
             {item.name}
-          </h4>
+          </div>
+          <div className="text-xs text-gray-500 truncate">
+            SKU: {item.sku}
+          </div>
+        </div>
 
+        {/* ปุ่มเลือก */}
+        <button
+          onClick={handleAddClick}
+          className="text-xs px-3 py-1.5 rounded-lg
+                     bg-blue-600 text-white hover:bg-blue-700
+                     whitespace-nowrap"
+        >
+          เลือก
+        </button>
+      </div>
+
+      {/* ================= DROPDOWN DETAIL ================= */}
+      {open && (
+        <div className="px-4 pb-4 text-sm text-gray-600 space-y-1 border-t bg-gray-50 rounded-b-xl shadow-md">
           {item.alternate_names && (
-            <p className="text-sm text-gray-500">
-              ชื่ออื่น: {item.alternate_names}
+            <p className="mt-2">
+              <span className="font-medium">ชื่ออื่น:</span>{" "}
+              {item.alternate_names}
             </p>
           )}
 
-          <p className="text-sm text-gray-500">รหัส: {item.sku}</p>
-
-          {(item.product_group || item.product_sub_group) && (
-            <p className="text-xs text-gray-400">
-              {item.product_group}
-              {item.product_sub_group ? ` / ${item.product_sub_group}` : ""}
-            </p>
-          )}
-
-          {item.sku2 && (
-            <p className="text-xs text-gray-400">
-              SKU รอง: {item.sku2}
+          {(item.groupName || item.subGroupName) && (
+            <p className="grid grid-cols-2 text-xs text-gray-500 gird ">
+              <p>
+                <span className="font-medium">Brand:</span>{" "}
+                {item.brandName}
+              </p>
+              <p>
+                <span className="font-medium">Group:</span>{" "}
+                {item.groupName}
+              </p>
+              <p>
+                <span className="font-medium">Sub Group:</span>{" "}
+                {item.subGroupName}
+              </p>
+              <p>
+                {item.sku2 && (
+                  <p className="text-xs text-gray-500 fo">SKU2: {item.sku2}</p>
+                )}
+              </p>
+              
+              
             </p>
           )}
 
           {item.inventory !== undefined && (
-            <p className="text-sm font-semibold text-green-600">
-              มีในสต๊อก: {item.inventory} {item.unit || ""}
+            <p className="text-green-600 font-semibold">
+              สต๊อก: {item.inventory} {item.unit || ""}
             </p>
           )}
-        </div>
-      </div>
 
-      {/* ===== แถวล่าง : จำนวน + ปุ่ม ===== */}
-      <div className="flex items-center justify-end gap-4 pt-2 border-t">
-        <input
-          type="number"
-          value={qty}
-          onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-          className="w-full rounded-lg border border-gray-300 p-2 text-center text-lg font-bold shadow-sm"
-          min="1"
-        />
-        <button
-          onClick={handleAddClick}
-          className="whitespace-nowrap rounded-lg bg-blue-600 px-5 py-2 text-sm text-white shadow-sm hover:bg-blue-700"
-        >
-          เลือกสินค้า
-        </button>
-      </div>
+          {/* QTY */}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-xs text-gray-500">จำนวน</span>
+            <input
+              type="number"
+              min={1}
+              value={qty}
+              onChange={(e) => setQty(Number(e.target.value))}
+              onClick={(e) => e.stopPropagation()}
+              className="w-14 border rounded px-2 py-1 text-sm"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

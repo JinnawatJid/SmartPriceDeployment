@@ -2,6 +2,8 @@
 from fastapi import APIRouter, Query, HTTPException
 import pandas as pd
 from config.db_sqlite import get_conn
+from services.sku_enricher import enrich_by_category
+
 
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -122,6 +124,8 @@ def get_items_by_category(category_name: str):
 
     items = []
     for _, row in filtered.iterrows():
+        extra = enrich_by_category(row["category"], row["sku"]) or {}
+
         items.append({
             "sku": row["sku"],
             "name": row["name"],
@@ -142,6 +146,7 @@ def get_items_by_category(category_name: str):
             "product_sub_group": row.get("product_sub_group"),
             "alternate_names": row.get("alternate_names"),
             "sku2": row.get("sku2"),
+            **extra,
 
 
         })
