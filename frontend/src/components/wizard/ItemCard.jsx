@@ -79,14 +79,12 @@ const ItemCard = ({ item, onAdd }) => {
           )}
 
           {!loading && detail && (
-            <>
-              {detail.alternate_names && (
-                <p>
-                  <span className="font-medium">ชื่ออื่น:</span>{" "}
-                  {detail.alternate_names}
+            <div>
+                <p className="mt-2">
+                  <span className="font-medium ">ชื่ออื่น:</span>{" "}
+                  {detail.alternate_names || "Name"}
                 </p>
-              )}
-
+              
               <div className="grid grid-cols-2 text-xs gap-y-1">
                 <p>
                   <span className="font-medium">Brand:</span>{" "}
@@ -108,7 +106,7 @@ const ItemCard = ({ item, onAdd }) => {
               <p className="text-green-600 font-semibold">
                 สต๊อก: {detail.inventory} {detail.unit || ""}
               </p>
-            </>
+            </div>
           )}
 
           {/* QTY */}

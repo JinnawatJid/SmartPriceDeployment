@@ -68,10 +68,12 @@ def get_items_list_light(category_name: str):
 
     sql = """
         SELECT
-            No          AS sku,
-            No_2        AS sku2,
-            Description AS name,
-            Inventory   AS inventory
+            No            AS sku,
+            No_2          AS sku2,
+            Description   AS name,
+            Inventory     AS inventory,
+            Product_Group AS product_group,
+            Product_Sub_Group AS product_sub_group
         FROM Items_Test
         WHERE Inventory_Posting_Group = ?
         ORDER BY No
@@ -87,6 +89,8 @@ def get_items_list_light(category_name: str):
             "sku2": r.sku2,
             "name": r.name,
             "inventory": int(r.inventory or 0),
+            "product_group": r.product_group,
+            "product_sub_group": r.product_sub_group,
         }
         for r in rows
     ]
