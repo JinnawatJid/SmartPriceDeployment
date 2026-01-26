@@ -62,7 +62,8 @@ def get_item_categories():
 # 👉 LIGHT LIST (เร็วมาก)
 # ======================================================
 @router.get("/categories/{category_name}/list")
-def get_items_list_light(category_name: str):
+def get_items_list_light(category_name: str,limit: int = 10,
+    offset: int = 0,):
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
@@ -77,52 +78,31 @@ def get_items_list_light(category_name: str):
         FROM Items_Test
         WHERE Inventory_Posting_Group = ?
         ORDER BY No
+        OFFSET ? ROWS
+        FETCH NEXT ? ROWS ONLY
     """
 
     cursor.execute(sql, category_name.upper())
     rows = cursor.fetchall()
     conn.close()
 
-    return [
-        {
-            "sku": r.sku,
-            "sku2": r.sku2,
-            "name": r.name,
-            "inventory": int(r.inventory or 0),
-            "product_group": r.product_group,
-            "product_sub_group": r.product_sub_group,
-        }
-        for r in rows
-    ]
+    return {
+        "items": [
+            {
+                "sku": r.sku,
+                "sku2": r.sku2,
+                "name": r.name,
+                "inventory": int(r.inventory or 0),
+                "product_group": r.product_group,
+                "product_sub_group": r.product_sub_group,
+            }
+            for r in rows
+        ],
+        "limit": limit,
+        "offset": offset,
+        "count": len(rows),
+    }
 
-
-# ======================================================
-# ❗ ของเดิม: GET /items/categories/{category}
-# (ยังอยู่ แต่ช้า — แนะนำให้ FE เลิกใช้)
-# ======================================================
-@router.get("/categories/{category_name}")
-def get_items_by_category(category_name: str):
-    conn = get_mssql_conn()
-    cursor = conn.cursor()
-
-    sql = f"""
-        SELECT *
-        FROM {TABLE_NAME}
-        WHERE Inventory_Posting_Group = ?
-    """
-
-    cursor.execute(sql, category_name.upper())
-    rows = cursor.fetchall()
-    conn.close()
-
-    items = []
-    for row in rows:
-        item = row_to_item(row)
-        extra = enrich_by_category(item["category"], item["sku"]) or {}
-        item.update(extra)
-        items.append(item)
-
-    return items
 
 
 # ======================================================

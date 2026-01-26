@@ -10,8 +10,11 @@ import GypsumPicker from "./GypsumPicker.jsx";
 
 function ItemPickerModal({ open, category, onClose, onConfirm }) {
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+
 
   // ⭐ state สำหรับ multi-add summary
   const [selectedItems, setSelectedItems] = useState([]);
@@ -128,40 +131,44 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
       thickness: sku.slice(10, 12),
     };
   };
+  const loadItems = async (reset = false) => {
+    if (loading || (!hasMore && !reset)) return;
 
-  // ---------------- Load items ----------------
-  // ---------------- Load items ----------------
+    setLoading(true);
+
+    const currentOffset = reset ? 0 : offset;
+
+    const res = await api.get(
+      `/api/items/categories/${category}/list`,
+      {
+        params: {
+          limit: 10,
+          offset: currentOffset,
+        },
+      }
+    );
+
+    const newItems = res.data || [];
+
+    setItems((prev) =>
+      reset ? newItems : [...prev, ...newItems]
+    );
+
+    setOffset(currentOffset + newItems.length);
+    setHasMore(newItems.length === 10);
+    setLoading(false);
+  };
+
   useEffect(() => {
     if (!open || !category) return;
 
-    let cancelled = false; // ✅ กัน request เก่ามาทับ
+    setItems([]);
+    setOffset(0);
+    setHasMore(true);
+    setActiveItem(null);
+    setSearchTerm("");
 
-    const loadItems = async () => {
-      setLoading(true);
-
-      // ✅ reset กันค้างของหมวดก่อนหน้า
-      setItems([]);
-      setActiveItem(null);
-      setSearchTerm("");
-
-      try {
-        const res = await api.get(`/api/items/categories/${category}/list`);
-        if (cancelled) return;
-        setItems(res.data || []);
-      } catch (err) {
-        console.error("loadItems error:", err);
-        if (cancelled) return;
-        setItems([]); // ✅ error ก็ต้องล้าง ไม่งั้นค้างของเดิม
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    loadItems();
-
-    return () => {
-      cancelled = true;
-    };
+    loadItems(true); // ⭐ reset + โหลดชุดแรก
   }, [open, category]);
 
 
@@ -372,7 +379,21 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
                   รายการสินค้า
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4">
+                <div
+                    className="flex-1 overflow-y-auto p-4"
+                    onScroll={(e) => {
+                      const el = e.currentTarget;
+                      if (
+                        el.scrollTop + el.clientHeight >=
+                        el.scrollHeight - 20
+                      ) {
+                        if (!loading && hasMore) {
+                          loadItems(); // ⭐ โหลดเพิ่ม
+                        }
+
+                      }
+                    }}
+                >
                   <div className="grid grid-cols-1 gap-4">
                       {filteredItems.map((item, idx) => {
 
