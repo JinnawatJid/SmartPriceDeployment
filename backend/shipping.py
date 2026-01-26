@@ -4,13 +4,15 @@ from typing import List, Optional
 import pandas as pd
 import math
 
-from items import load_items_sqlite
+from config.db_mssql import get_mssql_conn   # ✅ FIX
+
 
 # =====================================================
 # ROUTER
 # =====================================================
 
 router = APIRouter(prefix="/api/shipping", tags=["shipping"])
+
 
 # =====================================================
 # CONFIG รถ
@@ -27,6 +29,7 @@ VEHICLE_CONFIG = {
 
 FUEL_PRICE = 32  # บาท/ลิตร
 
+
 # =====================================================
 # MODELS (เดิม)
 # =====================================================
@@ -40,7 +43,7 @@ class ShippingRequest(BaseModel):
 
 
 # =====================================================
-# MODELS (ใหม่: จาก Cart)
+# MODELS (จาก Cart)
 # =====================================================
 
 class CartLine(BaseModel):
@@ -60,21 +63,45 @@ class ShippingFromCartRequest(BaseModel):
     cart: List[CartLine]
 
 
-
 def round_shipping_baht(x: float) -> int:
     return int(math.floor(x))
 
 
 # =====================================================
-# CORE: คำนวณ profit จาก Cart ปัจจุบัน
+# 🔧 FIX: LOAD ITEMS BY SKU (แทน load_items_mssql)
 # =====================================================
+
+def load_items_by_skus(skus: list[str]) -> pd.DataFrame:
+    if not skus:
+        return pd.DataFrame()
+
+    conn = get_mssql_conn()
+    placeholders = ",".join(["?"] * len(skus))
+
+    sql = f"""
+        SELECT
+            No AS sku,
+            RE
+        FROM Items_Test
+        WHERE No IN ({placeholders})
+    """
+
+    df = pd.read_sql(sql, conn, params=skus)
+    conn.close()
+
+    return df
+
+
+# =====================================================
+# CORE: คำนวณ profit จาก Cart
+# =====================================================
+
 def compute_profit_from_cart(cart: List[CartLine]):
     if not cart:
         return 0.0, False
 
     df_cart = pd.DataFrame([c.model_dump() for c in cart])
 
-    # normalize
     df_cart["qty"] = pd.to_numeric(df_cart["qty"], errors="coerce").fillna(0)
     df_cart["price"] = pd.to_numeric(df_cart["price"], errors="coerce").fillna(0)
     df_cart["product_weight"] = pd.to_numeric(
@@ -84,9 +111,12 @@ def compute_profit_from_cart(cart: List[CartLine]):
         df_cart.get("sqft_sheet", 0), errors="coerce"
     ).fillna(0)
 
-    df_items = load_items_sqlite()[["sku", "cost"]]
+    # ✅ FIX: โหลด cost เฉพาะ SKU ใน cart
+    cart_skus = df_cart["sku"].dropna().astype(str).unique().tolist()
+    df_items = load_items_by_skus(cart_skus)
+
     df = df_cart.merge(df_items, on="sku", how="left")
-    df["cost"] = pd.to_numeric(df["cost"], errors="coerce").fillna(0)
+    df["cost"] = pd.to_numeric(df.get("RE"), errors="coerce").fillna(0)
 
     has_missing_cost = False
 
@@ -106,32 +136,20 @@ def compute_profit_from_cart(cart: List[CartLine]):
 
         if category == "G":
             sqft = row["sqft_sheet"]
-
-            # ป้องกันหาร 0 (ปลอดภัยกับ draft / repeat)
             if sqft <= 0:
                 has_missing_cost = True
                 return 0
 
-            
-            # BEFORE (ผิดหน่วย)
-            price_per_sqft = row["price"]
-
-            # AFTER (ถูกหน่วย)
             price_per_sheet = row["price"]
             price_per_sqft = price_per_sheet / sqft
-
-
             unit_profit = price_per_sqft - cost
             total_sqft = row["qty"] * sqft
             return unit_profit * total_sqft
-
-
 
         return (row["price"] - cost) * row["qty"]
 
     df["profit"] = df.apply(_profit, axis=1)
 
-    # ⭐ DEBUG TABLE
     print("\n--- PROFIT TABLE ---")
     print(
         df[
@@ -152,7 +170,7 @@ def compute_profit_from_cart(cart: List[CartLine]):
 
 
 # =====================================================
-# CORE: คำนวณค่าขนส่ง (ใช้ร่วมกัน)
+# CORE: คำนวณค่าขนส่ง
 # =====================================================
 
 def _calculate_shipping_cost(
@@ -195,7 +213,7 @@ def _calculate_shipping_cost(
 
 
 # =====================================================
-# ENDPOINT เดิม (ยังใช้ได้เหมือนเดิม)
+# ENDPOINT เดิม
 # =====================================================
 
 @router.post("/calculate")
@@ -214,29 +232,13 @@ def calculate_shipping(data: ShippingRequest):
 
 
 # =====================================================
-# ENDPOINT ใหม่: คิดค่าขนส่งจาก Cart
+# ENDPOINT: จาก Cart
 # =====================================================
 
 @router.post("/calculate_from_cart")
 def calculate_shipping_from_cart(data: ShippingFromCartRequest):
 
-    print("\n=== SHIPPING FROM CART DEBUG ===")
-    print("Vehicle:", data.vehicle_type)
-    print("Distance:", data.distance_km)
-    print("Unload hours:", data.unload_hours)
-    print("Staff:", data.staff_count)
-    print("Cart lines:", len(data.cart))
-
-    for c in data.cart:
-        print(
-            f"- {c.sku} | qty={c.qty} | price={c.price} | "
-            f"cat={c.category} | wt={c.product_weight} | sqft={c.sqft_sheet}"
-        )
-
     profit, has_missing_cost = compute_profit_from_cart(data.cart)
-
-    print("=> PROFIT FOR SHIPPING:", profit)
-    print("=> HAS MISSING COST:", has_missing_cost)
 
     result = _calculate_shipping_cost(
         vehicle_type=data.vehicle_type,
@@ -246,13 +248,9 @@ def calculate_shipping_from_cart(data: ShippingFromCartRequest):
         profit=profit,
     )
 
-    print("=> SHIPPING RESULT:", result)
-    print("=== END SHIPPING DEBUG ===\n")
-
     return {
         "vehicle_type": data.vehicle_type.upper(),
         "profit_for_shipping": round(profit, 2),
         "has_missing_cost": has_missing_cost,
         **result,
     }
-

@@ -1,17 +1,41 @@
-// src/components/wizard/ItemCard.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import api from "../../services/api";
 
 const ItemCard = ({ item, onAdd }) => {
   const [qty, setQty] = useState(1);
-  const [open, setOpen] = useState(false); // ⭐ dropdown state
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // 🔥 โหลด detail เฉพาะตอนเปิด dropdown
+  useEffect(() => {
+    if (!open || detail) return;
+
+    const loadDetail = async () => {
+      try {
+        setLoading(true);
+        const sku = item.sku || item.SKU;
+        const res = await api.get(`/api/items/${sku}`);
+        setDetail(res.data);
+      } catch (err) {
+        console.error("load item detail error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDetail();
+  }, [open, detail, item]);
 
   const handleAddClick = (e) => {
-    e.stopPropagation(); // กัน trigger dropdown
+    e.stopPropagation();
     if (qty <= 0) {
       alert("กรุณาใส่จำนวนที่มากกว่า 0");
       return;
     }
-    onAdd(item, qty);
+
+    // ✅ ส่ง full item ถ้ามี
+    onAdd(detail || item, qty);
   };
 
   return (
@@ -20,10 +44,9 @@ const ItemCard = ({ item, onAdd }) => {
                  hover:shadow-md transition cursor-pointer"
       onClick={() => setOpen((v) => !v)}
     >
-      {/* ================= HEADER (COMPACT) ================= */}
+      {/* ===== HEADER ===== */}
       <div className="flex gap-3 p-3 items-center">
-        {/* รูป */}
-        <div className="w-16 h-16 flex-shrink-0 rounded-lg border bg-white overflow-hidden">
+        <div className="w-16 h-16 rounded-lg border bg-white overflow-hidden">
           <img
             src={item.image_url || "/assets/placeholder.png"}
             alt={item.name}
@@ -31,70 +54,66 @@ const ItemCard = ({ item, onAdd }) => {
           />
         </div>
 
-        {/* ชื่อ + SKU */}
         <div className="flex-grow min-w-0">
-          <div className="font-semibold text-sm text-gray-800 truncate">
-            {item.name}
-          </div>
+          <div className="font-semibold text-sm truncate">{item.name}</div>
           <div className="text-xs text-gray-500 truncate">
             SKU: {item.sku}
           </div>
         </div>
 
-        {/* ปุ่มเลือก */}
         <button
           onClick={handleAddClick}
-          className="text-xs px-3 py-1.5 rounded-lg
-                     bg-blue-600 text-white hover:bg-blue-700
-                     whitespace-nowrap"
+          className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white"
         >
           เลือก
         </button>
       </div>
 
-      {/* ================= DROPDOWN DETAIL ================= */}
+      {/* ===== DROPDOWN ===== */}
       {open && (
-        <div className="px-4 pb-4 text-sm text-gray-600 space-y-1 border-t bg-gray-50 rounded-b-xl shadow-md">
-          {item.alternate_names && (
-            <p className="mt-2">
-              <span className="font-medium">ชื่ออื่น:</span>{" "}
-              {item.alternate_names}
-            </p>
+        <div className="px-4 pb-4 text-sm text-gray-600 space-y-1 border-t bg-gray-50">
+          {loading && (
+            <div className="text-xs text-gray-400 mt-2">
+              กำลังโหลดรายละเอียด...
+            </div>
           )}
 
-          {(item.groupName || item.subGroupName) && (
-            <p className="grid grid-cols-2 text-xs text-gray-500 gird ">
-              <p>
-                <span className="font-medium">Brand:</span>{" "}
-                {item.brandName}
-              </p>
-              <p>
-                <span className="font-medium">Group:</span>{" "}
-                {item.groupName}
-              </p>
-              <p>
-                <span className="font-medium">Sub Group:</span>{" "}
-                {item.subGroupName}
-              </p>
-              <p>
-                {item.sku2 && (
-                  <p className="text-xs text-gray-500 fo">SKU2: {item.sku2}</p>
+          {!loading && detail && (
+            <>
+              {detail.alternate_names && (
+                <p>
+                  <span className="font-medium">ชื่ออื่น:</span>{" "}
+                  {detail.alternate_names}
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 text-xs gap-y-1">
+                <p>
+                  <span className="font-medium">Brand:</span>{" "}
+                  {detail.brandName || "-"}
+                </p>
+                <p>
+                  <span className="font-medium">Group:</span>{" "}
+                  {detail.groupName || "-"}
+                </p>
+                <p>
+                  <span className="font-medium">Sub Group:</span>{" "}
+                  {detail.subGroupName || "-"}
+                </p>
+                {detail.sku2 && (
+                  <p className="col-span-2">SKU2: {detail.sku2}</p>
                 )}
-              </p>
-              
-              
-            </p>
-          )}
+              </div>
 
-          {item.inventory !== undefined && (
-            <p className="text-green-600 font-semibold">
-              สต๊อก: {item.inventory} {item.unit || ""}
-            </p>
+              <p className="text-green-600 font-semibold">
+                สต๊อก: {detail.inventory} {detail.unit || ""}
+              </p>
+            </>
           )}
 
           {/* QTY */}
           <div className="flex items-center gap-2 pt-1">
-            <span className="text-xs text-gray-500">จำนวน</span>
+            <span className="text-xs">จำนวน</span>
             <input
               type="number"
               min={1}

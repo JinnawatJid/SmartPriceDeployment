@@ -145,7 +145,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
       setSearchTerm("");
 
       try {
-        const res = await api.get(`/api/items/categories/${category}`);
+        const res = await api.get(`/api/items/categories/${category}/list`);
         if (cancelled) return;
         setItems(res.data || []);
       } catch (err) {
@@ -249,18 +249,28 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
   }, [activeItem, items]);
 
   // ---------------- Add to summary (แทนการปิด modal) ----------------
-  const handleAdd = (item, qty) => {
-    setActiveItem(item);
-    const normalizedItem = {
-      ...item,
-      unit: item.unit || item["Base Unit Measure"] || item.saleUnit || item.uom || "-",
-      pkg_size: item.pkg_size ?? item.pkgSize ?? 1,
-      product_weight: item.product_weight ?? item.ProductWeight ?? 0,
-      product_group: item.product_group ?? null,
-      product_sub_group: item.product_sub_group ?? null,
-    };
+  const handleAdd = async (item, qty) => {
+  try {
+    const sku = item.sku || item.SKU;
 
-    const sku = normalizedItem.sku || normalizedItem.SKU;
+    // 🔥 โหลด detail + enrich
+    const res = await api.get(`/api/items/${sku}`);
+    const fullItem = res.data;
+
+    setActiveItem(fullItem);
+
+    const normalizedItem = {
+      ...fullItem,
+      unit:
+        fullItem.unit ||
+        fullItem["Base_Unit_of_Measure"] ||
+        fullItem.saleUnit ||
+        "-",
+      pkg_size: fullItem.pkg_size ?? 1,
+      product_weight: fullItem.product_weight ?? 0,
+      product_group: fullItem.product_group ?? null,
+      product_sub_group: fullItem.product_sub_group ?? null,
+    };
 
     setSelectedItems((prev) => {
       const exist = prev.find((x) => x.sku === sku);
@@ -271,7 +281,11 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
       }
       return [...prev, { sku, item: normalizedItem, qty }];
     });
-  };
+  } catch (err) {
+    console.error("load item detail error:", err);
+  }
+};
+
 
   // ---------------- Remove one from summary ----------------
   const handleRemoveSelected = (sku) => {

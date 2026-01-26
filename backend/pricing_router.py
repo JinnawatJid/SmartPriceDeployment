@@ -7,7 +7,8 @@ from typing import List, Dict, Any
 
 from LevelPrice import LevelPrice
 from price import Price
-from items import load_items_sqlite
+from config.db_mssql import get_mssql_conn
+
 
 router = APIRouter(prefix="/api/pricing", tags=["pricing"])
 
@@ -76,9 +77,46 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
         return {"items": [], "subtotal": 0, "customer_tier": "N/A"}
 
     # Load Items DB
-    df_items = load_items_sqlite()
-    if df_items.empty:
-        raise HTTPException(500, "ไม่สามารถโหลด Items_Test")
+    def load_items_by_skus(skus: list[str]) -> pd.DataFrame:
+        if not skus:
+            return pd.DataFrame()
+
+        conn = get_mssql_conn()
+        placeholders = ",".join(["?"] * len(skus))
+
+        sql = f"""
+            SELECT
+                No AS sku,
+                No_2 AS sku2,
+                Inventory_Posting_Group AS category,
+                Base_Unit_of_Measure,
+                Package_Size AS pkg_size,
+                Product_Weight,
+                Sqft_Sheet,
+                R1, R2, W1, W2,
+                Product_Group,
+                Product_Sub_Group,
+                AlternateName,
+                RE
+            FROM Items_Test
+            WHERE No IN ({placeholders})
+        """
+
+        df = pd.read_sql(sql, conn, params=skus)
+        conn.close()
+
+        if df.empty:
+            return df
+
+        # normalize price columns (เหมือนของเดิม)
+        for c in ["R1", "R2", "W1", "W2"]:
+            df[f"price{c}"] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+
+        df["pkg_size"] = pd.to_numeric(df.get("pkg_size"), errors="coerce").fillna(1)
+        df["product_weight"] = pd.to_numeric(df.get("Product_Weight"), errors="coerce").fillna(0)
+
+        return df
+
 
     # Cart → DataFrame
     df_calc = pd.DataFrame([item.model_dump() for item in req.cart])
@@ -115,14 +153,26 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
         or ""
     )
 
-    
+    # ✅ FIX: โหลด items เฉพาะ SKU ใน cart
+    cart_skus = df_calc["sku"].dropna().astype(str).unique().tolist()
+    df_items = load_items_by_skus(cart_skus)
+
+    if df_items.empty:
+        raise HTTPException(500, "ไม่สามารถโหลด Items_Test ตาม SKU ใน cart")
+
     print("ITEMS COLUMNS =", df_items.columns.tolist())
     # Merge item data
     merge_cols = [
-        "sku", "name", "category", "cost", "product_weight",
-        "priceR1", "priceR2", "priceW1", "priceW2","pkg_size","unit","Base Unit of Measure",
+        "sku",
+        "category",
+        "RE",
+        "product_weight",
+        "priceR1", "priceR2", "priceW1", "priceW2",
+        "pkg_size",
+        "Base_Unit_of_Measure",
     ]
     safe_merge_cols = [c for c in merge_cols if c in df_items.columns]
+
 
     # ✅ Ensure pkg_size exists and usable (priority: FE > master > 1)
     df_calc["pkg_size"] = pd.to_numeric(df_calc.get("pkg_size", 1), errors="coerce")
@@ -141,6 +191,13 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
         df_calc["unit"] = df_calc["Base Unit of Measure"]
     else:
         df_calc["unit"] = ""
+
+    # ✅ FIX: normalize cost column ให้เป็น cost (ตามที่โค้ดด้านล่างใช้)
+    if "Cost" in df_calc.columns and "cost" not in df_calc.columns:
+        df_calc["cost"] = pd.to_numeric(df_calc["Cost"], errors="coerce").fillna(0)
+    else:
+        df_calc["cost"] = pd.to_numeric(df_calc.get("cost", 0), errors="coerce").fillna(0)
+
 
 
     print("\n=== AFTER MERGE UNIT CHECK ===")
@@ -346,10 +403,11 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
 
 
     # ⭐ FIX UNIT (Normal Mode)
-    if "Base Unit of Measure" in df_price.columns:
-        df_price["unit"] = df_price["Base Unit of Measure"]
+    if "Base_Unit_of_Measure" in df_calc.columns:
+        df_calc["unit"] = df_calc["Base_Unit_of_Measure"]
     else:
-        df_price["unit"] = ""
+        df_calc["unit"] = ""
+
 
 
     print("\n=== AFTER PRICE UNIT CHECK ===")

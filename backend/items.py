@@ -1,180 +1,179 @@
-# items.py — FINAL VERSION FOR YOUR DATABASE
+# items_mssql.py
 from fastapi import APIRouter, Query, HTTPException
-import pandas as pd
-from config.db_sqlite import get_conn
 from services.sku_enricher import enrich_by_category
-
-
+from config.db_mssql import get_mssql_conn
 
 router = APIRouter(prefix="/items", tags=["items"])
+
 TABLE_NAME = "Items_Test"
 
 
-def load_items_sqlite():
-    conn = get_conn()
-    df = pd.read_sql_query(f'SELECT * FROM "{TABLE_NAME}"', conn)
-    conn.close()
-
-    # create price columns
-    if "R1" in df.columns: df["priceR1"] = pd.to_numeric(df["R1"], errors="coerce").fillna(0)
-    if "R2" in df.columns: df["priceR2"] = pd.to_numeric(df["R2"], errors="coerce").fillna(0)
-    if "W1" in df.columns: df["priceW1"] = pd.to_numeric(df["W1"], errors="coerce").fillna(0)
-    if "W2" in df.columns: df["priceW2"] = pd.to_numeric(df["W2"], errors="coerce").fillna(0)
-
-    # rename important columns
-    rename_map = {
-        "No.": "sku",
-        "Description": "name",
-        "Package Size": "pkg_size"
+# ======================================================
+# Helper: Convert DB row → API item (🔥 SHAPE เดิม)
+# ======================================================
+def row_to_item(row) -> dict:
+    return {
+        "sku": row.No,
+        "sku2": row.No_2,
+        "name": row.Description,
+        "inventory": int(row.Inventory or 0),
+        "unit": row.Base_Unit_of_Measure,
+        "category": row.Inventory_Posting_Group,
+        "isVariant": str(row.Variant_Mandatory_if_Exists).strip().upper() == "YES",
+        "prices": {
+            "R1": row.R1 or 0,
+            "R2": row.R2 or 0,
+            "W1": row.W1 or 0,
+            "W2": row.W2 or 0,
+        },
+        "pkg_size": row.Package_Size or 1,
+        "product_weight": row.Product_Weight or 0,
+        "sqft_sheet": row.Sqft_Sheet,
+        "product_group": row.Product_Group,
+        "product_sub_group": row.Product_Sub_Group,
+        "alternate_names": row.AlternateName,
     }
-    df = df.rename(columns={old: new for old, new in rename_map.items() if old in df.columns})
-
-    # create category from Inventory Posting Group
-    if "Inventory Posting Group" not in df.columns:
-        raise HTTPException(500, "❌ Missing Inventory Posting Group in Items_Test")
-
-    df["category"] = df["Inventory Posting Group"].astype(str).str.upper()
-
-    # create price columns
-    if "R1" in df.columns: df["priceR1"] = df["R1"]
-    if "R2" in df.columns: df["priceR2"] = df["R2"]
-    if "W1" in df.columns: df["priceW1"] = df["W1"]
-    if "W2" in df.columns: df["priceW2"] = df["W2"]
-    if "RE" in df.columns:
-        df["cost"] = pd.to_numeric(df["RE"], errors="coerce").fillna(0)
-    else:
-        df["cost"] = 0
-    # --- create product_weight column from Product Weight ---
-    if "Product Weight" in df.columns:
-        df["product_weight"] = pd.to_numeric(df["Product Weight"], errors="coerce").fillna(0)
-    else:
-        df["product_weight"] = 0
 
 
-    # pkg_size fallback
-    if "pkg_size" not in df.columns:
-        df["pkg_size"] = 1
-
-        # --- Variant flag from "Variant Mandatory if Exists" ---
-    if "Variant Mandatory if Exists" in df.columns:
-        df["isVariant"] = (
-            df["Variant Mandatory if Exists"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-            .eq("YES")
-        )
-    else:
-        df["isVariant"] = False
-    
-    # --- Product Group / Sub Group ---
-    if "Product Group" in df.columns:
-        df["product_group"] = df["Product Group"].astype(str).str.strip()
-    else:
-        df["product_group"] = None
-
-    if "Product Sub Group" in df.columns:
-        df["product_sub_group"] = df["Product Sub Group"].astype(str).str.strip()
-    else:
-        df["product_sub_group"] = None
-
-    # --- Alternate Names ---
-    if "AlternateName" in df.columns:
-        df["alternate_names"] = (
-            df["AlternateName"]
-            .astype(str)
-            .str.strip()
-        )
-    else:
-        df["alternate_names"] = None
-    
-    # --- No. 2 (Secondary SKU / Alternate Code) ---
-    if "No. 2" in df.columns:
-        df["sku2"] = (
-            df["No. 2"]
-            .astype(str)
-            .str.strip()
-        )
-    else:
-        df["sku2"] = None
-
-
-
-
-    return df
-
-
+# ======================================================
+# GET /items/categories/list  (เหมือนเดิม)
+# ======================================================
 @router.get("/categories/list")
 def get_item_categories():
-    df = load_items_sqlite()
-    grouped = (
-        df.groupby("category")
-          .size()
-          .reset_index(name="count")
-          .rename(columns={"category": "name"})
-    )
-    return grouped.to_dict("records")
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            Inventory_Posting_Group AS name,
+            COUNT(*) AS count
+        FROM Items_Test
+        GROUP BY Inventory_Posting_Group
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [{"name": r.name, "count": r.count} for r in rows]
 
 
+# ======================================================
+# ✅ NEW: GET /items/categories/{category}/list
+# 👉 LIGHT LIST (เร็วมาก)
+# ======================================================
+@router.get("/categories/{category_name}/list")
+def get_items_list_light(category_name: str):
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+
+    sql = """
+        SELECT
+            No          AS sku,
+            No_2        AS sku2,
+            Description AS name,
+            Inventory   AS inventory
+        FROM Items_Test
+        WHERE Inventory_Posting_Group = ?
+        ORDER BY No
+    """
+
+    cursor.execute(sql, category_name.upper())
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [
+        {
+            "sku": r.sku,
+            "sku2": r.sku2,
+            "name": r.name,
+            "inventory": int(r.inventory or 0),
+        }
+        for r in rows
+    ]
+
+
+# ======================================================
+# ❗ ของเดิม: GET /items/categories/{category}
+# (ยังอยู่ แต่ช้า — แนะนำให้ FE เลิกใช้)
+# ======================================================
 @router.get("/categories/{category_name}")
 def get_items_by_category(category_name: str):
-    df = load_items_sqlite()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
-    filtered = df[df["category"] == category_name.upper()]
+    sql = f"""
+        SELECT *
+        FROM {TABLE_NAME}
+        WHERE Inventory_Posting_Group = ?
+    """
+
+    cursor.execute(sql, category_name.upper())
+    rows = cursor.fetchall()
+    conn.close()
 
     items = []
-    for _, row in filtered.iterrows():
-        extra = enrich_by_category(row["category"], row["sku"]) or {}
-
-        items.append({
-            "sku": row["sku"],
-            "name": row["name"],
-            "inventory": row.get("Inventory", 0),
-            "unit": row.get("Base Unit Measure", ""),
-            "category": row["category"],
-            "isVariant": bool(row.get("isVariant", False)),
-            "prices": {
-                "R1": row.get("priceR1", 0),
-                "R2": row.get("priceR2", 0),
-                "W1": row.get("priceW1", 0),
-                "W2": row.get("priceW2", 0),
-            },
-            "pkg_size": row.get("pkg_size", 1),
-            "product_weight": row.get("product_weight", 0), 
-            "sqft_sheet": row.get("Sqft_Sheet"),
-            "product_group": row.get("product_group"),
-            "product_sub_group": row.get("product_sub_group"),
-            "alternate_names": row.get("alternate_names"),
-            "sku2": row.get("sku2"),
-            **extra,
-
-
-        })
+    for row in rows:
+        item = row_to_item(row)
+        extra = enrich_by_category(item["category"], item["sku"]) or {}
+        item.update(extra)
+        items.append(item)
 
     return items
 
 
+# ======================================================
+# ✅ NEW: GET /items/{sku}
+# 👉 FULL DETAIL + enrich (ตอนกด dropdown)
+# ======================================================
+@router.get("/{sku}")
+def get_item_detail(sku: str):
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+
+    sql = f"""
+        SELECT *
+        FROM {TABLE_NAME}
+        WHERE No = ?
+    """
+
+    cursor.execute(sql, sku)
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(404, "Item not found")
+
+    item = row_to_item(row)
+
+    # ⭐ enrich เฉพาะตอนนี้
+    extra = enrich_by_category(item["category"], item["sku"]) or {}
+    item.update(extra)
+
+    return item
+
+
+# ======================================================
+# GET /items/search (ยังใช้ได้ แต่ LIMIT ไว้)
+# ======================================================
 @router.get("/search")
 def full_text_search_items(q: str = Query(..., min_length=3)):
-    df = load_items_sqlite()
-    q = q.strip().lower()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
-    def contains(col):
-        if not isinstance(col, pd.Series):
-            return False
-        return col.astype(str).str.lower().str.contains(q, na=False)
+    q_like = f"%{q.strip()}%"
 
-    df = df[
-        contains(df["sku"]) |
-        contains(df.get("sku2")) |
-        contains(df["name"]) |
-        contains(df.get("Description")) |
-        contains(df.get("Inventory Posting Group")) |
-        contains(df.get("Base Unit Measure")) |
-        contains(df.get("alternate_names"))
-    ]
+    sql = f"""
+        SELECT TOP 50 *
+        FROM {TABLE_NAME}
+        WHERE
+            No LIKE ?
+            OR No_2 LIKE ?
+            OR Description LIKE ?
+            OR AlternateName LIKE ?
+    """
 
-    return df.head(50).to_dict("records")  # ⭐ limit 5 ที่ backend
+    cursor.execute(sql, q_like, q_like, q_like, q_like)
+    rows = cursor.fetchall()
+    conn.close()
 
- 
-
+    return [row_to_item(r) for r in rows]
