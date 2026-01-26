@@ -148,7 +148,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
       }
     );
 
-    const newItems = res.data || [];
+    const newItems = res.data.items || [];
 
     setItems((prev) =>
       reset ? newItems : [...prev, ...newItems]
@@ -368,10 +368,15 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {loading && <Loader />}
+        <div className="flex-1 min-h-0 overflow-hidden relative">
+            {/* 🔥 Loader เป็น overlay ไม่ทำให้ list หาย */}
+            {loading && (
+              <div className="absolute inset-0 bg-white/60 z-20 flex items-center justify-center">
+                <Loader />
+              </div>
+            )}
 
-          {!loading && (
+            {/* ❗ grid ต้อง render ตลอด ห้ามใช้ {!loading && ...} */}
             <div className="grid grid-cols-2 gap-5 h-full min-h-0 overflow-hidden">
               {/* ================= LEFT ================= */}
               <div className="flex flex-col bg-gray-50 rounded-xl border overflow-hidden">
@@ -380,45 +385,32 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
                 </div>
 
                 <div
-                    className="flex-1 overflow-y-auto p-4"
-                    onScroll={(e) => {
-                      const el = e.currentTarget;
-                      if (
-                        el.scrollTop + el.clientHeight >=
-                        el.scrollHeight - 20
-                      ) {
-                        if (!loading && hasMore) {
-                          loadItems(); // ⭐ โหลดเพิ่ม
-                        }
+                  className="flex-1 overflow-y-auto p-4"
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    const nearBottom =
+                      el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
 
-                      }
-                    }}
+                    if (nearBottom && hasMore && !loading) {
+                      loadItems(); // ⭐ โหลดเพิ่มแบบไม่เด้ง
+                    }
+                  }}
                 >
                   <div className="grid grid-cols-1 gap-4">
-                      {filteredItems.map((item, idx) => {
+                    {filteredItems.map((item, idx) => (
+                      <ItemCard
+                        key={`${item.sku || item.SKU}-${idx}`}
+                        item={item}
+                        onAdd={handleAdd}
+                      />
+                    ))}
 
-                        // 🔍 DEBUG LOG (ใส่ชั่วคราว)
-                        if (idx === 0) {
-                          console.log("🧩 Item sent to ItemCard:", {
-                            sku: item.sku || item.SKU,
-                            group: item.group,
-                            groupName: item.groupName,
-                            subGroup: item.subGroup,
-                            subGroupName: item.subGroupName,
-                            product_group: item.product_group,
-                            product_sub_group: item.product_sub_group,
-                            fullItem: item,
-                          });
-                        }
-
-                      return (
-                        <ItemCard
-                          key={`${item.sku || item.SKU}-${idx}`}
-                          item={item}
-                          onAdd={handleAdd}
-                        />
-                      );
-                    })}
+                    {/* optional: hint ว่ายังมีโหลดต่อ */}
+                    {!hasMore && (
+                      <div className="text-xs text-gray-400 text-center py-4">
+                        โหลดครบแล้ว
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -454,9 +446,8 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
                 </div>
               </div>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </div>              
 
       {/* ================= ADDED ITEMS LIST ================= */}
       {selectedItems.length > 0 && (

@@ -82,7 +82,7 @@ def get_items_list_light(category_name: str,limit: int = 10,
         FETCH NEXT ? ROWS ONLY
     """
 
-    cursor.execute(sql, category_name.upper())
+    cursor.execute(sql, category_name.upper(), offset, limit)
     rows = cursor.fetchall()
     conn.close()
 
