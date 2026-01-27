@@ -1,10 +1,9 @@
 import React from "react";
-import AluminiumPicker from "../wizard/AluminiumPicker.jsx";
-import AccessoriesPicker from "../wizard/AccessoriesPicker.jsx";
-import CLinePicker from "../wizard/CLinePicker.jsx";
-import SealantPicker from "../wizard/SealantPicker.jsx";
-import GypsumPicker from "../wizard/GypsumPicker.jsx";
-import GlassPickerModal from "../wizard/GlassPickerModal.jsx";
+import AluminiumFilter from "./AluminiumFilter.jsx";
+import AccessoriesFilter from "./AccessoriesFilter.jsx";
+import CLineFilter from "./CLineFilter.jsx";
+import SealantFilter from "./SealantFilter.jsx";
+import GypsumFilter from "./GypsumFilter.jsx";
 import { useState } from "react";
 
 export default function DynamicProductFilter({ category, onFilterChange }) {
@@ -18,19 +17,19 @@ export default function DynamicProductFilter({ category, onFilterChange }) {
 
   switch (category) {
     case "A":
-      return <AluminiumPicker onSelect={handleChange} />;
+      return <AluminiumFilter onFilterChange={handleChange} />;
 
     case "E":
-      return <AccessoriesPicker onSelect={handleChange} />;
+      return <AccessoriesFilter onFilterChange={handleChange} />;
 
     case "C":
-      return <CLinePicker onSelect={handleChange} />;
+      return <CLineFilter onFilterChange={handleChange} />;
 
     case "S":
-      return <SealantPicker onSelect={handleChange} />;
+      return <SealantFilter onFilterChange={handleChange} />;
 
     case "Y":
-      return <GypsumPicker onSelect={handleChange} />;
+      return <GypsumFilter onFilterChange={handleChange} />;
 
     case "G":
       return (

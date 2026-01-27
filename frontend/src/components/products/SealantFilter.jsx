@@ -1,9 +1,8 @@
-// src/components/wizard/SealantPicker.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 
-export default function SealantPicker({ onSelect }) {
+export default function SealantFilter({ onFilterChange }) {
   const [brand, setBrand] = useState(null);
   const [group, setGroup] = useState(null);
   const [subGroup, setSubGroup] = useState(null);
@@ -28,7 +27,7 @@ export default function SealantPicker({ onSelect }) {
         color: res.data.color || [],
       });
     } catch (err) {
-      console.error("Load sealant options failed:", err);
+      console.error("Load sealant filter options failed:", err);
     }
   };
 
@@ -40,49 +39,26 @@ export default function SealantPicker({ onSelect }) {
     fetchOptions();
   }, [brand, group, subGroup, color]);
 
-  const emitFilters = (next) => {
-    onSelect && onSelect(next);
-  };
-
-  const handleBrandChange = (v) => {
-    const next = { brand: v || null, group, subGroup, color };
-    setBrand(next.brand);
-    emitFilters(next);
-  };
-
-  const handleGroupChange = (v) => {
-    const next = { brand, group: v || null, subGroup, color };
-    setGroup(next.group);
-    emitFilters(next);
-  };
-
-  const handleSubGroupChange = (v) => {
-    const next = { brand, group, subGroup: v || null, color };
-    setSubGroup(next.subGroup);
-    emitFilters(next);
-  };
-
-  const handleColorChange = (v) => {
-    const next = { brand, group, subGroup, color: v || null };
-    setColor(next.color);
-    emitFilters(next);
-  };
+  useEffect(() => {
+    if (onFilterChange) {
+      onFilterChange({ brand, group, subGroup, color });
+    }
+  }, [brand, group, subGroup, color]);
 
   const handleClearAll = () => {
     setBrand(null);
     setGroup(null);
     setSubGroup(null);
     setColor(null);
-    emitFilters({ brand: null, group: null, subGroup: null, color: null });
   };
 
   return (
-    <div className="flex justify-between p-3 border rounded-xl bg-gray-50 mt-3">
+    <div className="flex justify-between p-3 border rounded-xl bg-gray-50">
       <CustomDropdown
         label="Brand"
         value={brand}
         options={options.brand}
-        onChange={handleBrandChange}
+        onChange={setBrand}
         width={200}
       />
 
@@ -90,7 +66,7 @@ export default function SealantPicker({ onSelect }) {
         label="Group"
         value={group}
         options={options.group}
-        onChange={handleGroupChange}
+        onChange={setGroup}
         width={240}
       />
 
@@ -98,7 +74,7 @@ export default function SealantPicker({ onSelect }) {
         label="SubGroup"
         value={subGroup}
         options={options.subGroup}
-        onChange={handleSubGroupChange}
+        onChange={setSubGroup}
         width={240}
       />
 
@@ -106,7 +82,7 @@ export default function SealantPicker({ onSelect }) {
         label="Color"
         value={color}
         options={options.color}
-        onChange={handleColorChange}
+        onChange={setColor}
         width={200}
       />
 

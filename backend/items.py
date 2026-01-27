@@ -1,6 +1,6 @@
 # items_mssql.py
 from fastapi import APIRouter, Query, HTTPException
-from services.sku_enricher import enrich_by_category
+from services.sku_enricher import enrich_by_category, load_mapping
 from config.db_mssql import get_mssql_conn
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -59,30 +59,144 @@ def get_item_categories():
 
 # ======================================================
 # ✅ NEW: GET /items/categories/{category}/list
-# 👉 LIGHT LIST (เร็วมาก)
+# 👉 LIGHT LIST (เร็วมาก) + รองรับ filter
 # ======================================================
 @router.get("/categories/{category_name}/list")
-def get_items_list_light(category_name: str,limit: int = 10,
-    offset: int = 0,):
+def get_items_list_light(
+    category_name: str,
+    limit: int = 10,
+    offset: int = 0,
+    # ⭐ เพิ่ม filter parameters
+    brand: str = None,
+    group: str = None,
+    subGroup: str = None,
+    color: str = None,
+    thickness: str = None,
+    character: str = None,
+):
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
-    sql = """
+    # ⭐ สร้าง WHERE clause สำหรับ filter
+    where_clauses = ["Inventory_Posting_Group = ?"]
+    params = [category_name.upper()]
+
+    # ⭐ Filter by SKU pattern (Aluminium: ABBGGSSSCCTT)
+    if category_name.upper() == "A":
+        if brand:
+            where_clauses.append("SUBSTRING(No, 2, 2) = ?")
+            params.append(brand.zfill(2))
+        if group:
+            where_clauses.append("SUBSTRING(No, 4, 2) = ?")
+            params.append(group.zfill(2))
+        if subGroup:
+            where_clauses.append("SUBSTRING(No, 6, 3) = ?")
+            params.append(subGroup.zfill(3))
+        if color:
+            where_clauses.append("SUBSTRING(No, 9, 2) = ?")
+            params.append(color.zfill(2))
+        if thickness:
+            where_clauses.append("SUBSTRING(No, 11, 2) = ?")
+            params.append(thickness.zfill(2))
+
+    # ⭐ Filter by SKU pattern (C-Line: CBBGGSSSCCTT)
+    elif category_name.upper() == "C":
+        if brand:
+            where_clauses.append("SUBSTRING(No, 2, 2) = ?")
+            params.append(brand.zfill(2))
+        if group:
+            where_clauses.append("SUBSTRING(No, 4, 2) = ?")
+            params.append(group.zfill(2))
+        if subGroup:
+            where_clauses.append("SUBSTRING(No, 6, 3) = ?")
+            params.append(subGroup.zfill(3))
+        if color:
+            where_clauses.append("SUBSTRING(No, 9, 2) = ?")
+            params.append(color.zfill(2))
+        if thickness:
+            where_clauses.append("SUBSTRING(No, 11, 2) = ?")
+            params.append(thickness.zfill(2))
+
+    # ⭐ Filter by SKU pattern (Accessories: EBBBGGSSCCX)
+    elif category_name.upper() == "E":
+        if brand:
+            where_clauses.append("SUBSTRING(No, 2, 3) = ?")
+            params.append(brand.zfill(3))
+        if group:
+            where_clauses.append("SUBSTRING(No, 5, 2) = ?")
+            params.append(group.zfill(2))
+        if subGroup:
+            where_clauses.append("SUBSTRING(No, 7, 2) = ?")
+            params.append(subGroup.zfill(2))
+        if color:
+            where_clauses.append("SUBSTRING(No, 9, 2) = ?")
+            params.append(color.zfill(2))
+        if character:
+            where_clauses.append("SUBSTRING(No, 11, 1) = ?")
+            params.append(character)
+
+    # ⭐ Filter by SKU pattern (Sealant: SBBGGGCC)
+    elif category_name.upper() == "S":
+        if brand:
+            where_clauses.append("SUBSTRING(No, 2, 2) = ?")
+            params.append(brand.zfill(2))
+        if group:
+            where_clauses.append("SUBSTRING(No, 4, 2) = ?")
+            params.append(group.zfill(2))
+        if subGroup:
+            where_clauses.append("SUBSTRING(No, 6, 3) = ?")
+            params.append(subGroup.zfill(3))
+        if color:
+            where_clauses.append("SUBSTRING(No, 9, 2) = ?")
+            params.append(color.zfill(2))
+
+    # ⭐ Filter by SKU pattern (Gypsum: YBBGGSCCCTT...)
+    elif category_name.upper() == "Y":
+        if brand:
+            where_clauses.append("SUBSTRING(No, 2, 2) = ?")
+            params.append(brand.zfill(2))
+        if group:
+            where_clauses.append("SUBSTRING(No, 4, 2) = ?")
+            params.append(group.zfill(2))
+        if subGroup:
+            where_clauses.append("SUBSTRING(No, 6, 2) = ?")
+            params.append(subGroup.zfill(2))
+        if color:
+            where_clauses.append("SUBSTRING(No, 8, 3) = ?")
+            params.append(color.zfill(3))
+        if thickness:
+            where_clauses.append("SUBSTRING(No, 11, 2) = ?")
+            params.append(thickness.zfill(2))
+
+    where_sql = " AND ".join(where_clauses)
+
+    # ⭐ นับจำนวนทั้งหมดตาม filter
+    count_sql = f"""
+        SELECT COUNT(*) AS total
+        FROM Items_Test
+        WHERE {where_sql}
+    """
+    cursor.execute(count_sql, *params)
+    total = cursor.fetchone().total
+
+    # ⭐ ดึงข้อมูลตาม limit/offset + filter
+    sql = f"""
         SELECT
             No            AS sku,
             No_2          AS sku2,
             Description   AS name,
             Inventory     AS inventory,
             Product_Group AS product_group,
-            Product_Sub_Group AS product_sub_group
+            Product_Sub_Group AS product_sub_group,
+            AlternateName AS alternate_names
         FROM Items_Test
-        WHERE Inventory_Posting_Group = ?
+        WHERE {where_sql}
         ORDER BY No
         OFFSET ? ROWS
         FETCH NEXT ? ROWS ONLY
     """
 
-    cursor.execute(sql, category_name.upper(), offset, limit)
+    cursor.execute(sql, *params, offset, limit)
     rows = cursor.fetchall()
     conn.close()
 
@@ -90,17 +204,20 @@ def get_items_list_light(category_name: str,limit: int = 10,
         "items": [
             {
                 "sku": r.sku,
+                "SKU": r.sku,  # ⭐ เพิ่ม uppercase version สำหรับ compatibility
                 "sku2": r.sku2,
                 "name": r.name,
                 "inventory": int(r.inventory or 0),
                 "product_group": r.product_group,
                 "product_sub_group": r.product_sub_group,
+                "alternate_names": r.alternate_names,
             }
             for r in rows
         ],
         "limit": limit,
         "offset": offset,
         "count": len(rows),
+        "total": total,
     }
 
 
@@ -161,3 +278,181 @@ def full_text_search_items(q: str = Query(..., min_length=3)):
     conn.close()
 
     return [row_to_item(r) for r in rows]
+
+
+# ======================================================
+# ✅ NEW: GET /items/categories/{category}/filter-options
+# 👉 ดึง filter options ที่ปรับตาม filter ที่เลือกแล้ว (cascading)
+# ======================================================
+@router.get("/categories/{category_name}/filter-options")
+def get_filter_options(
+    category_name: str,
+    brand: str = None,
+    group: str = None,
+    subGroup: str = None,
+    color: str = None,
+    thickness: str = None,
+    character: str = None,
+):
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+
+    # ⭐ สร้าง WHERE clause สำหรับ filter (เหมือนกับ list endpoint)
+    where_clauses = ["Inventory_Posting_Group = ?"]
+    params = [category_name.upper()]
+
+    # Helper function สำหรับเพิ่ม filter
+    def add_filter(field_slice, value, pad_len):
+        if value:
+            where_clauses.append(f"SUBSTRING(No, {field_slice[0]}, {field_slice[1]}) = ?")
+            params.append(value.zfill(pad_len))
+
+    # ⭐ Filter by SKU pattern ตาม category
+    if category_name.upper() == "A":
+        add_filter((2, 2), brand, 2)
+        add_filter((4, 2), group, 2)
+        add_filter((6, 3), subGroup, 3)
+        add_filter((9, 2), color, 2)
+        add_filter((11, 2), thickness, 2)
+        
+        # Define extraction for each field
+        field_extracts = {
+            "brand": "SUBSTRING(No, 2, 2)",
+            "group": "SUBSTRING(No, 4, 2)",
+            "subGroup": "SUBSTRING(No, 6, 3)",
+            "color": "SUBSTRING(No, 9, 2)",
+            "thickness": "SUBSTRING(No, 11, 2)",
+        }
+
+    elif category_name.upper() == "C":
+        add_filter((2, 2), brand, 2)
+        add_filter((4, 2), group, 2)
+        add_filter((6, 3), subGroup, 3)
+        add_filter((9, 2), color, 2)
+        add_filter((11, 2), thickness, 2)
+        
+        field_extracts = {
+            "brand": "SUBSTRING(No, 2, 2)",
+            "group": "SUBSTRING(No, 4, 2)",
+            "subGroup": "SUBSTRING(No, 6, 3)",
+            "color": "SUBSTRING(No, 9, 2)",
+            "thickness": "SUBSTRING(No, 11, 2)",
+        }
+
+    elif category_name.upper() == "E":
+        add_filter((2, 3), brand, 3)
+        add_filter((5, 2), group, 2)
+        add_filter((7, 2), subGroup, 2)
+        add_filter((9, 2), color, 2)
+        if character:
+            where_clauses.append("SUBSTRING(No, 11, 1) = ?")
+            params.append(character)
+        
+        field_extracts = {
+            "brand": "SUBSTRING(No, 2, 3)",
+            "group": "SUBSTRING(No, 5, 2)",
+            "subGroup": "SUBSTRING(No, 7, 2)",
+            "color": "SUBSTRING(No, 9, 2)",
+            "character": "SUBSTRING(No, 11, 1)",
+        }
+
+    elif category_name.upper() == "S":
+        add_filter((2, 2), brand, 2)
+        add_filter((4, 2), group, 2)
+        add_filter((6, 3), subGroup, 3)
+        add_filter((9, 2), color, 2)
+        
+        field_extracts = {
+            "brand": "SUBSTRING(No, 2, 2)",
+            "group": "SUBSTRING(No, 4, 2)",
+            "subGroup": "SUBSTRING(No, 6, 3)",
+            "color": "SUBSTRING(No, 9, 2)",
+        }
+
+    elif category_name.upper() == "Y":
+        add_filter((2, 2), brand, 2)
+        add_filter((4, 2), group, 2)
+        add_filter((6, 2), subGroup, 2)
+        add_filter((8, 3), color, 3)
+        add_filter((11, 2), thickness, 2)
+        
+        field_extracts = {
+            "brand": "SUBSTRING(No, 2, 2)",
+            "group": "SUBSTRING(No, 4, 2)",
+            "subGroup": "SUBSTRING(No, 6, 2)",
+            "color": "SUBSTRING(No, 8, 3)",
+            "thickness": "SUBSTRING(No, 11, 2)",
+        }
+    else:
+        return {}
+
+    where_sql = " AND ".join(where_clauses)
+
+    # ⭐ โหลด mapping tables
+    mapping_tables = {
+        "A": {
+            "brand": "Aluminium_Brand",
+            "group": "Aluminium_Group",
+            "subGroup": "Aluminium_SubGroup",
+            "color": "Aluminium_Color",
+            "thickness": "Aluminium_Thickness",
+        },
+        "C": {
+            "brand": "CLine_Brand",
+            "group": "CLine_Group",
+            "subGroup": "CLine_SubGroup",
+            "color": "CLine_Color",
+            "thickness": "CLine_Thickness",
+        },
+        "E": {
+            "brand": "Accessories_Brand",
+            "group": "Accessories_Group",
+            "subGroup": "Accessories_SubGroup",
+            "color": "Accessories_Color",
+            "character": "Accessories_Character",
+        },
+        "S": {
+            "brand": "Sealant_Brand",
+            "group": "Sealant_Group",
+            "subGroup": "Sealant_SubGroup",
+            "color": "Sealant_Color",
+        },
+        "Y": {
+            "brand": "Gypsum_Brand",
+            "group": "Gypsum_Group",
+            "subGroup": "Gypsum_SubGroup",
+            "color": "Gypsum_Color",
+            "thickness": "Gypsum_Thickness",
+        },
+    }
+
+    mappings = {}
+    if category_name.upper() in mapping_tables:
+        for field, table in mapping_tables[category_name.upper()].items():
+            try:
+                mappings[field] = load_mapping(table)
+            except:
+                mappings[field] = {}
+
+    # ⭐ ดึง distinct values สำหรับแต่ละ field
+    result = {}
+    for field_name, extract_sql in field_extracts.items():
+        sql = f"""
+            SELECT DISTINCT {extract_sql} AS value
+            FROM Items_Test
+            WHERE {where_sql}
+            ORDER BY value
+        """
+        cursor.execute(sql, *params)
+        rows = cursor.fetchall()
+        
+        # ⭐ แปลงเป็น {code, name}
+        codes = [r.value for r in rows if r.value]
+        mapping = mappings.get(field_name, {})
+        result[field_name] = [
+            {"code": code, "name": mapping.get(code, code)}
+            for code in codes
+        ]
+
+    conn.close()
+    return result

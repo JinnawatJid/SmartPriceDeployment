@@ -11,6 +11,7 @@ import GypsumPicker from "./GypsumPicker.jsx";
 function ItemPickerModal({ open, category, onClose, onConfirm }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false); // ⭐ แยก loading สำหรับโหลดเพิ่ม
   const [searchTerm, setSearchTerm] = useState("");
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -132,31 +133,82 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     };
   };
   const loadItems = async (reset = false) => {
-    if (loading || (!hasMore && !reset)) return;
+    if (!hasMore && !reset) return;
 
-    setLoading(true);
+    // ⭐ แยก loading state
+    if (reset) {
+      setLoading(true);
+    } else {
+      if (loadingMore) return; // ป้องกันโหลดซ้ำ
+      setLoadingMore(true);
+    }
 
     const currentOffset = reset ? 0 : offset;
 
-    const res = await api.get(
-      `/api/items/categories/${category}/list`,
-      {
-        params: {
-          limit: 10,
-          offset: currentOffset,
-        },
+    try {
+      // ⭐ สร้าง filter params ตาม category
+      const filterParams = {};
+      
+      if (category === "A") {
+        if (aluFilter.brand) filterParams.brand = aluFilter.brand;
+        if (aluFilter.group) filterParams.group = aluFilter.group;
+        if (aluFilter.subGroup) filterParams.subGroup = aluFilter.subGroup;
+        if (aluFilter.color) filterParams.color = aluFilter.color;
+        if (aluFilter.thickness) filterParams.thickness = aluFilter.thickness;
+      } else if (category === "C") {
+        if (clineFilter.brand) filterParams.brand = clineFilter.brand;
+        if (clineFilter.group) filterParams.group = clineFilter.group;
+        if (clineFilter.subGroup) filterParams.subGroup = clineFilter.subGroup;
+        if (clineFilter.color) filterParams.color = clineFilter.color;
+        if (clineFilter.thickness) filterParams.thickness = clineFilter.thickness;
+      } else if (category === "E") {
+        if (accFilter.brand) filterParams.brand = accFilter.brand;
+        if (accFilter.group) filterParams.group = accFilter.group;
+        if (accFilter.subGroup) filterParams.subGroup = accFilter.subGroup;
+        if (accFilter.color) filterParams.color = accFilter.color;
+        if (accFilter.character) filterParams.character = accFilter.character;
+      } else if (category === "S") {
+        if (sealantFilter.brand) filterParams.brand = sealantFilter.brand;
+        if (sealantFilter.group) filterParams.group = sealantFilter.group;
+        if (sealantFilter.subGroup) filterParams.subGroup = sealantFilter.subGroup;
+        if (sealantFilter.color) filterParams.color = sealantFilter.color;
+      } else if (category === "Y") {
+        if (gypsumFilter.brand) filterParams.brand = gypsumFilter.brand;
+        if (gypsumFilter.group) filterParams.group = gypsumFilter.group;
+        if (gypsumFilter.subGroup) filterParams.subGroup = gypsumFilter.subGroup;
+        if (gypsumFilter.color) filterParams.color = gypsumFilter.color;
+        if (gypsumFilter.thickness) filterParams.thickness = gypsumFilter.thickness;
       }
-    );
 
-    const newItems = res.data.items || [];
+      const res = await api.get(
+        `/api/items/categories/${category}/list`,
+        {
+          params: {
+            limit: 10,
+            offset: currentOffset,
+            ...filterParams, // ⭐ ส่ง filter ไปด้วย
+          },
+        }
+      );
 
-    setItems((prev) =>
-      reset ? newItems : [...prev, ...newItems]
-    );
+      const newItems = res.data.items || [];
+      const total = res.data.total || 0;
 
-    setOffset(currentOffset + newItems.length);
-    setHasMore(newItems.length === 10);
-    setLoading(false);
+      setItems((prev) =>
+        reset ? newItems : [...prev, ...newItems]
+      );
+
+      const newOffset = currentOffset + newItems.length;
+      setOffset(newOffset);
+      
+      // ⭐ เช็คจาก total แทน
+      setHasMore(newOffset < total);
+    } catch (err) {
+      console.error("Load items error:", err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
   };
 
   useEffect(() => {
@@ -171,61 +223,23 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     loadItems(true); // ⭐ reset + โหลดชุดแรก
   }, [open, category]);
 
+  // ⭐ เมื่อ filter เปลี่ยน ให้โหลดใหม่
+  useEffect(() => {
+    if (!open || !category) return;
+
+    setItems([]);
+    setOffset(0);
+    setHasMore(true);
+    loadItems(true);
+  }, [aluFilter, clineFilter, accFilter, sealantFilter, gypsumFilter]);
+
 
   // ---------------- Filtered items ----------------
   const filteredItems = useMemo(() => {
     let base = items;
 
-    if (category === "A") {
-      base = base.filter((it) => {
-        const p = parseAluminiumSku(it.sku || it.SKU);
-        if (aluFilter.brand && p.brand !== aluFilter.brand) return false;
-        if (aluFilter.group && p.group !== aluFilter.group) return false;
-        if (aluFilter.subGroup && p.subGroup !== aluFilter.subGroup) return false;
-        if (aluFilter.color && p.color !== aluFilter.color) return false;
-        if (aluFilter.thickness && p.thickness !== aluFilter.thickness) return false;
-        return true;
-      });
-    } else if (category === "C") {
-      base = base.filter((it) => {
-        const p = parseCLineSku(it.sku || it.SKU);
-        if (clineFilter.brand && p.brand !== clineFilter.brand) return false;
-        if (clineFilter.group && p.group !== clineFilter.group) return false;
-        if (clineFilter.subGroup && p.subGroup !== clineFilter.subGroup) return false;
-        if (clineFilter.color && p.color !== clineFilter.color) return false;
-        if (clineFilter.thickness && p.thickness !== clineFilter.thickness) return false;
-        return true;
-      });
-    } else if (category === "E") {
-      base = base.filter((it) => {
-        const p = parseAccessoriesSku(it.sku || it.SKU);
-        if (accFilter.brand && p.brand !== accFilter.brand) return false;
-        if (accFilter.group && p.group !== accFilter.group) return false;
-        if (accFilter.subGroup && p.subGroup !== accFilter.subGroup) return false;
-        if (accFilter.color && p.color !== accFilter.color) return false;
-        if (accFilter.character && p.character !== accFilter.character) return false;
-        return true;
-      });
-    } else if (category === "S") {
-      base = base.filter((it) => {
-        const p = parseSealantSku(it.sku || it.SKU);
-        if (sealantFilter.brand && p.brand !== sealantFilter.brand) return false;
-        if (sealantFilter.group && p.group !== sealantFilter.group) return false;
-        if (sealantFilter.subGroup && p.subGroup !== sealantFilter.subGroup) return false;
-        if (sealantFilter.color && p.color !== sealantFilter.color) return false;
-        return true;
-      });
-    } else if (category === "Y") {
-      base = base.filter((it) => {
-        const p = parseGypsumSku(it.sku || it.SKU);
-        if (gypsumFilter.brand && p.brand !== gypsumFilter.brand) return false;
-        if (gypsumFilter.group && p.group !== gypsumFilter.group) return false;
-        if (gypsumFilter.subGroup && p.subGroup !== gypsumFilter.subGroup) return false;
-        if (gypsumFilter.color && p.color !== gypsumFilter.color) return false;
-        if (gypsumFilter.thickness && p.thickness !== gypsumFilter.thickness) return false;
-        return true;
-      });
-    }
+    // ⭐ ไม่ต้องกรองตาม category filter อีกแล้ว เพราะ backend กรองให้แล้ว
+    // เหลือแค่ search term
 
     if (!searchTerm) return base;
     const term = searchTerm.toLowerCase();
@@ -235,16 +249,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
       String(it.sku || it.SKU || "").toLowerCase().includes(term) ||
       String(it.alternate_names || "").toLowerCase().includes(term)
     );
-  }, [
-    items,
-    searchTerm,
-    category,
-    aluFilter,
-    clineFilter,
-    accFilter,
-    sealantFilter,
-    gypsumFilter,
-  ]);
+  }, [items, searchTerm]);
 
   const relatedItems = useMemo(() => {
     if (!activeItem?.product_group) return [];
@@ -369,14 +374,14 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
 
         {/* CONTENT */}
         <div className="flex-1 min-h-0 overflow-hidden relative">
-            {/* 🔥 Loader เป็น overlay ไม่ทำให้ list หาย */}
-            {loading && (
-              <div className="absolute inset-0 bg-white/60 z-20 flex items-center justify-center">
+            {/* 🔥 Loader แสดงเฉพาะตอนโหลดครั้งแรก */}
+            {loading && items.length === 0 && (
+              <div className="absolute inset-0 bg-white z-20 flex items-center justify-center">
                 <Loader />
               </div>
             )}
 
-            {/* ❗ grid ต้อง render ตลอด ห้ามใช้ {!loading && ...} */}
+            {/* ❗ grid ต้อง render ตลอด */}
             <div className="grid grid-cols-2 gap-5 h-full min-h-0 overflow-hidden">
               {/* ================= LEFT ================= */}
               <div className="flex flex-col bg-gray-50 rounded-xl border overflow-hidden">
@@ -391,7 +396,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
                     const nearBottom =
                       el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
 
-                    if (nearBottom && hasMore && !loading) {
+                    if (nearBottom && hasMore && !loadingMore) {
                       loadItems(); // ⭐ โหลดเพิ่มแบบไม่เด้ง
                     }
                   }}
@@ -405,10 +410,27 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
                       />
                     ))}
 
-                    {/* optional: hint ว่ายังมีโหลดต่อ */}
-                    {!hasMore && (
+                    {/* ⭐ แสดง loading indicator เล็กๆ ตอนโหลดเพิ่ม */}
+                    {loadingMore && (
+                      <div className="flex justify-center py-4">
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                          กำลังโหลด...
+                        </div>
+                      </div>
+                    )}
+
+                    {/* hint ว่าโหลดครบแล้ว */}
+                    {!hasMore && filteredItems.length > 0 && (
                       <div className="text-xs text-gray-400 text-center py-4">
                         โหลดครบแล้ว
+                      </div>
+                    )}
+
+                    {/* ไม่มีสินค้า */}
+                    {!loading && filteredItems.length === 0 && (
+                      <div className="text-sm text-gray-400 text-center py-10">
+                        ไม่พบสินค้า
                       </div>
                     )}
                   </div>

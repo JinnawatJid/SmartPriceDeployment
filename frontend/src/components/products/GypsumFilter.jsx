@@ -1,9 +1,8 @@
-// src/components/wizard/GypsumPicker.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 
-export default function GypsumPicker({ onSelect }) {
+export default function GypsumFilter({ onFilterChange }) {
   const [brand, setBrand] = useState(null);
   const [group, setGroup] = useState(null);
   const [subGroup, setSubGroup] = useState(null);
@@ -31,7 +30,7 @@ export default function GypsumPicker({ onSelect }) {
         thickness: res.data.thickness || [],
       });
     } catch (err) {
-      console.error("Load gypsum options failed:", err);
+      console.error("Load gypsum filter options failed:", err);
     }
   };
 
@@ -43,39 +42,11 @@ export default function GypsumPicker({ onSelect }) {
     fetchOptions();
   }, [brand, group, subGroup, color, thickness]);
 
-  const emitFilters = (next) => {
-    onSelect && onSelect(next);
-  };
-
-  const handleBrandChange = (v) => {
-    const next = { brand: v || null, group, subGroup, color, thickness };
-    setBrand(next.brand);
-    emitFilters(next);
-  };
-
-  const handleGroupChange = (v) => {
-    const next = { brand, group: v || null, subGroup, color, thickness };
-    setGroup(next.group);
-    emitFilters(next);
-  };
-
-  const handleSubGroupChange = (v) => {
-    const next = { brand, group, subGroup: v || null, color, thickness };
-    setSubGroup(next.subGroup);
-    emitFilters(next);
-  };
-
-  const handleColorChange = (v) => {
-    const next = { brand, group, subGroup, color: v || null, thickness };
-    setColor(next.color);
-    emitFilters(next);
-  };
-
-  const handleThicknessChange = (v) => {
-    const next = { brand, group, subGroup, color, thickness: v || null };
-    setThickness(next.thickness);
-    emitFilters(next);
-  };
+  useEffect(() => {
+    if (onFilterChange) {
+      onFilterChange({ brand, group, subGroup, color, thickness });
+    }
+  }, [brand, group, subGroup, color, thickness]);
 
   const handleClearAll = () => {
     setBrand(null);
@@ -83,16 +54,15 @@ export default function GypsumPicker({ onSelect }) {
     setSubGroup(null);
     setColor(null);
     setThickness(null);
-    emitFilters({ brand: null, group: null, subGroup: null, color: null, thickness: null });
   };
 
   return (
-    <div className="grid grid-cols-3 gap-3 p-3 border rounded-xl bg-gray-50 mt-3">
+    <div className="grid grid-cols-3 gap-3 p-3 border rounded-xl bg-gray-50">
       <CustomDropdown
         label="Brand"
         value={brand}
         options={options.brand}
-        onChange={handleBrandChange}
+        onChange={setBrand}
         width={170}
       />
 
@@ -100,7 +70,7 @@ export default function GypsumPicker({ onSelect }) {
         label="Group"
         value={group}
         options={options.group}
-        onChange={handleGroupChange}
+        onChange={setGroup}
         width={240}
       />
 
@@ -108,7 +78,7 @@ export default function GypsumPicker({ onSelect }) {
         label="SubGroup"
         value={subGroup}
         options={options.subGroup}
-        onChange={handleSubGroupChange}
+        onChange={setSubGroup}
         width={240}
       />
 
@@ -116,7 +86,7 @@ export default function GypsumPicker({ onSelect }) {
         label="Color"
         value={color}
         options={options.color}
-        onChange={handleColorChange}
+        onChange={setColor}
         width={180}
       />
 
@@ -124,7 +94,7 @@ export default function GypsumPicker({ onSelect }) {
         label="Thickness"
         value={thickness}
         options={options.thickness}
-        onChange={handleThicknessChange}
+        onChange={setThickness}
         width={180}
       />
 

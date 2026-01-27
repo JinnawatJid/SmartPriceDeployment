@@ -11,21 +11,29 @@ export default function CLinePicker({ onSelect }) {
   const [thickness, setThickness] = useState(null);
 
   const [options, setOptions] = useState({
-    brands: [],
-    groups: [],
-    subGroups: [],
-    colors: [],
+    brand: [],
+    group: [],
+    subGroup: [],
+    color: [],
     thickness: [],
   });
 
-  const fetchOptions = async (filters = {}) => {
+  const fetchOptions = async () => {
     try {
-      const res = await api.get("/api/cline/master", { params: filters });
+      const res = await api.get("/api/items/categories/C/filter-options", {
+        params: {
+          brand,
+          group,
+          subGroup,
+          color,
+          thickness,
+        },
+      });
       setOptions({
-        brands: res.data.brands || [],
-        groups: res.data.groups || [],
-        subGroups: res.data.subGroups || [],
-        colors: res.data.colors || [],
+        brand: res.data.brand || [],
+        group: res.data.group || [],
+        subGroup: res.data.subGroup || [],
+        color: res.data.color || [],
         thickness: res.data.thickness || [],
       });
     } catch (err) {
@@ -35,12 +43,12 @@ export default function CLinePicker({ onSelect }) {
 
   // โหลดครั้งแรก
   useEffect(() => {
-    fetchOptions({});
+    fetchOptions();
   }, []);
 
   // โหลด options ใหม่เมื่อ filter เปลี่ยน
   useEffect(() => {
-    fetchOptions({ brand, group, subGroup, color, thickness });
+    fetchOptions();
   }, [brand, group, subGroup, color, thickness]);
 
   const emitFilters = (next) => {
@@ -48,73 +56,48 @@ export default function CLinePicker({ onSelect }) {
   };
 
   const handleBrandChange = (v) => {
-    const next = {
-      brand: v || null,
-      group: null,
-      subGroup: null,
-      color: null,
-      thickness: null,
-    };
+    const next = { brand: v || null, group, subGroup, color, thickness };
     setBrand(next.brand);
-    setGroup(null);
-    setSubGroup(null);
-    setColor(null);
-    setThickness(null);
     emitFilters(next);
   };
 
   const handleGroupChange = (v) => {
-    const next = {
-      brand,
-      group: v || null,
-      subGroup: null,
-      color: null,
-      thickness: null,
-    };
+    const next = { brand, group: v || null, subGroup, color, thickness };
     setGroup(next.group);
-    setSubGroup(null);
-    setColor(null);
-    setThickness(null);
     emitFilters(next);
   };
 
   const handleSubGroupChange = (v) => {
-    const next = {
-      brand,
-      group,
-      subGroup: v || null,
-      color: null,
-      thickness: null,
-    };
+    const next = { brand, group, subGroup: v || null, color, thickness };
     setSubGroup(next.subGroup);
-    setColor(null);
-    setThickness(null);
     emitFilters(next);
   };
 
   const handleColorChange = (v) => {
-    const next = {
-      brand,
-      group,
-      subGroup,
-      color: v || null,
-      thickness: null,
-    };
+    const next = { brand, group, subGroup, color: v || null, thickness };
     setColor(next.color);
-    setThickness(null);
     emitFilters(next);
   };
 
   const handleThicknessChange = (v) => {
-    const next = {
-      brand,
-      group,
-      subGroup,
-      color,
-      thickness: v || null,
-    };
+    const next = { brand, group, subGroup, color, thickness: v || null };
     setThickness(next.thickness);
     emitFilters(next);
+  };
+
+  const handleClearAll = () => {
+    setBrand(null);
+    setGroup(null);
+    setSubGroup(null);
+    setColor(null);
+    setThickness(null);
+    emitFilters({
+      brand: null,
+      group: null,
+      subGroup: null,
+      color: null,
+      thickness: null,
+    });
   };
 
   return (
@@ -122,14 +105,14 @@ export default function CLinePicker({ onSelect }) {
       <CustomDropdown
         label="Brand"
         value={brand}
-        options={options.brands}
+        options={options.brand}
         onChange={handleBrandChange}
       />
 
       <CustomDropdown
         label="Group"
         value={group}
-        options={options.groups}
+        options={options.group}
         onChange={handleGroupChange}
         width={240}
       />
@@ -137,7 +120,7 @@ export default function CLinePicker({ onSelect }) {
       <CustomDropdown
         label="SubGroup"
         value={subGroup}
-        options={options.subGroups}
+        options={options.subGroup}
         onChange={handleSubGroupChange}
         width={360}
       />
@@ -145,7 +128,7 @@ export default function CLinePicker({ onSelect }) {
       <CustomDropdown
         label="Color"
         value={color}
-        options={options.colors}
+        options={options.color}
         onChange={handleColorChange}
       />
 
@@ -155,6 +138,13 @@ export default function CLinePicker({ onSelect }) {
         options={options.thickness}
         onChange={handleThicknessChange}
       />
+
+      <button
+        onClick={handleClearAll}
+        className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
+      >
+        Clear All
+      </button>
     </div>
   );
 }

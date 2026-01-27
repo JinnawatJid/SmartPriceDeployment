@@ -10,22 +10,31 @@ export default function AluminiumPicker({ onSelect }) {
   const [thickness, setThickness] = useState(null);
 
   const [options, setOptions] = useState({
-    brands: [],
-    groups: [],
-    subGroups: [],
-    colors: [],
+    brand: [],
+    group: [],
+    subGroup: [],
+    color: [],
     thickness: [],
   });
 
-  // ---- โหลด options จาก backend ----
-  const fetchOptions = async (filters = {}) => {
+  // ---- โหลด options จาก backend (cascading) ----
+  const fetchOptions = async () => {
     try {
-      const res = await api.get("/api/aluminium/master", { params: filters });
+      const res = await api.get("/api/items/categories/A/filter-options", {
+        params: {
+          brand,
+          group,
+          subGroup,
+          color,
+          thickness,
+        },
+      });
+
       setOptions({
-        brands: res.data.brands || [],
-        groups: res.data.groups || [],
-        subGroups: res.data.subGroups || [],
-        colors: res.data.colors || [],
+        brand: res.data.brand || [],
+        group: res.data.group || [],
+        subGroup: res.data.subGroup || [],
+        color: res.data.color || [],
         thickness: res.data.thickness || [],
       });
     } catch (err) {
@@ -35,18 +44,12 @@ export default function AluminiumPicker({ onSelect }) {
 
   // โหลดครั้งแรก
   useEffect(() => {
-    fetchOptions({});
+    fetchOptions();
   }, []);
 
   // โหลดใหม่ทุกครั้งที่ filter เปลี่ยน
   useEffect(() => {
-    fetchOptions({
-      brand,
-      group,
-      subGroup,
-      color,
-      thickness,
-    });
+    fetchOptions();
   }, [brand, group, subGroup, color, thickness]);
 
   // helper ส่งค่ากลับ parent
@@ -57,16 +60,12 @@ export default function AluminiumPicker({ onSelect }) {
   const handleBrandChange = (v) => {
     const next = {
       brand: v || null,
-      group: null,
-      subGroup: null,
-      color: null,
-      thickness: null,
+      group,
+      subGroup,
+      color,
+      thickness,
     };
     setBrand(next.brand);
-    setGroup(null);
-    setSubGroup(null);
-    setColor(null);
-    setThickness(null);
     emitFilters(next);
   };
 
@@ -74,14 +73,11 @@ export default function AluminiumPicker({ onSelect }) {
     const next = {
       brand,
       group: v || null,
-      subGroup: null,
-      color: null,
-      thickness: null,
+      subGroup,
+      color,
+      thickness,
     };
     setGroup(next.group);
-    setSubGroup(null);
-    setColor(null);
-    setThickness(null);
     emitFilters(next);
   };
 
@@ -90,12 +86,10 @@ export default function AluminiumPicker({ onSelect }) {
       brand,
       group,
       subGroup: v || null,
-      color: null,
-      thickness: null,
+      color,
+      thickness,
     };
     setSubGroup(next.subGroup);
-    setColor(null);
-    setThickness(null);
     emitFilters(next);
   };
 
@@ -105,10 +99,9 @@ export default function AluminiumPicker({ onSelect }) {
       group,
       subGroup,
       color: v || null,
-      thickness: null,
+      thickness,
     };
     setColor(next.color);
-    setThickness(null);
     emitFilters(next);
   };
 
@@ -124,12 +117,28 @@ export default function AluminiumPicker({ onSelect }) {
     emitFilters(next);
   };
 
+  // ⭐ ปุ่ม Clear All
+  const handleClearAll = () => {
+    setBrand(null);
+    setGroup(null);
+    setSubGroup(null);
+    setColor(null);
+    setThickness(null);
+    emitFilters({
+      brand: null,
+      group: null,
+      subGroup: null,
+      color: null,
+      thickness: null,
+    });
+  };
+
   return (
     <div className="flex items-end justify-between p-3 border rounded-xl bg-gray-50 mt-3">
       <CustomDropdown
         label="Brand"
         value={brand}
-        options={options.brands}
+        options={options.brand}
         onChange={(v) => handleBrandChange(v)}
         width={200}
       />
@@ -137,7 +146,7 @@ export default function AluminiumPicker({ onSelect }) {
       <CustomDropdown
         label="Group"
         value={group}
-        options={options.groups}
+        options={options.group}
         onChange={(v) => handleGroupChange(v)}
         width={200}
       />
@@ -145,14 +154,14 @@ export default function AluminiumPicker({ onSelect }) {
       <CustomDropdown
         label="SubGroup"
         value={subGroup}
-        options={options.subGroups}
+        options={options.subGroup}
         onChange={(v) => handleSubGroupChange(v)}
       />
 
       <CustomDropdown
         label="Color"
         value={color}
-        options={options.colors}
+        options={options.color}
         onChange={(v) => handleColorChange(v)}
         width={170}
       />
@@ -163,6 +172,13 @@ export default function AluminiumPicker({ onSelect }) {
         options={options.thickness}
         onChange={(v) => handleThicknessChange(v)}
       />
+
+      <button
+        onClick={handleClearAll}
+        className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
+      >
+        Clear All
+      </button>
     </div>
   );
 }

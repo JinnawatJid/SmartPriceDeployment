@@ -72,50 +72,48 @@ export default function ShippingModal({ open = false, initial = {}, onClose, onC
         aria-modal="true"
         ref={dialogRef}
         tabIndex={-1}
-        className="relative z-10 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl"
+        className="relative z-10 w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl"
       >
         {/* Header */}
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
             <TruckIcon />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-gray-900">ข้อมูลรถ</h3>
-            <p className="text-sm text-gray-500">กรอกรายละเอียดสำหรับการจัดส่ง</p>
+            <h3 className="text-lg font-bold text-gray-900">ข้อมูลรถ</h3>
+            <p className="text-xs text-gray-500">กรอกรายละเอียดสำหรับการจัดส่ง</p>
           </div>
         </div>
 
         {/* Form */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* ข้อมูลรถ */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-gray-700">
-                เลือกประเภทรถ
-              </label>
-              <select
-                className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={vehicleType}
-                onChange={(e) => setVehicleType(e.target.value)}
-              >
-                <option value="">— เลือกประเภทรถ —</option>
-                <option value="PICKUP">กระบะ Pickup</option>
-                <option value="4 ล้อใหญ่">4 ล้อใหญ่</option>
-                <option value="6 ล้อจิ๋ว">6 ล้อจิ๋ว</option>
-                <option value="6 ล้อเล็ก">6 ล้อเล็ก</option>
-                <option value="6 ล้อใหญ่">6 ล้อใหญ่</option>
-                <option value="10 ล้อ">10 ล้อ</option>
-              </select>
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-gray-700">
+              เลือกประเภทรถ
+            </label>
+            <select
+              className="w-48 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={vehicleType}
+              onChange={(e) => setVehicleType(e.target.value)}
+            >
+              <option value="">— เลือกประเภทรถ —</option>
+              <option value="PICKUP">กระบะ Pickup</option>
+              <option value="4 ล้อใหญ่">4 ล้อใหญ่</option>
+              <option value="6 ล้อจิ๋ว">6 ล้อจิ๋ว</option>
+              <option value="6 ล้อเล็ก">6 ล้อเล็ก</option>
+              <option value="6 ล้อใหญ่">6 ล้อใหญ่</option>
+              <option value="10 ล้อ">10 ล้อ</option>
+            </select>
           </div>
 
           {/* รายละเอียดการขนส่ง */}
           <div>
-            <h4 className="mb-2 text-base font-bold text-gray-800">รายละเอียดการขนส่ง</h4>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <h4 className="mb-2 text-sm font-bold text-gray-800">รายละเอียดการขนส่ง</h4>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">
-                  ระยะทาง (กิโลเมตร)
+                <label className="mb-1 block text-xs font-semibold text-gray-700">
+                  ระยะทาง (กม.)
                 </label>
                 <input
                   inputMode="decimal"
@@ -125,11 +123,11 @@ export default function ShippingModal({ open = false, initial = {}, onClose, onC
                   placeholder="เช่น 12.5"
                   value={distanceKm}
                   onChange={(e) => setDistanceKm(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                <label className="mb-1 block text-xs font-semibold text-gray-700">
                   ชั่วโมงลงสินค้า
                 </label>
                 <input
@@ -140,11 +138,11 @@ export default function ShippingModal({ open = false, initial = {}, onClose, onC
                   placeholder="เช่น 1.5"
                   value={unloadHours}
                   onChange={(e) => setUnloadHours(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                <label className="mb-1 block text-xs font-semibold text-gray-700">
                   จำนวนพนักงาน
                 </label>
                 <input
@@ -154,7 +152,7 @@ export default function ShippingModal({ open = false, initial = {}, onClose, onC
                   placeholder="เช่น 2"
                   value={staffCount}
                   onChange={(e) => setStaffCount(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -162,16 +160,16 @@ export default function ShippingModal({ open = false, initial = {}, onClose, onC
         </div>
 
         {/* Actions */}
-        <div className="mt-6 flex justify-between gap-3">
+        <div className="mt-5 flex justify-between gap-3">
           <button
             onClick={onClose}
-            className="w-40 rounded-lg bg-gray-100 px-5 py-3 font-semibold text-gray-700 shadow-sm hover:bg-gray-200"
+            className="w-32 rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200"
           >
             ยกเลิก
           </button>
           <button
             onClick={handleConfirm}
-            className="w-40 rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white shadow-md hover:bg-blue-700"
+            className="w-32 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:bg-blue-700"
           >
             ยืนยัน
           </button>

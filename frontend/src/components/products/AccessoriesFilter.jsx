@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import api from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 
-export default function AccessoriesPicker({ onSelect }) {
+export default function AccessoriesFilter({ onFilterChange }) {
   const [brand, setBrand] = useState(null);
   const [group, setGroup] = useState(null);
   const [subGroup, setSubGroup] = useState(null);
@@ -30,7 +30,7 @@ export default function AccessoriesPicker({ onSelect }) {
         character: res.data.character || [],
       });
     } catch (err) {
-      console.error("Load accessories options failed:", err);
+      console.error("Load accessories filter options failed:", err);
     }
   };
 
@@ -42,39 +42,11 @@ export default function AccessoriesPicker({ onSelect }) {
     fetchOptions();
   }, [brand, group, subGroup, color, character]);
 
-  const emitFilters = (next) => {
-    onSelect && onSelect(next);
-  };
-
-  const handleBrandChange = (v) => {
-    const next = { brand: v || null, group, subGroup, color, character };
-    setBrand(next.brand);
-    emitFilters(next);
-  };
-
-  const handleGroupChange = (v) => {
-    const next = { brand, group: v || null, subGroup, color, character };
-    setGroup(next.group);
-    emitFilters(next);
-  };
-
-  const handleSubGroupChange = (v) => {
-    const next = { brand, group, subGroup: v || null, color, character };
-    setSubGroup(next.subGroup);
-    emitFilters(next);
-  };
-
-  const handleColorChange = (v) => {
-    const next = { brand, group, subGroup, color: v || null, character };
-    setColor(next.color);
-    emitFilters(next);
-  };
-
-  const handleCharacterChange = (v) => {
-    const next = { brand, group, subGroup, color, character: v || null };
-    setCharacter(next.character);
-    emitFilters(next);
-  };
+  useEffect(() => {
+    if (onFilterChange) {
+      onFilterChange({ brand, group, subGroup, color, character });
+    }
+  }, [brand, group, subGroup, color, character]);
 
   const handleClearAll = () => {
     setBrand(null);
@@ -82,44 +54,43 @@ export default function AccessoriesPicker({ onSelect }) {
     setSubGroup(null);
     setColor(null);
     setCharacter(null);
-    emitFilters({ brand: null, group: null, subGroup: null, color: null, character: null });
   };
 
   return (
-    <div className="flex items-end justify-between p-3 border rounded-xl bg-gray-50 mt-3">
+    <div className="flex items-end justify-between p-3 border rounded-xl bg-gray-50">
       <CustomDropdown
         label="Brand"
         value={brand}
         options={options.brand}
-        onChange={handleBrandChange}
+        onChange={setBrand}
       />
 
       <CustomDropdown
         label="Group"
         value={group}
         options={options.group}
-        onChange={handleGroupChange}
+        onChange={setGroup}
       />
 
       <CustomDropdown
         label="SubGroup"
         value={subGroup}
         options={options.subGroup}
-        onChange={handleSubGroupChange}
+        onChange={setSubGroup}
       />
 
       <CustomDropdown
         label="Color"
         value={color}
         options={options.color}
-        onChange={handleColorChange}
+        onChange={setColor}
       />
 
       <CustomDropdown
         label="Character"
         value={character}
         options={options.character}
-        onChange={handleCharacterChange}
+        onChange={setCharacter}
       />
 
       <button
