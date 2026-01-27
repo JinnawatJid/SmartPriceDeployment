@@ -21,6 +21,9 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
   const [selectedItems, setSelectedItems] = useState([]);
   // ⭐ item ที่ user คลิกอยู่
   const [activeItem, setActiveItem] = useState(null);
+  // ⭐ related items - โหลดแยกจาก backend
+  const [relatedItems, setRelatedItems] = useState([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
 
 
   // ---------------- Filters ----------------
@@ -63,76 +66,8 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     thickness: null,
   });
 
-  // ---------------- SKU Parsers ----------------
-  const parseAluminiumSku = (skuRaw) => {
-    const sku = String(skuRaw || "").toUpperCase().trim();
-    if (!sku.startsWith("A") || sku.length < 12) {
-      return { brand: null, group: null, subGroup: null, color: null, thickness: null };
-    }
-    return {
-      brand: sku.slice(1, 3),
-      group: sku.slice(3, 5),
-      subGroup: sku.slice(5, 8),
-      color: sku.slice(8, 10),
-      thickness: sku.slice(10, 12),
-    };
-  };
 
-  const parseCLineSku = (skuRaw) => {
-    const sku = String(skuRaw || "").toUpperCase().trim();
-    if (!sku.startsWith("C") || sku.length < 12) {
-      return { brand: null, group: null, subGroup: null, color: null, thickness: null };
-    }
-    return {
-      brand: sku.slice(1, 3),
-      group: sku.slice(3, 5),
-      subGroup: sku.slice(5, 8),
-      color: sku.slice(8, 10),
-      thickness: sku.slice(10, 12),
-    };
-  };
-
-  const parseAccessoriesSku = (skuRaw) => {
-    const sku = String(skuRaw || "").toUpperCase().trim();
-    if (!sku.startsWith("E") || sku.length < 11) {
-      return { brand: null, group: null, subGroup: null, color: null, character: null };
-    }
-    return {
-      brand: sku.slice(1, 4),
-      group: sku.slice(4, 6),
-      subGroup: sku.slice(6, 8),
-      color: sku.slice(8, 10),
-      character: sku.slice(10, 11),
-    };
-  };
-
-  const parseSealantSku = (skuRaw) => {
-    const sku = String(skuRaw || "").toUpperCase().trim();
-    if (!sku.startsWith("S") || sku.length < 10) {
-      return { brand: null, group: null, subGroup: null, color: null };
-    }
-    return {
-      brand: sku.slice(1, 3),
-      group: sku.slice(3, 5),
-      subGroup: sku.slice(5, 8),
-      color: sku.slice(8, 10),
-    };
-  };
-
-  const parseGypsumSku = (skuRaw) => {
-    const sku = String(skuRaw || "").toUpperCase().trim();
-    if (!sku.startsWith("Y") || sku.length < 18) {
-      return { brand: null, group: null, subGroup: null, color: null, thickness: null };
-    }
-    return {
-      brand: sku.slice(1, 3),
-      group: sku.slice(3, 5),
-      subGroup: sku.slice(5, 7),
-      color: sku.slice(7, 10),
-      thickness: sku.slice(10, 12),
-    };
-  };
-  const loadItems = async (reset = false) => {
+  const loadItems = async (reset = false, searchQuery = "") => {
     if (!hasMore && !reset) return;
 
     // ⭐ แยก loading state
@@ -180,13 +115,19 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
         if (gypsumFilter.thickness) filterParams.thickness = gypsumFilter.thickness;
       }
 
+      // ⭐ เพิ่ม search parameter
+      if (searchQuery && searchQuery.trim()) {
+        filterParams.search = searchQuery.trim();
+      }
+
       const res = await api.get(
         `/api/items/categories/${category}/list`,
         {
           params: {
             limit: 10,
             offset: currentOffset,
-            ...filterParams, // ⭐ ส่ง filter ไปด้วย
+            ...filterParams, // ⭐ ส่ง filter + search ไปด้วย
+            include_product_group: true, // ⭐ ขอ product_group มาด้วย
           },
         }
       );
@@ -218,6 +159,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     setOffset(0);
     setHasMore(true);
     setActiveItem(null);
+    setRelatedItems([]);
     setSearchTerm("");
 
     loadItems(true); // ⭐ reset + โหลดชุดแรก
@@ -230,36 +172,46 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     setItems([]);
     setOffset(0);
     setHasMore(true);
-    loadItems(true);
+    loadItems(true, searchTerm);
   }, [aluFilter, clineFilter, accFilter, sealantFilter, gypsumFilter]);
+
+  // ⭐ เมื่อ search term เปลี่ยน ให้โหลดใหม่ (debounce 500ms)
+  useEffect(() => {
+    if (!open || !category) return;
+
+    const timer = setTimeout(() => {
+      setItems([]);
+      setOffset(0);
+      setHasMore(true);
+      loadItems(true, searchTerm);
+    }, 500); // รอ 500ms หลังจากพิมพ์เสร็จ
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
 
   // ---------------- Filtered items ----------------
-  const filteredItems = useMemo(() => {
-    let base = items;
+  // ⭐ ไม่ต้อง filter ฝั่ง client แล้ว เพราะ backend filter ให้แล้ว
+  const filteredItems = items;
 
-    // ⭐ ไม่ต้องกรองตาม category filter อีกแล้ว เพราะ backend กรองให้แล้ว
-    // เหลือแค่ search term
+  // ⭐ โหลด related items แยกจาก backend (เร็ว)
+  const loadRelatedItems = async (item) => {
+    if (!item?.product_group) {
+      setRelatedItems([]);
+      return;
+    }
 
-    if (!searchTerm) return base;
-    const term = searchTerm.toLowerCase();
-
-    return base.filter((it) =>
-      String(it.name || "").toLowerCase().includes(term) ||
-      String(it.sku || it.SKU || "").toLowerCase().includes(term) ||
-      String(it.sku2 || "").toLowerCase().includes(term) ||  // ⭐ เพิ่ม sku2
-      String(it.alternate_names || "").toLowerCase().includes(term)
-    );
-  }, [items, searchTerm]);
-
-  const relatedItems = useMemo(() => {
-    if (!activeItem?.product_group) return [];
-
-    return items.filter((it) => {
-      if ((it.sku || it.SKU) === (activeItem.sku || activeItem.SKU)) return false;
-      return it.product_group === activeItem.product_group;
-    });
-  }, [activeItem, items]);
+    setLoadingRelated(true);
+    try {
+      const res = await api.get(`/api/items/related/${item.sku || item.SKU}`);
+      setRelatedItems(res.data.items || []);
+    } catch (err) {
+      console.error("Load related items error:", err);
+      setRelatedItems([]);
+    } finally {
+      setLoadingRelated(false);
+    }
+  };
 
   // ---------------- Add to summary (แทนการปิด modal) ----------------
   const handleAdd = async (item, qty) => {
@@ -271,6 +223,9 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     const fullItem = res.data;
 
     setActiveItem(fullItem);
+    
+    // ⭐ โหลด related items แยก
+    loadRelatedItems(fullItem);
 
     const normalizedItem = {
       ...fullItem,
@@ -309,6 +264,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
   const handleClearAll = () => {
     setSelectedItems([]);
     setActiveItem(null);
+    setRelatedItems([]);
   };
 
 
@@ -398,7 +354,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
                       el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
 
                     if (nearBottom && hasMore && !loadingMore) {
-                      loadItems(); // ⭐ โหลดเพิ่มแบบไม่เด้ง
+                      loadItems(false, searchTerm); // ⭐ โหลดเพิ่มพร้อม search term
                     }
                   }}
                 >
@@ -445,27 +401,39 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
-                  {!activeItem && (
+                  {/* Loading state */}
+                  {loadingRelated && (
+                    <div className="flex justify-center py-10">
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        กำลังโหลด...
+                      </div>
+                    </div>
+                  )}
+
+                  {!loadingRelated && !activeItem && (
                     <div className="text-sm text-gray-400 text-center mt-10">
                       เลือกสินค้าเพื่อดูรายการที่เกี่ยวข้อง
                     </div>
                   )}
 
-                  {activeItem && relatedItems.length === 0 && (
+                  {!loadingRelated && activeItem && relatedItems.length === 0 && (
                     <div className="text-sm text-gray-400 text-center mt-10">
                       ไม่พบสินค้าใน Product Group เดียวกัน
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 gap-4">
-                    {relatedItems.map((item, idx) => (
-                      <ItemCard
-                        key={`related-${item.sku || item.SKU}-${idx}`}
-                        item={item}
-                        onAdd={handleAdd}
-                      />
-                    ))}
-                  </div>
+                  {!loadingRelated && (
+                    <div className="grid grid-cols-1 gap-4">
+                      {relatedItems.map((item, idx) => (
+                        <ItemCard
+                          key={`related-${item.sku || item.SKU}-${idx}`}
+                          item={item}
+                          onAdd={handleAdd}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

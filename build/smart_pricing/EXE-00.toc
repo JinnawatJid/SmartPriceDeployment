@@ -70,7 +70,7 @@
  [],
  False,
  False,
- 1769486273,
+ 1769489925,
  [('run.exe',
    'C:\\Users\\HP\\Desktop\\Quetung\\SmartPriceDeployment\\backend\\venv\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\run.exe',
    'EXECUTABLE')],

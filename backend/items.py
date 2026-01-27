@@ -73,6 +73,7 @@ def get_items_list_light(
     color: str = None,
     thickness: str = None,
     character: str = None,
+    search: str = None,  # ⭐ เพิ่ม search parameter
 ):
     conn = get_mssql_conn()
     cursor = conn.cursor()
@@ -167,6 +168,12 @@ def get_items_list_light(
         if thickness:
             where_clauses.append("SUBSTRING(No, 11, 2) = ?")
             params.append(thickness.zfill(2))
+
+    # ⭐ เพิ่ม search filter (ค้นหาใน SKU, SKU2, Description, AlternateName)
+    if search and search.strip():
+        search_term = f"%{search.strip()}%"
+        where_clauses.append("(No LIKE ? OR No_2 LIKE ? OR Description LIKE ? OR AlternateName LIKE ?)")
+        params.extend([search_term, search_term, search_term, search_term])
 
     where_sql = " AND ".join(where_clauses)
 
@@ -268,6 +275,67 @@ def get_item_detail(sku: str):
     item.update(extra)
 
     return item
+
+
+# ======================================================
+# ✅ NEW: GET /items/related/{sku}
+# 👉 ดึงสินค้าที่อยู่ใน Product Group เดียวกัน (LIGHT VERSION - เร็ว)
+# ======================================================
+@router.get("/related/{sku}")
+def get_related_items(sku: str, limit: int = 50):
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+
+    # ⭐ หา product_group ของ SKU นี้ก่อน (เร็ว)
+    sql = f"""
+        SELECT Product_Group
+        FROM {TABLE_NAME}
+        WHERE No = ? OR No_2 = ?
+    """
+    cursor.execute(sql, sku, sku)
+    row = cursor.fetchone()
+
+    if not row or not row.Product_Group:
+        conn.close()
+        return {"items": [], "total": 0}
+
+    product_group = row.Product_Group
+
+    # ⭐ ดึงสินค้าใน Product Group เดียวกัน (LIGHT - เฉพาะข้อมูลที่จำเป็น)
+    sql = f"""
+        SELECT TOP {limit}
+            No            AS sku,
+            No_2          AS sku2,
+            Description   AS name,
+            Inventory     AS inventory,
+            Product_Group AS product_group,
+            Product_Sub_Group AS product_sub_group
+        FROM {TABLE_NAME}
+        WHERE Product_Group = ?
+          AND No != ?
+          AND (No_2 IS NULL OR No_2 != ?)
+        ORDER BY No
+    """
+    cursor.execute(sql, product_group, sku, sku)
+    rows = cursor.fetchall()
+    conn.close()
+
+    return {
+        "items": [
+            {
+                "sku": r.sku,
+                "SKU": r.sku,
+                "sku2": r.sku2,
+                "name": r.name,
+                "inventory": int(r.inventory or 0),
+                "product_group": r.product_group,
+                "product_sub_group": r.product_sub_group,
+            }
+            for r in rows
+        ],
+        "total": len(rows),
+        "product_group": product_group,
+    }
 
 
 # ======================================================
@@ -415,11 +483,11 @@ def get_filter_options(
             "thickness": "Aluminium_Thickness",
         },
         "C": {
-            "brand": "CLine_Brand",
-            "group": "CLine_Group",
-            "subGroup": "CLine_SubGroup",
-            "color": "CLine_Color",
-            "thickness": "CLine_Thickness",
+            "brand": "C-Line_Brand",
+            "group": "C-Line_Group",
+            "subGroup": "C-Line_SubGroup",
+            "color": "C-Line_Color",
+            "thickness": "C-Line_Thickness",
         },
         "E": {
             "brand": "Accessories_Brand",

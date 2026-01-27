@@ -3,6 +3,8 @@ from fastapi import APIRouter, Query, HTTPException
 import pandas as pd
 from datetime import datetime, timedelta
 import requests
+from functools import lru_cache
+import time
 
 from config.config_external_api import (
     CUSTOMER_API_URL,
@@ -12,6 +14,48 @@ from config.config_external_api import (
 )
 
 router = APIRouter(prefix="/api/customer")
+
+# ⭐ Cache สำหรับเก็บข้อมูลลูกค้า (5 นาที)
+_customer_cache = {
+    "data": None,
+    "timestamp": 0,
+    "ttl": 300,  # 5 minutes
+}
+
+# =====================================================
+# DEBUG: GET /customer/test-connection
+# =====================================================
+@router.get("/test-connection")
+def test_api_connection():
+    """ทดสอบการเชื่อมต่อกับ D365 API"""
+    try:
+        payload = {
+            "page": 1,
+            "size": 1,
+            "gen_bus": {"$eq": "R"},
+        }
+        
+        print(f"Testing connection to: {CUSTOMER_API_URL}")
+        
+        resp = requests.post(
+            CUSTOMER_API_URL,
+            json=payload,
+            headers=CUSTOMER_API_HEADERS,
+            timeout=10,
+        )
+        
+        return {
+            "status": "success",
+            "status_code": resp.status_code,
+            "api_url": CUSTOMER_API_URL,
+            "response_sample": resp.json() if resp.status_code == 200 else None,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "api_url": CUSTOMER_API_URL,
+        }
 
 # =====================================================
 # Helpers
@@ -38,65 +82,92 @@ def classify_group(no):
 # Load Customer from API
 # =====================================================
 def load_customer_from_api():
+    # ⭐ ตรวจสอบ cache ก่อน
+    current_time = time.time()
+    if _customer_cache["data"] is not None:
+        age = current_time - _customer_cache["timestamp"]
+        if age < _customer_cache["ttl"]:
+            print(f"✅ Using cached customer data (age: {age:.1f}s)")
+            return _customer_cache["data"]
+        else:
+            print(f"⏰ Cache expired (age: {age:.1f}s), reloading...")
+    
     rows = []
-    gen_bus_list = ["R", "W", "I", "P"]
 
     page = 1
-    size = 100
-    max_page = 50  # ⭐ เพิ่มจาก 10 → 50 (5000 รายการต่อ gen_bus)
+    size = 200
+    max_page = None  # ไม่จำกัดจริง
 
-    for gen_bus in gen_bus_list:
-        page = 1
-        print(f"📥 Loading customers for gen_bus={gen_bus}...")
-        
-        while True:
-            payload = {
-                "page": page,
-                "size": size,
-                "gen_bus": {"$eq": gen_bus},
-            }
+    print("📥 Loading customers (ALL, no gen_bus filter)...")
 
-            try:
-                resp = requests.post(
-                    CUSTOMER_API_URL,
-                    json=payload,
-                    headers=CUSTOMER_API_HEADERS,
-                    timeout=20,
-                )
-                resp.raise_for_status()
+    while True:
+        payload = {
+            "page": page,
+            "size": size,
+        }
 
-                data = resp.json()
-                items = data.get("data") or data
+        try:
+            resp = requests.post(
+                CUSTOMER_API_URL,
+                json=payload,
+                headers=CUSTOMER_API_HEADERS,
+                timeout=60,
+            )
 
-                if not items:
-                    print(f"  ✓ gen_bus={gen_bus} page={page}: No more data")
-                    break
+            resp.raise_for_status()
 
-                rows.extend(items)
-                print(f"  ✓ gen_bus={gen_bus} page={page}: Loaded {len(items)} customers (total: {len(rows)})")
+            data = resp.json()
+            items = data.get("data") or data
 
-                # ⭐ ถ้าได้น้อยกว่า size แสดงว่าหมดแล้ว
-                if len(items) < size:
-                    print(f"  ✓ gen_bus={gen_bus}: Completed (last page)")
-                    break
-
-                page += 1
-                
-                # ⭐ ป้องกัน infinite loop
-                if page > max_page:
-                    print(f"  ⚠️ gen_bus={gen_bus}: Reached max_page={max_page}")
-                    break
-                    
-            except Exception as e:
-                print(f"  ❌ Error loading gen_bus={gen_bus} page={page}: {e}")
+            if not items:
+                print(f"  ✓ page={page}: No more data")
                 break
+
+            rows.extend(items)
+            print(f"  ✓ page={page}: Loaded {len(items)} customers (total: {len(rows)})")
+
+            if len(items) < size:
+                print("  ✓ Completed (last page)")
+                break
+
+            page += 1
+
+            if max_page and page > max_page:
+                raise RuntimeError("Reached max_page safety limit")
+
+        except requests.exceptions.Timeout as e:
+            print(f"  ❌ Timeout on page={page}: {e}")
+            break
+
+        except requests.exceptions.ConnectionError as e:
+            print(f"  ❌ Connection error on page={page}: {e}")
+            break
+
+        except requests.exceptions.HTTPError as e:
+            print(f"  ❌ HTTP error on page={page}: {e}")
+            print(f"     Response: {e.response.text if e.response else 'N/A'}")
+            break
+
+        except Exception as e:
+            print(f"  ❌ Unexpected error on page={page}: {e}")
+            import traceback
+            traceback.print_exc()
+            break
+
+
 
     print(f"📊 Total customers loaded: {len(rows)}")
 
     if not rows:
+        print("⚠️ WARNING: No customers loaded from API!")
+        # ⭐ ถ้ามี cache เก่าอยู่ ให้ใช้ต่อ (แม้จะหมดอายุแล้ว)
+        if _customer_cache["data"] is not None:
+            print("⚠️ Using expired cache as fallback")
+            return _customer_cache["data"]
         return pd.DataFrame()
 
     df = pd.DataFrame(rows)
+    print(f"✅ DataFrame created with {len(df)} rows")
 
     # ---- map field ให้เหมือน SQLite เดิม ----
     rename_map = {
@@ -112,6 +183,13 @@ def load_customer_from_api():
     for src, dst in rename_map.items():
         if src in df.columns:
             df[dst] = df[src]
+        else:
+            print(f"⚠️ Column '{src}' not found in API response")
+
+    # ⭐ บันทึกลง cache
+    _customer_cache["data"] = df
+    _customer_cache["timestamp"] = time.time()
+    print(f"💾 Customer data cached (TTL: {_customer_cache['ttl']}s)")
 
     return df
 

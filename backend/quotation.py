@@ -371,7 +371,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         """, (
             quote_no,
             line["ItemCode"], line["ItemName"], line["Category"],
-            line["Unit"], line["Quantity"], line["UnitPrice"],
+            line["Unit"], line["Quantity"],line["Price_System"], line["UnitPrice"],
             line["TotalPrice"], line["IsGlassCut"],
             line["CutInfoJson"], line["Remark"],
             line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"]
