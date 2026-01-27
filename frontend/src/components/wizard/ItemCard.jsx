@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from "react";
 import api from "../../services/api";
+import { useSelectedStatus } from "../../hooks/useSelectedStatus";
 
 const ItemCard = ({ item, onAdd }) => {
   const [qty, setQty] = useState(1);
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // ตรวจสอบว่าสินค้าถูกเลือกแล้วหรือไม่
+  const sku = item.sku || item.SKU;
+  const variantCode = item.variantCode || item.VariantCode || null;
+  const sqft = item.sqft_sheet || item.sqft || 0;
+  const isSelected = useSelectedStatus(sku, variantCode, sqft);
 
   // 🔥 โหลด detail เฉพาะตอนเปิด dropdown
   useEffect(() => {
@@ -55,7 +62,10 @@ const ItemCard = ({ item, onAdd }) => {
         </div>
 
         <div className="flex-grow min-w-0">
-          <div className="font-semibold text-sm truncate">{item.name}</div>
+          <div className={`font-semibold text-sm truncate ${isSelected ? 'text-red-600 font-semibold' : 'text-gray-900'}`}>
+            {isSelected && <span className="mr-1">✓</span>}
+            {item.name}
+          </div>
           <div className="text-xs text-gray-500 truncate">
             SKU: {item.sku}
           </div>
@@ -80,9 +90,9 @@ const ItemCard = ({ item, onAdd }) => {
 
           {!loading && detail && (
             <div>
-                <p className="mt-2">
+                <p className="mt-3 flex gap-1">
                   <span className="font-medium ">ชื่ออื่น:</span>{" "}
-                  {detail.alternate_names || "Name"}
+                  <div className="font-bold">{detail.alternate_names || "Name"}</div>
                 </p>
               
               <div className="grid grid-cols-2 text-xs gap-y-1">
@@ -98,12 +108,13 @@ const ItemCard = ({ item, onAdd }) => {
                   <span className="font-medium">Sub Group:</span>{" "}
                   {detail.subGroupName || "-"}
                 </p>
-                {detail.sku2 && (
-                  <p className="col-span-2">SKU2: {detail.sku2}</p>
-                )}
+                <p>
+                  <span className="font-medium">SKU 2:</span>{" "}
+                  {detail.sku2 || "-"}
+                </p>
               </div>
 
-              <p className="text-green-600 font-semibold">
+              <p className="text-green-600 mt-1 font-semibold">
                 สต๊อก: {detail.inventory} {detail.unit || ""}
               </p>
             </div>

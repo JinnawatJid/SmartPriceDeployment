@@ -14,7 +14,7 @@ const CATEGORY_LABEL_TH = {
   S: "กาว",
   Y: "ยิปซัม",
   C: "ซีลายน์",
-  E: "อุปกรณ์เสริมและอื่นๆ",
+  E: "อุปกรณ์และอื่นๆ",
 };
 const getCategoryLabel = (code) => {
   if (!code) return "ไม่ระบุหมวด";
@@ -53,7 +53,11 @@ const CategoryCard = ({ category, name, count, onClick }) => {
     >
       <div className="flex flex-col items-center justify-center space-y-1 p-2 bg-[#DC2626] rounded-lg">
         {/* Icon */}
-        <h3 className="text-xl text-white font-semibold">{getCategoryLabel(category)}</h3>
+        <h3 className="text-xl text-white font-semibold">
+          {getCategoryLabel(category)}{" "}
+          <span className="text-xl opacity-90">({category})</span>
+        </h3>
+
         {/* Text */}
         <div>
           <p className="text-sm text-white text-center">{count} รายการ</p>

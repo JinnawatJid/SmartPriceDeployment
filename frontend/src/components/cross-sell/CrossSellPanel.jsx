@@ -23,7 +23,7 @@ export default function CrossSellPanel({ onAddRequest }) {
       <div className="font-semibold text-sm mb-2">สินค้าแนะนำ</div>
 
       <div
-        className="grid grid-cols-3 gap-2 overflow-y-auto"
+        className="grid grid-cols-2 gap-2 overflow-y-auto"
         style={{
           maxHeight: "180px", // ~ 3 items (ปรับได้)
         }}

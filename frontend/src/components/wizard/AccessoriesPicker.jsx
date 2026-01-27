@@ -99,6 +99,7 @@ export default function AccessoriesPicker({ onSelect }) {
         value={group}
         options={options.group}
         onChange={handleGroupChange}
+        width={300}
       />
 
       <CustomDropdown
@@ -120,6 +121,7 @@ export default function AccessoriesPicker({ onSelect }) {
         value={character}
         options={options.character}
         onChange={handleCharacterChange}
+        width={100}
       />
 
       <button

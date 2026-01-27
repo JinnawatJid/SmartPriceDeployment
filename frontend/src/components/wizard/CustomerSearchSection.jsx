@@ -73,7 +73,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
       } finally {
         setLoading(false);
       }
-    }, 300);
+    }, 200); // ⚡ ลดจาก 300ms เป็น 200ms
 
     return () => clearTimeout(timer);
   }, [searchTerm]);
@@ -96,8 +96,13 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="กรอกรหัส, เบอร์โทร, หรือชื่อ..."
-              className="w-full rounded-lg border border-gray-300 p-3 text-sm shadow-sm"
+              className="w-full rounded-lg border border-gray-300 p-3 pr-10 text-sm shadow-sm"
             />
+            {loading && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+              </div>
+            )}
 
             {/* Dropdown */}
             {openDropdown && results.length > 0 && (

@@ -750,6 +750,13 @@ def gypsum_items(
 # ==========================================================
 glass_router = APIRouter(prefix="/glass", tags=["glass"])
 
+# ⚡ Cache สำหรับ glass list (10 นาที)
+_glass_cache = {
+    "data": None,
+    "timestamp": 0,
+    "ttl": 600,  # 10 minutes
+}
+
 
 def parse_glass_sku(sku: str):
     return {
@@ -763,17 +770,25 @@ def parse_glass_sku(sku: str):
     }
 
 
-@glass_router.get("/list")
-def get_glass_list(
-    brand: Optional[str] = Query(None),
-    type: Optional[str] = Query(None),
-    subGroup: Optional[str] = Query(None),
-    color: Optional[str] = Query(None),
-    thickness: Optional[str] = Query(None)
-):
+def load_glass_data():
+    """⚡ โหลดข้อมูลกระจกพร้อม cache"""
+    import time
+    
+    current_time = time.time()
+    
+    # ตรวจสอบ cache
+    if _glass_cache["data"] is not None:
+        age = current_time - _glass_cache["timestamp"]
+        if age < _glass_cache["ttl"]:
+            print(f"✅ Using cached glass data (age: {age:.1f}s)")
+            return _glass_cache["data"]
+    
+    print("📥 Loading glass data from database...")
+    
     conn = get_conn()
     cur = conn.cursor()
 
+    # ⚡ ใช้ SQL ที่มี WHERE clause เพื่อกรองที่ database level
     cur.execute("""
         SELECT
             [No.],
@@ -788,6 +803,7 @@ def get_glass_list(
     """)
     rows = cur.fetchall()
 
+    # โหลด mapping tables
     cur.execute("SELECT Code, Name FROM Glass_Brand")
     brand_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
 
@@ -800,16 +816,12 @@ def get_glass_list(
     cur.execute("SELECT Type, Code, Name FROM Glass_SubGroup")
     subgroup_map = {(str(t).zfill(2), str(c).zfill(3)): n for t, c, n in cur.fetchall()}
 
+    conn.close()
+
+    # ⚡ สร้าง result พร้อม enrich
     result = []
     for sku, desc, inv, vmand, product_group, product_sub_group in rows:
         parsed = parse_glass_sku(sku)
-
-        if brand and parsed["brand"] != brand: continue
-        if type and parsed["type"] != type: continue
-        if subGroup and parsed["subGroup"] != subGroup: continue
-        if color and parsed["color"] != color: continue
-        if thickness and parsed["thickness"] != thickness: continue
-
         is_variant = str(vmand or "").strip().upper() == "YES"
 
         brandName = brand_map.get(parsed["brand"], "")
@@ -839,8 +851,64 @@ def get_glass_list(
             "product_sub_group": product_sub_group,
         })
 
-    conn.close()
-    return {"items": result}
+    # บันทึกลง cache
+    _glass_cache["data"] = result
+    _glass_cache["timestamp"] = current_time
+    print(f"💾 Glass data cached ({len(result)} items, TTL: {_glass_cache['ttl']}s)")
+    
+    return result
+
+
+@glass_router.get("/list")
+def get_glass_list(
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    brand: Optional[str] = Query(None),
+    type: Optional[str] = Query(None),
+    subGroup: Optional[str] = Query(None),
+    color: Optional[str] = Query(None),
+    thickness: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+):
+    """⚡ ดึงรายการกระจก (มี cache + pagination)"""
+    
+    # โหลดจาก cache
+    all_items = load_glass_data()
+    
+    # ⚡ กรองตาม filter + search (ทำใน memory - เร็วมาก)
+    filtered = []
+    for item in all_items:
+        if brand and item["brand"] != brand:
+            continue
+        if type and item["type"] != type:
+            continue
+        if subGroup and item["subGroup"] != subGroup:
+            continue
+        if color and item["color"] != color:
+            continue
+        if thickness and item["thickness"] != thickness:
+            continue
+        
+        # ⚡ search filter
+        if search and search.strip():
+            search_lower = search.strip().lower()
+            searchable = f"{item['sku']} {item['description']} {item['subGroupName']} {item['brandName']}".lower()
+            if search_lower not in searchable:
+                continue
+        
+        filtered.append(item)
+    
+    # ⚡ pagination
+    total = len(filtered)
+    result = filtered[offset:offset + limit]
+    
+    return {
+        "items": result,
+        "limit": limit,
+        "offset": offset,
+        "count": len(result),
+        "total": total,
+    }
 
 
 class GlassCalcRequest(BaseModel):
@@ -907,6 +975,40 @@ def calc_glass(req: GlassCalcRequest):
         "totalSqft": req.sqftRounded * req.qty,
         "priceR2": price_r2,
         "totalPriceR2": total_price_r2,
+        "widthRaw": req.widthRaw,
+        "heightRaw": req.heightRaw,
+        "widthRounded": req.widthRounded,
+        "heightRounded": req.heightRounded,
+    }
+
+
+@glass_router.get("/filter-options")
+def get_glass_filter_options():
+    """⚡ ดึง filter options ทั้งหมด (มี cache)"""
+    
+    # โหลดจาก cache
+    all_items = load_glass_data()
+    
+    # สร้าง unique sets
+    brands = {}
+    types = {}
+    subGroups = {}
+    colors = {}
+    thicknesses = {}
+    
+    for item in all_items:
+        brands[item["brand"]] = item["brandName"]
+        types[item["type"]] = item["typeName"]
+        subGroups[item["subGroup"]] = item["subGroupName"]
+        colors[item["color"]] = item["colorName"]
+        thicknesses[item["thickness"]] = item["thickness"]
+    
+    return {
+        "brands": [{"code": k, "name": v} for k, v in sorted(brands.items())],
+        "types": [{"code": k, "name": v} for k, v in sorted(types.items())],
+        "subGroups": [{"code": k, "name": v} for k, v in sorted(subGroups.items())],
+        "colors": [{"code": k, "name": v} for k, v in sorted(colors.items())],
+        "thicknesses": [{"code": k, "name": f"{v} มม."} for k, v in sorted(thicknesses.items())],
     }
 
 

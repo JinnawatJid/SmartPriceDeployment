@@ -15,12 +15,15 @@ from config.config_external_api import (
 
 router = APIRouter(prefix="/api/customer")
 
-# ⭐ Cache สำหรับเก็บข้อมูลลูกค้า (5 นาที)
+# ⭐ Cache สำหรับเก็บข้อมูลลูกค้า (15 นาที)
 _customer_cache = {
     "data": None,
     "timestamp": 0,
-    "ttl": 300,  # 5 minutes
+    "ttl": 900,  # 15 minutes (เพิ่มจาก 5 นาที)
 }
+
+# ⭐ Cache สำหรับ search results (1 นาที)
+_search_cache = {}
 
 # =====================================================
 # DEBUG: GET /customer/test-connection
@@ -95,7 +98,7 @@ def load_customer_from_api():
     rows = []
 
     page = 1
-    size = 200
+    size = 500  # ⚡ เพิ่มจาก 200 เป็น 500 เพื่อลด API calls
     max_page = None  # ไม่จำกัดจริง
 
     print("📥 Loading customers (ALL, no gen_bus filter)...")
@@ -403,6 +406,16 @@ def search_customer(
 def search_customer_list(
     q: str = Query(..., min_length=1),
 ):
+    # ⚡ ตรวจสอบ search cache ก่อน
+    cache_key = q.strip().lower()
+    current_time = time.time()
+    
+    if cache_key in _search_cache:
+        cached_result, cached_time = _search_cache[cache_key]
+        if current_time - cached_time < 60:  # cache 1 นาที
+            print(f"✅ Using cached search result for '{q}'")
+            return cached_result
+    
     try:
         df = load_customer_from_api()
     except Exception as e:
@@ -419,6 +432,24 @@ def search_customer_list(
 
     q_phone = normalize_phone(q)
 
+    # ⚡ ปรับปรุงการค้นหาให้เร็วขึ้น
+    # 1. ค้นหาด้วย Customer Code ก่อน (exact match)
+    exact_match = df[df["Customer"].astype(str).str.strip().str.lower() == q_clean]
+    
+    if not exact_match.empty:
+        result = [
+            {
+                "id": clean(r["Customer"]),
+                "name": clean(r["Name"]),
+                "phone": clean(r["Tel"]),
+                "tax_no": clean(r.get("Tax No.")),
+            }
+            for _, r in exact_match.head(15).iterrows()
+        ]
+        _search_cache[cache_key] = (result, current_time)
+        return result
+    
+    # 2. ค้นหาแบบ partial match
     mask = (
         df["Customer"].astype(str).str.strip().str.lower().str.contains(q_clean, na=False)
         | df["Name"].astype(str).str.strip().str.lower().str.contains(q_clean, na=False)
@@ -429,7 +460,7 @@ def search_customer_list(
 
     found = df[mask].head(15)
 
-    return [
+    result = [
         {
             "id": clean(r["Customer"]),
             "name": clean(r["Name"]),
@@ -438,4 +469,15 @@ def search_customer_list(
         }
         for _, r in found.iterrows()
     ]
+    
+    # ⚡ บันทึกลง cache
+    _search_cache[cache_key] = (result, current_time)
+    
+    # ⚡ ทำความสะอาด cache เก่า (เก็บแค่ 100 รายการล่าสุด)
+    if len(_search_cache) > 100:
+        oldest_keys = sorted(_search_cache.keys(), key=lambda k: _search_cache[k][1])[:50]
+        for k in oldest_keys:
+            del _search_cache[k]
+    
+    return result
 

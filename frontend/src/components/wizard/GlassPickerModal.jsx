@@ -1,10 +1,45 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
+import { useSelectedStatus } from "../../hooks/useSelectedStatus";
+
+// Component สำหรับแสดงแถวของกระจกในตาราง
+function GlassTableRow({ item, isActive, onClick }) {
+  const sku = item.sku;
+  const variantCode = item.variantCode || null;
+  const sqft = 0; // กระจกใน list ยังไม่มีขนาดเฉพาะ
+  const isSelected = useSelectedStatus(sku, variantCode, sqft);
+
+  return (
+    <tr
+      className={`grid grid-cols-12 gap-2 items-center cursor-pointer
+        hover:bg-blue-50 transition
+        ${isActive ? "bg-blue-100" : ""}
+      `}
+      onClick={onClick}
+    >
+      <td className="col-span-2 p-2 truncate">{item.sku}</td>
+      <td className={`col-span-4 p-2 truncate ${isSelected ? 'text-blue-600 font-semibold' : ''}`}>
+        {isSelected && <span className="mr-1">✓</span>}
+        {item.description}
+      </td>
+      <td className="col-span-2 p-2 truncate">{item.subGroupName}</td>
+      <td className="col-span-2 p-2 text-center whitespace-nowrap">
+        {item.width} × {item.height}
+      </td>
+      <td className="col-span-1 p-2 text-center">{item.thickness}</td>
+      <td className="col-span-1 p-2 text-center font-semibold">{item.inventory}</td>
+    </tr>
+  );
+}
 
 export default function GlassPickerModal({ open, onClose, onConfirm }) {
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [glassList, setGlassList] = useState([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
 
   // FILTERS
   const [search, setSearch] = useState("");
@@ -32,6 +67,15 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   const [qtyCustomer, setQtyCustomer] = useState(1);
   const [qtySku, setQtySku] = useState(1);
   const [priceMode, setPriceMode] = useState("actual");
+
+  // FILTER OPTIONS
+  const [filterOptions, setFilterOptions] = useState({
+    brands: [],
+    types: [],
+    subGroups: [],
+    colors: [],
+    thicknesses: [],
+  });
 
   // STEP SIZE
   const STEPS = [12, 18, 24, 30, 36, 42, 48, 60, 72, 84, 96, 120, 144];
@@ -65,27 +109,105 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   }
 
   // -------------------------
-  // EFFECT 1: LOAD GLASS LIST
+  // LOAD GLASS LIST (with pagination)
+  // -------------------------
+  const loadGlass = async (reset = false, searchQuery = "") => {
+    if (!hasMore && !reset) return;
+
+    // แยก loading state
+    if (reset) {
+      setLoading(true);
+    } else {
+      if (loadingMore) return;
+      setLoadingMore(true);
+    }
+
+    const currentOffset = reset ? 0 : offset;
+
+    try {
+      const params = {
+        limit: 10,
+        offset: currentOffset,
+      };
+
+      // เพิ่ม filters
+      if (brandFilter) params.brand = brandFilter;
+      if (typeFilter) params.type = typeFilter;
+      if (subGroupFilter) params.subGroup = subGroupFilter;
+      if (colorFilter) params.color = colorFilter;
+      if (thickFilter) params.thickness = thickFilter;
+      if (searchQuery && searchQuery.trim()) params.search = searchQuery.trim();
+
+      const res = await api.get("/api/glass/list", { params });
+      
+      const newItems = res.data.items || [];
+      const totalCount = res.data.total || 0;
+
+      setGlassList((prev) => (reset ? newItems : [...prev, ...newItems]));
+      setTotal(totalCount);
+
+      const newOffset = currentOffset + newItems.length;
+      setOffset(newOffset);
+      setHasMore(newOffset < totalCount);
+
+      if (reset) {
+        const loadTime = performance.now();
+        console.log(`✅ Glass list loaded (${newItems.length}/${totalCount} items)`);
+      }
+    } catch (err) {
+      console.error("Error loading glass:", err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  // -------------------------
+  // EFFECT 1: LOAD INITIAL
   // -------------------------
   useEffect(() => {
     if (!open) return;
 
-    const loadGlass = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get("/api/glass/list");
-        setGlassList(res.data.items || []);
-      } catch (err) {
-        console.error("Error loading glass:", err);
-      }
-      setLoading(false);
-    };
+    setGlassList([]);
+    setOffset(0);
+    setHasMore(true);
+    setTotal(0);
+    setSelectedItem(null);
+    setSearch("");
 
-    loadGlass();
+    loadGlass(true);
   }, [open]);
 
   // -------------------------
-  // EFFECT 2: RESET calcResult WHEN sku changes
+  // EFFECT 2: RELOAD ON FILTER CHANGE
+  // -------------------------
+  useEffect(() => {
+    if (!open) return;
+
+    setGlassList([]);
+    setOffset(0);
+    setHasMore(true);
+    loadGlass(true, search);
+  }, [brandFilter, typeFilter, subGroupFilter, colorFilter, thickFilter, variantOnly]);
+
+  // -------------------------
+  // EFFECT 3: RELOAD ON SEARCH (debounced)
+  // -------------------------
+  useEffect(() => {
+    if (!open) return;
+
+    const timer = setTimeout(() => {
+      setGlassList([]);
+      setOffset(0);
+      setHasMore(true);
+      loadGlass(true, search);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // -------------------------
+  // EFFECT: RESET calcResult WHEN sku changes
   // -------------------------
   useEffect(() => {
     setCalcResult(null);
@@ -98,8 +220,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   }, [selectedItem]);
 
   // -------------------------
-  // EFFECT 3: AUTO-CALCULATE
-  // -------------------------
+  // EFFECT: AUTO-CALCULATE
   // -------------------------
   useEffect(() => {
     if (!selectedItem) return;
@@ -121,6 +242,24 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       setCalcResult(null);
       setPriceMode("actual");
     }
+  }, [open]);
+
+  // -------------------------
+  // LOAD FILTER OPTIONS
+  // -------------------------
+  useEffect(() => {
+    if (!open) return;
+
+    const loadFilterOptions = async () => {
+      try {
+        const res = await api.get("/api/glass/filter-options");
+        setFilterOptions(res.data);
+      } catch (err) {
+        console.error("Error loading filter options:", err);
+      }
+    };
+
+    loadFilterOptions();
   }, [open]);
 
   async function handleCalculate() {
@@ -241,90 +380,21 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   // -------------------------
   if (!open) return null;
 
-  const filteredList = glassList.filter((item) => {
-    if (search) {
-      const s = search.toLowerCase();
-      const combined =
-        `${item.sku} ${item.subGroupName} ${item.brandName} ${item.typeName}`.toLowerCase();
-      if (!combined.includes(s)) return false;
-    }
-    if (brandFilter && item.brand !== brandFilter) return false;
-    if (typeFilter && item.type !== typeFilter) return false;
-    if (subGroupFilter && item.subGroup !== subGroupFilter) return false;
-    if (colorFilter && item.color !== colorFilter) return false;
-    if (thickFilter && String(item.thickness) !== String(thickFilter)) return false;
-    if (variantOnly && !item.isVariant) return false;
-    return true;
-  });
+  // ⚡ กรอง variant ฝั่ง client (เพราะ backend ยังไม่รองรับ)
+  const filteredList = variantOnly 
+    ? glassList.filter(item => item.isVariant)
+    : glassList;
 
   const isVariantReady = () => {
     if (!isVariant) return true; // non-variant พร้อมเสมอ
     return variantCode && width && height;
   };
 
-  const brandOptions = [...new Set(glassList.map((i) => i.brand))];
-  const typeOptions = [
-    ...new Set(glassList.filter((i) => !brandFilter || i.brand === brandFilter).map((i) => i.type)),
-  ];
-  const subGroupOptions = [
-    ...new Set(
-      glassList
-        .filter(
-          (i) => (!brandFilter || i.brand === brandFilter) && (!typeFilter || i.type === typeFilter)
-        )
-        .map((i) => i.subGroup)
-    ),
-  ];
-  const colorOptions = [
-    ...new Set(
-      glassList
-        .filter(
-          (i) =>
-            (!brandFilter || i.brand === brandFilter) &&
-            (!typeFilter || i.type === typeFilter) &&
-            (!subGroupFilter || i.subGroup === subGroupFilter)
-        )
-        .map((i) => i.color)
-    ),
-  ];
-  const thicknessOptions = [
-    ...new Set(
-      glassList
-        .filter(
-          (i) =>
-            (!brandFilter || i.brand === brandFilter) &&
-            (!typeFilter || i.type === typeFilter) &&
-            (!subGroupFilter || i.subGroup === subGroupFilter) &&
-            (!colorFilter || i.color === colorFilter)
-        )
-        .map((i) => i.thickness)
-    ),
-  ];
-
-  const brandDropdownOptions = brandOptions.map((code) => ({
-    code,
-    name: glassList.find((x) => x.brand === code)?.brandName || code,
-  }));
-
-  const typeDropdownOptions = typeOptions.map((code) => ({
-    code,
-    name: glassList.find((x) => x.type === code)?.typeName || code,
-  }));
-
-  const subGroupDropdownOptions = subGroupOptions.map((code) => ({
-    code,
-    name: glassList.find((x) => x.subGroup === code)?.subGroupName || code,
-  }));
-
-  const colorDropdownOptions = colorOptions.map((code) => ({
-    code,
-    name: glassList.find((x) => x.color === code)?.colorName || code,
-  }));
-
-  const thicknessDropdownOptions = thicknessOptions.map((t) => ({
-    code: String(t),
-    name: `${t} มม.`,
-  }));
+  const brandDropdownOptions = filterOptions.brands;
+  const typeDropdownOptions = filterOptions.types;
+  const subGroupDropdownOptions = filterOptions.subGroups;
+  const colorDropdownOptions = filterOptions.colors;
+  const thicknessDropdownOptions = filterOptions.thicknesses;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 ">
@@ -356,7 +426,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
           />
 
           <CustomDropdown
-            label="Type"
+            label="Group"
             value={typeFilter || null}
             options={typeDropdownOptions}
             onChange={(v) => setTypeFilter(v || "")}
@@ -401,44 +471,77 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
         </div>
 
         {/* SKU TABLE */}
-        <div className="border rounded-lg p-2 max-h-[260px] overflow-y-auto mb-4">
-          {loading ? (
-            <p className="text-sm text-gray-500">กำลังโหลดข้อมูล...</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-100 sticky top-0 z-10">
-                <tr className="grid grid-cols-12 gap-2 text-gray-700 font-semibold">
-                  <th className="col-span-2 p-2 text-left">SKU</th>
-                  <th className="col-span-4 p-2 text-left">ชื่อสินค้า</th>
-                  <th className="col-span-2 p-2 text-left">SubGroup</th>
-                  <th className="col-span-2 p-2 text-center">ขนาด (นิ้ว)</th>
-                  <th className="col-span-1 p-2 text-center">หนา</th>
-                  <th className="col-span-1 p-2 text-center">สต๊อก</th>
-                </tr>
-              </thead>
+        <div 
+          className="border rounded-lg p-2 max-h-[260px] overflow-y-auto mb-4"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
 
-              <tbody>
-                {filteredList.map((item) => (
-                  <tr
-                    key={item.sku}
-                    className={`grid grid-cols-12 gap-2 items-center cursor-pointer
-                      hover:bg-blue-50 transition
-                      ${selectedItem?.sku === item.sku ? "bg-blue-100" : ""}
-                    `}
-                    onClick={() => setSelectedItem(item)}
-                  >
-                    <td className="col-span-2 p-2 truncate">{item.sku}</td>
-                    <td className="col-span-4 p-2 truncate">{item.description}</td>
-                    <td className="col-span-2 p-2 truncate">{item.subGroupName}</td>
-                    <td className="col-span-2 p-2 text-center whitespace-nowrap">
-                      {item.width} × {item.height}
-                    </td>
-                    <td className="col-span-1 p-2 text-center">{item.thickness}</td>
-                    <td className="col-span-1 p-2 text-center font-semibold">{item.inventory}</td>
+            if (nearBottom && hasMore && !loadingMore) {
+              loadGlass(false, search);
+            }
+          }}
+        >
+          {loading && glassList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mb-3"></div>
+              <p className="text-sm text-gray-600">กำลังโหลดข้อมูลกระจก...</p>
+            </div>
+          ) : filteredList.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <p>ไม่พบสินค้าที่ตรงกับเงื่อนไข</p>
+            </div>
+          ) : (
+            <>
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100 sticky top-0 z-10">
+                  <tr className="grid grid-cols-12 gap-2 text-gray-700 font-semibold">
+                    <th className="col-span-2 p-2 text-left">SKU</th>
+                    <th className="col-span-4 p-2 text-left">ชื่อสินค้า</th>
+                    <th className="col-span-2 p-2 text-left">SubGroup</th>
+                    <th className="col-span-2 p-2 text-center">ขนาด (นิ้ว)</th>
+                    <th className="col-span-1 p-2 text-center">หนา</th>
+                    <th className="col-span-1 p-2 text-center">สต๊อก</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+
+                <tbody>
+                  {filteredList.map((item) => (
+                    <GlassTableRow
+                      key={item.sku}
+                      item={item}
+                      isActive={selectedItem?.sku === item.sku}
+                      onClick={() => setSelectedItem(item)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Loading indicator สำหรับโหลดเพิ่ม */}
+              {loadingMore && (
+                <div className="flex justify-center py-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    กำลังโหลดเพิ่ม...
+                  </div>
+                </div>
+              )}
+
+              {/* แสดงว่าโหลดครบแล้ว */}
+              {!hasMore && filteredList.length > 0 && (
+                <div className="text-xs text-gray-400 text-center py-3 border-t mt-2">
+                  โหลดครบแล้ว
+                </div>
+              )}
+            </>
+          )}
+          
+          {/* แสดงจำนวนผลลัพธ์ */}
+          {!loading && filteredList.length > 0 && (
+            <div className="text-xs text-gray-500 text-center mt-2 pt-2 border-t">
+              แสดง {filteredList.length} รายการ
+              {total > 0 && ` จากทั้งหมด ${total} รายการ`}
+            </div>
           )}
         </div>
 

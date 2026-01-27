@@ -143,21 +143,7 @@ export default function AluminiumPicker({ onSelect }) {
         width={200}
       />
 
-      <CustomDropdown
-        label="Group"
-        value={group}
-        options={options.group}
-        onChange={(v) => handleGroupChange(v)}
-        width={200}
-      />
-
-      <CustomDropdown
-        label="SubGroup"
-        value={subGroup}
-        options={options.subGroup}
-        onChange={(v) => handleSubGroupChange(v)}
-      />
-
+      
       <CustomDropdown
         label="Color"
         value={color}
@@ -171,6 +157,22 @@ export default function AluminiumPicker({ onSelect }) {
         value={thickness}
         options={options.thickness}
         onChange={(v) => handleThicknessChange(v)}
+      />
+
+
+      <CustomDropdown
+        label="Group"
+        value={group}
+        options={options.group}
+        onChange={(v) => handleGroupChange(v)}
+        width={200}
+      />
+
+      <CustomDropdown
+        label="SubGroup"
+        value={subGroup}
+        options={options.subGroup}
+        onChange={(v) => handleSubGroupChange(v)}
       />
 
       <button

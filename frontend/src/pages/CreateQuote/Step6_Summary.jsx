@@ -78,6 +78,8 @@ function Step6_Summary({ state, dispatch }) {
   const [productSearch, setProductSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const CATEGORY_ORDER = ["G", "A", "C", "Y", "S", "E"];
+
 
   // ประวัติการซื้อ
   const [historyOrders, setHistoryOrders] = useState([]);
@@ -1272,7 +1274,7 @@ function Step6_Summary({ state, dispatch }) {
 
       {/* TAB: QUOTE */}
       {activeTab === "quote" && (
-        <div className="grid gap-4 grid-cols-8 flex-1 border-t-4 border-t-gray-200">
+        <div className="grid gap-4 grid-cols-9 flex-1 border-t-4 border-t-gray-200">
           {/* ซ้าย: ประวัติ+Category */}
           <div className="col-span-2 mt-6 space-y-4">
             {customerCode && customerCode.toUpperCase() !== "N/A" && (
@@ -1339,8 +1341,13 @@ function Step6_Summary({ state, dispatch }) {
 
               {!catLoading && !catError && (
                 <div className="space-y-2">
-                  {categories
+                  {[...categories]
                     .filter((cat) => cat && cat.name)
+                    .sort(
+                      (a, b) =>
+                        CATEGORY_ORDER.indexOf(a.name) -
+                        CATEGORY_ORDER.indexOf(b.name)
+                    )
                     .map((cat) => (
                       <CategoryCard
                         key={cat.name}
@@ -1352,11 +1359,12 @@ function Step6_Summary({ state, dispatch }) {
                     ))}
                 </div>
               )}
+
             </div>
           </div>
 
           {/* กลาง: รายการสินค้า */}
-          <div className="col-span-4 p-6 rounded-lg bg-gray-50 mt-3">
+          <div className="col-span-5 p-6 rounded-lg bg-gray-50 mt-3">
             <h3 className="text-xl font-semibold text-gray-800 mb-3">รายการสินค้า</h3>
 
             {/* กล่องตาราง (grid ไม่เปลี่ยน) */}
@@ -1365,10 +1373,10 @@ function Step6_Summary({ state, dispatch }) {
               <table className="min-w-full table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="w-[40px] px-4 py-3 text-xs font-bold text-gray-500 text-left">#</th>
-                    <th className="w-[180px] px-4 py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
-                    <th className="w-[40px]  py-3 px-2 text-xs text-center font-bold text-gray-500">จำนวน</th>
-                    <th className="w-[80px]  py-3  text-xs font-bold text-gray-500 text-center">ราคา/หน่วย</th>
+                    <th className="w-[20px] px-2 pl-4 py-3 text-xs font-bold text-gray-500 text-left">#</th>
+                    <th className="w-[140px]  py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
+                    <th className="w-[40px]  py-3 px-2 text-xs text-start font-bold text-gray-500">จำนวน</th>
+                    <th className="w-[60px]  py-3  text-xs font-bold text-gray-500 text-center">ราคา/หน่วย</th>
                     <th className="w-[80px]  first-line:px-2 py-3 text-xs font-bold text-gray-500 text-left">ยอดรวม</th>
                   </tr>
                 </thead>
