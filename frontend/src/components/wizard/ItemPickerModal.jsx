@@ -247,6 +247,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
     return base.filter((it) =>
       String(it.name || "").toLowerCase().includes(term) ||
       String(it.sku || it.SKU || "").toLowerCase().includes(term) ||
+      String(it.sku2 || "").toLowerCase().includes(term) ||  // ⭐ เพิ่ม sku2
       String(it.alternate_names || "").toLowerCase().includes(term)
     );
   }, [items, searchTerm]);

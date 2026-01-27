@@ -225,12 +225,14 @@ def get_items_list_light(
 # ======================================================
 # ✅ NEW: GET /items/{sku}
 # 👉 FULL DETAIL + enrich (ตอนกด dropdown)
+# 👉 รองรับทั้ง SKU (No) และ SKU2 (No_2)
 # ======================================================
 @router.get("/{sku}")
 def get_item_detail(sku: str):
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
+    # ⭐ ลองหาจาก No ก่อน
     sql = f"""
         SELECT *
         FROM {TABLE_NAME}
@@ -239,6 +241,17 @@ def get_item_detail(sku: str):
 
     cursor.execute(sql, sku)
     row = cursor.fetchone()
+    
+    # ⭐ ถ้าไม่เจอ ลองหาจาก No_2
+    if not row:
+        sql = f"""
+            SELECT *
+            FROM {TABLE_NAME}
+            WHERE No_2 = ?
+        """
+        cursor.execute(sql, sku)
+        row = cursor.fetchone()
+
     conn.close()
 
     if not row:
@@ -247,6 +260,10 @@ def get_item_detail(sku: str):
     item = row_to_item(row)
 
     # ⭐ enrich เฉพาะตอนนี้
+    extra = enrich_by_category(item["category"], item["sku"]) or {}
+    item.update(extra)
+
+    return item
     extra = enrich_by_category(item["category"], item["sku"]) or {}
     item.update(extra)
 

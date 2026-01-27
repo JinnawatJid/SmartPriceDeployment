@@ -43,10 +43,12 @@ def load_customer_from_api():
 
     page = 1
     size = 100
-    max_page = 10
+    max_page = 50  # ⭐ เพิ่มจาก 10 → 50 (5000 รายการต่อ gen_bus)
 
     for gen_bus in gen_bus_list:
         page = 1
+        print(f"📥 Loading customers for gen_bus={gen_bus}...")
+        
         while True:
             payload = {
                 "page": page,
@@ -54,28 +56,42 @@ def load_customer_from_api():
                 "gen_bus": {"$eq": gen_bus},
             }
 
-            resp = requests.post(
-                CUSTOMER_API_URL,
-                json=payload,
-                headers=CUSTOMER_API_HEADERS,
-                timeout=20,
-            )
-            resp.raise_for_status()
+            try:
+                resp = requests.post(
+                    CUSTOMER_API_URL,
+                    json=payload,
+                    headers=CUSTOMER_API_HEADERS,
+                    timeout=20,
+                )
+                resp.raise_for_status()
 
-            data = resp.json()
-            items = data.get("data") or data
+                data = resp.json()
+                items = data.get("data") or data
 
-            if not items:
+                if not items:
+                    print(f"  ✓ gen_bus={gen_bus} page={page}: No more data")
+                    break
+
+                rows.extend(items)
+                print(f"  ✓ gen_bus={gen_bus} page={page}: Loaded {len(items)} customers (total: {len(rows)})")
+
+                # ⭐ ถ้าได้น้อยกว่า size แสดงว่าหมดแล้ว
+                if len(items) < size:
+                    print(f"  ✓ gen_bus={gen_bus}: Completed (last page)")
+                    break
+
+                page += 1
+                
+                # ⭐ ป้องกัน infinite loop
+                if page > max_page:
+                    print(f"  ⚠️ gen_bus={gen_bus}: Reached max_page={max_page}")
+                    break
+                    
+            except Exception as e:
+                print(f"  ❌ Error loading gen_bus={gen_bus} page={page}: {e}")
                 break
 
-            rows.extend(items)
-
-            if len(items) < size:
-                break
-
-            page += 1
-            if page > max_page:
-                break
+    print(f"📊 Total customers loaded: {len(rows)}")
 
     if not rows:
         return pd.DataFrame()
@@ -155,8 +171,9 @@ def load_invoice_by_customer_api(customer_code: str):
 
 
 # =====================================================
-# GET /customer/search
+# GET /customer/search (รองรับทั้ง GET และ POST)
 # =====================================================
+@router.get("/search")
 @router.post("/search")
 def search_customer(
     code: str | None = Query(None),
@@ -170,7 +187,14 @@ def search_customer(
         )
 
     # ---------- Load Customer ----------
-    df_cust = load_customer_from_api()
+    try:
+        df_cust = load_customer_from_api()
+    except Exception as e:
+        print(f"❌ Error loading customer from API: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"ไม่สามารถโหลดข้อมูลลูกค้าได้: {str(e)}"
+        )
 
     if df_cust.empty:
         raise HTTPException(status_code=500, detail="Customer data is empty")
@@ -195,7 +219,7 @@ def search_customer(
     if found.empty and name:
         q = name.strip().lower()
         found = df_cust[
-            df_cust["Name"].astype(str).str.strip().str.lower().str.contains(q)
+            df_cust["Name"].astype(str).str.strip().str.lower().str.contains(q, na=False)
         ]
 
     if found.empty:
@@ -207,7 +231,12 @@ def search_customer(
     # =====================================================
     # Load Invoice
     # =====================================================
-    invoice_rows = load_invoice_by_customer_api(customer_code)
+    try:
+        invoice_rows = load_invoice_by_customer_api(customer_code)
+    except Exception as e:
+        print(f"⚠️ Warning: Cannot load invoice for {customer_code}: {e}")
+        invoice_rows = []  # ถ้าโหลด invoice ไม่ได้ ให้ใช้ค่าว่าง
+    
     inv = pd.DataFrame(invoice_rows)
 
     accum_6m = 0.0
@@ -291,11 +320,16 @@ def search_customer(
 # =====================================================
 # GET /customer/search-list → dropdown (autocomplete)
 # =====================================================
+@router.get("/search-list")
 @router.post("/search-list")
 def search_customer_list(
     q: str = Query(..., min_length=1),
 ):
-    df = load_customer_from_api()
+    try:
+        df = load_customer_from_api()
+    except Exception as e:
+        print(f"❌ Error loading customer list from API: {e}")
+        return []
 
     if df.empty:
         return []
@@ -308,8 +342,8 @@ def search_customer_list(
     q_phone = normalize_phone(q)
 
     mask = (
-        df["Customer"].astype(str).str.strip().str.lower().str.contains(q_clean)
-        | df["Name"].astype(str).str.strip().str.lower().str.contains(q_clean)
+        df["Customer"].astype(str).str.strip().str.lower().str.contains(q_clean, na=False)
+        | df["Name"].astype(str).str.strip().str.lower().str.contains(q_clean, na=False)
         | df["Tel"].apply(
             lambda x: normalize_phone(x).startswith(q_phone) if q_phone else False
         )
