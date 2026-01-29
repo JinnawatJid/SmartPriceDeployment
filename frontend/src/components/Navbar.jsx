@@ -14,7 +14,7 @@ function Navbar() {
       <div className="mx-auto flex h-[75px] max-w-full items-center justify-between px-6 lg:px-10">
         {/* ส่วนโลโก้ */}
         <Link to="/dashboard" className="flex items-center" aria-label="ไปหน้าหลัก">
-          <img src="/assets/TANGNAMGLASSy.png" className="h-16 w-auto" />
+          <img src="/assets/favicon.png" className="h-16 w-auto" />
         </Link>
 
         {/* ส่วนผู้ใช้งาน */}

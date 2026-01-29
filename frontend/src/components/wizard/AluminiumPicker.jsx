@@ -173,6 +173,7 @@ export default function AluminiumPicker({ onSelect }) {
         value={subGroup}
         options={options.subGroup}
         onChange={(v) => handleSubGroupChange(v)}
+        width={200}
       />
 
       <button

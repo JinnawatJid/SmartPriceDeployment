@@ -101,50 +101,58 @@ export default function CLinePicker({ onSelect }) {
   };
 
   return (
-    <div className="flex items-end justify-between gap-2 p-3 border rounded-xl bg-gray-50 mt-3">
-      <CustomDropdown
-        label="Brand"
-        value={brand}
-        options={options.brand}
-        onChange={handleBrandChange}
-      />
+    <div className="flex-col">
+        <div className="flex items-end justify-between gap-2 p-3 border rounded-xl bg-gray-50 mt-3">
+          <CustomDropdown
+            label="Brand"
+            value={brand}
+            options={options.brand}
+            onChange={handleBrandChange}
+          />
 
-      <CustomDropdown
-        label="Group"
-        value={group}
-        options={options.group}
-        onChange={handleGroupChange}
-        width={240}
-      />
+          <CustomDropdown
+            label="Group"
+            value={group}
+            options={options.group}
+            onChange={handleGroupChange}
+            width={240}
+          />
 
-      <CustomDropdown
-        label="SubGroup"
-        value={subGroup}
-        options={options.subGroup}
-        onChange={handleSubGroupChange}
-        width={360}
-      />
+          <CustomDropdown
+            label="SubGroup"
+            value={subGroup}
+            options={options.subGroup}
+            onChange={handleSubGroupChange}
+            width={480}
+          />
 
-      <CustomDropdown
-        label="Color"
-        value={color}
-        options={options.color}
-        onChange={handleColorChange}
-      />
+          <CustomDropdown
+            label="Color"
+            value={color}
+            options={options.color}
+            onChange={handleColorChange}
+          />
 
-      <CustomDropdown
-        label="Thickness"
-        value={thickness}
-        options={options.thickness}
-        onChange={handleThicknessChange}
-      />
+          <CustomDropdown
+            label="Thickness"
+            value={thickness}
+            options={options.thickness}
+            onChange={handleThicknessChange}
+          />
 
-      <button
-        onClick={handleClearAll}
-        className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
-      >
-        Clear All
-      </button>
+          
+          </div>
+          <div className="relative">
+            <button
+              onClick={handleClearAll}
+              className="px-4 py-2 mt-2 right-0  text-sm border rounded-lg hover:bg-gray-100"
+            >
+              Clear All
+            </button>
+
+          </div>
+        
     </div>
+    
   );
 }

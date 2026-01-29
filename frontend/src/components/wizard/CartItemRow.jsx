@@ -1,6 +1,7 @@
 // src/components/wizard/CartItemRow.jsx
 import { useState } from "react";
 import { useItemPriceHistory } from "../../hooks/useItemPriceHistory";
+import PriceEditModal from "./PriceEditModal";
 
 function formatThaiDate(dt) {
   if (!dt) return "";
@@ -57,8 +58,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState(item.name || "");
   const [openPriceHistory, setOpenPriceHistory] = useState(false);
-  const [editingPrice, setEditingPrice] = useState(false);
-  const [priceDraft, setPriceDraft] = useState(displayUnitPrice);
+  const [showPriceModal, setShowPriceModal] = useState(false);
 
 
   const { prices, loading } = useItemPriceHistory({
@@ -100,14 +100,10 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
     });
     setEditingDesc(false);
   };
-  const commitPrice = () => {
-    const newPrice = Number(priceDraft);
 
-    if (isNaN(newPrice) || newPrice < 0) {
-      setPriceDraft(displayUnitPrice);
-      setEditingPrice(false);
-      return;
-    }
+  const handlePriceSave = (data) => {
+    const cat = (item.category || String(item.sku || "").slice(0, 1)).toUpperCase();
+    const isAluminium = cat === "A";
 
     dispatch({
       type: "UPDATE_CART_PRICE",
@@ -115,12 +111,15 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
         sku: item.sku,
         variantCode: item.variantCode ?? null,
         sqft_sheet: Number(item.sqft_sheet ?? item.sqft ?? 0),
-        unitPrice: newPrice,
+        unitPrice: data.unitPrice,
         from: "manual",
+        ...(data.pricePerSqft && { pricePerSqft: data.pricePerSqft }),
+        ...(data.pricePerKg && { pricePerKg: data.pricePerKg }),
+        ...(isAluminium && data.weight !== undefined && { weight: data.weight }),
       },
     });
 
-    setEditingPrice(false);
+    setShowPriceModal(false);
   };
 
   return (
@@ -168,41 +167,23 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
         </td>
 
         <td className="px-2 py-3 text-sm w-[80px]">
-          {editingPrice ? (
-            <input
-              type="number"
-              autoFocus
-              value={priceDraft}
-              onChange={(e) => setPriceDraft(e.target.value)}
-              onBlur={commitPrice}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitPrice();
-                if (e.key === "Escape") {
-                  setPriceDraft(displayUnitPrice);
-                  setEditingPrice(false);
-                }
-              }}
-              className="w-24 rounded border px-2 py-1 text-right text-sm"
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              <span
-                className="font-semibold cursor-pointer hover:underline text-blue-700"
-                onDoubleClick={() => setEditingPrice(true)}
-                title="ดับเบิลคลิกเพื่อแก้ไขราคา"
-              >
-                {Number(displayUnitPrice).toLocaleString("th-TH")}
-              </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="font-semibold cursor-pointer hover:underline text-blue-700"
+              onClick={() => setShowPriceModal(true)}
+              title="คลิกเพื่อแก้ไขราคา"
+            >
+              {Number(displayUnitPrice).toLocaleString("th-TH")}
+            </span>
 
-              <button
-                onClick={() => setOpenPriceHistory((v) => !v)}
-                className="text-gray-400 hover:text-gray-600"
-                title="ดูประวัติราคา"
-              >
-                ❯
-              </button>
-            </div>
-          )}
+            <button
+              onClick={() => setOpenPriceHistory((v) => !v)}
+              className="text-gray-400 hover:text-gray-600"
+              title="ดูประวัติราคา"
+            >
+              ❯
+            </button>
+          </div>
         </td>
 
 
@@ -216,6 +197,16 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
           </button>
         </td>
       </tr>
+
+      {/* ===== PRICE EDIT MODAL ===== */}
+      {showPriceModal && (
+        <PriceEditModal
+          item={item}
+          calculatedItem={calculatedItem}
+          onClose={() => setShowPriceModal(false)}
+          onSave={handlePriceSave}
+        />
+      )}
 
       {/* ===== EXPAND ROW ===== */}
       {openPriceHistory && (

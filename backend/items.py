@@ -193,6 +193,7 @@ def get_items_list_light(
             No_2          AS sku2,
             Description   AS name,
             Inventory     AS inventory,
+            Base_Unit_of_Measure AS unit,
             Product_Group AS product_group,
             Product_Sub_Group AS product_sub_group,
             AlternateName AS alternate_names
@@ -215,6 +216,7 @@ def get_items_list_light(
                 "sku2": r.sku2,
                 "name": r.name,
                 "inventory": int(r.inventory or 0),
+                "unit": r.unit,
                 "product_group": r.product_group,
                 "product_sub_group": r.product_sub_group,
                 "alternate_names": r.alternate_names,
@@ -308,6 +310,7 @@ def get_related_items(sku: str, limit: int = 50):
             No_2          AS sku2,
             Description   AS name,
             Inventory     AS inventory,
+            Base_Unit_of_Measure AS unit,
             Product_Group AS product_group,
             Product_Sub_Group AS product_sub_group
         FROM {TABLE_NAME}
@@ -328,6 +331,7 @@ def get_related_items(sku: str, limit: int = 50):
                 "sku2": r.sku2,
                 "name": r.name,
                 "inventory": int(r.inventory or 0),
+                "unit": r.unit,
                 "product_group": r.product_group,
                 "product_sub_group": r.product_sub_group,
             }
@@ -494,7 +498,7 @@ def get_filter_options(
             "group": "Accessories_Group",
             "subGroup": "Accessories_SubGroup",
             "color": "Accessories_Color",
-            "character": "Accessories_Character",
+            "character": "Character",  # ⭐ แก้ไขชื่อ table
         },
         "S": {
             "brand": "Sealant_Brand",
@@ -531,11 +535,14 @@ def get_filter_options(
         cursor.execute(sql, *params)
         rows = cursor.fetchall()
         
-        # ⭐ แปลงเป็น {code, name}
+        # ⭐ แปลงเป็น {code, name} พร้อม code ขึ้นหน้า
         codes = [r.value for r in rows if r.value]
         mapping = mappings.get(field_name, {})
         result[field_name] = [
-            {"code": code, "name": mapping.get(code, code)}
+            {
+                "code": code, 
+                "name": f"{code} - {mapping.get(code, code)}" if mapping.get(code) else code
+            }
             for code in codes
         ]
 

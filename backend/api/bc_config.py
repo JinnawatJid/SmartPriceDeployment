@@ -13,5 +13,5 @@ BC_COMPANY = "TNG LIV"
 BC_USERNAME = "KMITL2"
 
 # Web Service Access Key
-BC_PASSWORD = "tTy0heooW3mzh0LPZgALz2fdFNB+JUpebUbI9lExfU="
+BC_PASSWORD = "9ald3ESOIZZ/3l0h/6WMjvkt75b25MMVBdjNzvEbs64="
 

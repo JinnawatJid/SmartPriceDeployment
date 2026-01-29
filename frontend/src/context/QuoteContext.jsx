@@ -267,7 +267,15 @@ function quoteReducer(state, action) {
     // UPDATE CART PRICE (MANUAL)
     // -------------------------
     case "UPDATE_CART_PRICE": {
-      const { sku, variantCode = null, sqft_sheet = 0, unitPrice } = action.payload;
+      const { 
+        sku, 
+        variantCode = null, 
+        sqft_sheet = 0, 
+        unitPrice,
+        pricePerSqft,
+        pricePerKg,
+        weight
+      } = action.payload;
 
       const targetVariant = variantCode ?? null;
       const targetSqft = Number(sqft_sheet ?? 0);
@@ -286,6 +294,7 @@ function quoteReducer(state, action) {
           const qty = Number(it.qty ?? 0);
           const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
           const isGlass = cat === "G";
+          const isAluminium = cat === "A";
 
           // -------------------------
           // 🔒 manual price wins
@@ -301,10 +310,28 @@ function quoteReducer(state, action) {
               lineTotal: pricePerSheet * qty,
               priceSource: "manual",        // ⭐ สำคัญ
               needsPricing: false,          // ⭐ กัน pricing override
+              unit: it.unit, // ⭐ เก็บ unit ไว้
+              ...(pricePerSqft && { pricePerSqft }), // เก็บราคาต่อตร.ฟุต
             };
           }
 
-          // ===== non-glass =====
+          // ===== aluminium =====
+          if (isAluminium) {
+            return {
+              ...it,
+              UnitPrice: unitPrice,
+              price: unitPrice,
+              price_per_sheet: undefined,
+              lineTotal: unitPrice * qty,
+              priceSource: "manual",
+              needsPricing: false,
+              unit: it.unit, // ⭐ เก็บ unit ไว้
+              ...(pricePerKg && { pricePerKg }), // เก็บราคาต่อกก.
+              ...(weight !== undefined && { weight, product_weight: weight }), // เก็บน้ำหนัก
+            };
+          }
+
+          // ===== non-glass, non-aluminium =====
           return {
             ...it,
             UnitPrice: unitPrice,
@@ -313,6 +340,7 @@ function quoteReducer(state, action) {
             lineTotal: unitPrice * qty,
             priceSource: "manual",          // ⭐ สำคัญ
             needsPricing: false,
+            unit: it.unit, // ⭐ เก็บ unit ไว้
           };
         }),
       };
@@ -426,43 +454,59 @@ function quoteReducer(state, action) {
           const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
           const isGlass = cat === "G";
 
-          const rawUnitPrice = Number(it.price ?? it.UnitPrice ?? 0); // บาท/ตรฟ.
+          // ⭐ ราคาจาก DB
+          // - กระจก: price = บาท/แผ่น (บันทึกไว้แล้ว)
+          // - อื่นๆ: price = บาท/หน่วย
+          const priceFromDB = Number(it.price ?? it.UnitPrice ?? 0);
           const sqft = Number(it.sqft_sheet ?? it.sqft ?? 0);
           const qty = Number(it.qty ?? 0);
 
-          let displayUnitPrice = rawUnitPrice;
-          let lineTotal = it.lineTotal;
-
           if (isGlass && sqft > 0) {
-            // แปลงเป็นราคาต่อแผ่นตั้งแต่แรก
-            displayUnitPrice = rawUnitPrice * sqft;
+            // กระจก: priceFromDB = บาท/แผ่นแล้ว
+            const pricePerSheet = priceFromDB;
+            const pricePerSqft = sqft > 0 ? pricePerSheet / sqft : 0;
 
-            // lineTotal จาก DB ถูกอยู่แล้ว แต่ normalize ให้ชัวร์
-            lineTotal = displayUnitPrice * qty;
+            return {
+              ...it,
+              source: "db",
+              unit: it.unit ?? null,
+              UnitPrice: pricePerSqft, // บาท/ตรฟ (สำหรับ internal)
+              price_per_sheet: pricePerSheet, // บาท/แผ่น (สำหรับแสดง)
+              price: undefined,
+              lineTotal: pricePerSheet * qty,
+              pricePerSqft: pricePerSqft, // ⭐ เก็บ pricePerSqft สำหรับแก้ไข
+              product_weight: it.product_weight ?? 0,
+              isDraftItem: true,
+              needsPricing: false,
+              priceSource: "manual", // ⭐ ถือว่าเป็น manual เพราะมาจาก draft
+            };
+          } else {
+            // สินค้าอื่นๆ: priceFromDB = บาท/หน่วย
+            const isAluminium = cat === "A";
+            const productWeight = Number(it.product_weight ?? 0);
+            
+            // ⭐ สำหรับอลู: ถ้ามีน้ำหนักและราคา คำนวณ pricePerKg
+            let pricePerKg = undefined;
+            if (isAluminium && productWeight > 0 && priceFromDB > 0) {
+              pricePerKg = priceFromDB / productWeight;
+            }
+            
+            return {
+              ...it,
+              source: "db",
+              unit: it.unit ?? null,
+              UnitPrice: priceFromDB,
+              price: priceFromDB,
+              price_per_sheet: undefined,
+              lineTotal: priceFromDB * qty,
+              product_weight: productWeight,
+              weight: productWeight, // ⭐ เก็บ weight สำหรับอลู
+              ...(pricePerKg && { pricePerKg }), // ⭐ เก็บ pricePerKg ถ้ามี
+              isDraftItem: true,
+              needsPricing: false,
+              priceSource: "manual", // ⭐ ถือว่าเป็น manual เพราะมาจาก draft
+            };
           }
-
-          return {
-            ...it,
-            source: "db",
-            unit: it.unit ?? null,
-            UnitPrice: rawUnitPrice,
-            ...(isGlass
-              ? {
-                  // ✅ กระจก → แสดงต่อแผ่น
-                  price_per_sheet: rawUnitPrice * sqft,
-                  price: undefined,
-                  lineTotal: rawUnitPrice * sqft * qty,
-                }
-              : {
-                  // ✅ สินค้าอื่น → แสดงต่อหน่วยปกติ
-                  price: rawUnitPrice,
-                  price_per_sheet: undefined,
-                  lineTotal: rawUnitPrice * qty,
-                }),
-
-            product_weight: it.product_weight ?? 0,
-            isDraftItem: true,
-          };
         }),
 
         shippingCost: action.payload.totals?.shippingRaw ?? 0,

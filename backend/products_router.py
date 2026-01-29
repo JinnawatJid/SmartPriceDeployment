@@ -370,6 +370,7 @@ def aluminium_items(
             "colorName": color_map.get(row.get("color"), ""),
             "thickness": row.get("thickness"),
             "inventory": row.get("onhand_qty", 0),
+            "unit": row.get("Base Unit of Measure", ""),
             "product_group": row.get("Product Group"),
             "product_sub_group": row.get("Product Sub Group"),
         })
@@ -532,6 +533,7 @@ def get_accessories_items(
             "character": row.get("character"),
             "characterName": char_map.get(row.get("character"), ""),
             "inventory": row.get("inventory", 0),
+            "unit": row.get("Base Unit of Measure", ""),
             "product_group": row.get("Product Group"),
             "product_sub_group": row.get("Product Sub Group"),
         })
@@ -642,6 +644,7 @@ def sealant_items(
             "color": row.get("color"),
             "colorName": color_map.get(row.get("color"), ""),
             "inventory": row.get("onhand_qty", 0),
+            "unit": row.get("Base Unit of Measure", ""),
             "product_group": row.get("Product Group"),
             "product_sub_group": row.get("Product Sub Group"),
         })

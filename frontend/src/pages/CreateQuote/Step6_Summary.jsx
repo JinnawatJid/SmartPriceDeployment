@@ -724,15 +724,25 @@ function Step6_Summary({ state, dispatch }) {
 
       if (it.priceSource === "manual") {
         // ⭐ manual = ใช้ค่าที่ user ใส่
-        unitPrice = Number(it.UnitPrice ?? it.price ?? 0);
+        if (isGlass && sqft > 0) {
+          // กระจก: UnitPrice ใน state = บาท/ตรฟ → แปลงเป็นบาท/แผ่น
+          unitPrice = Number(it.price_per_sheet ?? Number(it.UnitPrice ?? 0) * sqft);
+        } else {
+          unitPrice = Number(it.UnitPrice ?? it.price ?? 0);
+        }
       } else {
         // system pricing
-        unitPrice = Number(
-          calc?.UnitPrice ??
-          it.UnitPrice ??
-          it.price ??
-          0
-        );
+        if (isGlass && sqft > 0) {
+          // กระจก: ใช้ price_per_sheet จาก pricing
+          unitPrice = Number(calc?.price_per_sheet ?? it.price_per_sheet ?? 0);
+        } else {
+          unitPrice = Number(
+            calc?.UnitPrice ??
+            it.UnitPrice ??
+            it.price ??
+            0
+          );
+        }
       }
 
       // -------------------------------
@@ -746,27 +756,34 @@ function Step6_Summary({ state, dispatch }) {
         lineTotal = Number(it.lineTotal || 0);
       } else {
         // system pricing
-        if (isGlass && sqft > 0) {
-          // กระจก: unitPrice = บาท/ตรฟ → แปลงเป็นต่อแผ่น
-          lineTotal = unitPrice * sqft * Number(it.qty ?? 0);
-        } else {
-          lineTotal = unitPrice * Number(it.qty ?? 0);
-        }
+        lineTotal = unitPrice * Number(it.qty ?? 0);
       }
 
       // -------------------------------
-      // 3) SYSTEM PRICE (reference)
+      // 3) SYSTEM PRICE (reference) - ต้องเป็นราคาจากระบบเสมอ
       // -------------------------------
-      const systemUnitPrice = Number(
-        calc?.UnitPrice ??
-        it.UnitPrice ??
-        it.price ??
-        0
-      );
+      const systemUnitPrice = isGlass && sqft > 0
+        ? Number(calc?.price_per_sheet ?? it.price_per_sheet ?? 0)
+        : Number(
+            calc?.UnitPrice ??
+            it.UnitPrice ??
+            it.price ??
+            0
+          );
 
       // -------------------------------
       // 4) RETURN CART PAYLOAD ITEM
       // -------------------------------
+      const isAluminium = (it.category || "").toUpperCase() === "A";
+      
+      // ⭐ น้ำหนักสินค้า
+      // - ถ้าเป็น manual และมีการแก้น้ำหนัก → ใช้น้ำหนักที่แก้
+      // - ไม่งั้นใช้จาก pricing หรือค่าเดิม
+      const productWeight = 
+        it.priceSource === "manual" && isAluminium && it.weight !== undefined
+          ? Number(it.weight)
+          : Number(calc?.product_weight ?? it.product_weight ?? it.weight ?? 0);
+
       return {
         sku: it.sku,
         name: it.name,
@@ -782,8 +799,8 @@ function Step6_Summary({ state, dispatch }) {
         UnitPrice: unitPrice,   // optional
         LineTotal: lineTotal,   // optional
 
-        unit: calc?.unit ?? it.unit ?? "",
-        product_weight: calc?.product_weight ?? it.product_weight ?? 0,
+        unit: it.unit ?? calc?.unit ?? "",
+        product_weight: productWeight,
         category: it.category ?? "",
         sqft_sheet: sqft,
         variantCode: it.variantCode ?? "",
