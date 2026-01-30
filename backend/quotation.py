@@ -426,6 +426,18 @@ def list_quotations(status: str = None):
 
         cur.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
         lines = [normalize_keys(dict(r)) for r in cur.fetchall()]
+        
+        # ⭐ ดึง request_number ถ้ามี special_price_request_id
+        request_number = None
+        if h.get("special_price_request_id"):
+            cur.execute("""
+                SELECT request_number 
+                FROM special_price_requests 
+                WHERE id = ?
+            """, (h["special_price_request_id"],))
+            req_row = cur.fetchone()
+            if req_row:
+                request_number = req_row["request_number"]
 
         result.append({
             "quoteNo": quote_no,
@@ -447,6 +459,8 @@ def list_quotations(status: str = None):
                 "exVat": h["SubtotalAmount"],
                 "shippingRaw": h["ShippingCost"],
             },
+            "specialPriceRequestId": request_number,  # ⭐ ส่ง request_number แทน id
+            "specialPriceStatus": h.get("special_price_status"),
             "cart": [
                 {
                     "sku": ln["ItemCode"],
@@ -486,11 +500,24 @@ def get_quotation(quote_no: str):
 
     cur.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
     lines = [normalize_keys(dict(r)) for r in cur.fetchall()]
+    
+    # ดึงข้อมูล special price request ถ้ามี
+    special_price_request = None
+    if header.get("special_price_request_id"):
+        cur.execute("""
+            SELECT request_number, status, approved_by, approved_at, rejection_reason
+            FROM special_price_requests
+            WHERE id = ?
+        """, (header["special_price_request_id"],))
+        spr = cur.fetchone()
+        if spr:
+            special_price_request = normalize_keys(dict(spr))
 
     conn.close()
 
     return {
         "header": header,
+        "specialPriceRequest": special_price_request,
         "lines": [
             {
                 **ln,

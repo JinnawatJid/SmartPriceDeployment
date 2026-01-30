@@ -1,5 +1,6 @@
 // src/components/quotes/QuoteDraftCard.jsx
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 function formatNumber(value) {
   if (value == null) return "-";
@@ -14,19 +15,26 @@ export default function QuoteDraftCard({
   dueDateText,
   totalAmount,
   items = [],
+  cart = [], // ⭐ เพิ่ม cart สำหรับส่งไปยัง modal
+  customer = {}, // ⭐ เพิ่ม customer
+  specialPriceStatus = null,
+  specialPriceRequestNumber = null, // ⭐ เพิ่ม request number
   onEdit,
   onDelete,
+  onRequestSpecialPrice, // ⭐ เพิ่ม callback สำหรับขอราคาพิเศษ
 }) {
+  const navigate = useNavigate();
   return (
     <div className="flex flex-col  rounded-2xl border border-gray-200 bg-white shadow-md transition-shadow">
       {/* Header */}
       <div className="border-b border-gray-200 px-5 py-3">
         <div className="flex items-start justify-between gap-2">
           {/* เลขที่ใบเสนอราคา */}
-          <p className="text-xl font-extrabold text-[#0084FF]">{quoteNo}</p>
+          <div className="flex-1">
+            <p className="text-xl font-extrabold text-[#0084FF]">{quoteNo}</p>
+          </div>
 
           {/* ปุ่มส่ง LINE */}
-
           <button
             type="button"
             className="flex items-center gap-2 rounded-lg bg-[#06b64c] font-medium  text-white px-3 py-1 text-xs shadow-md  hover:text-white hover:bg-[#05a445] "
@@ -36,6 +44,47 @@ export default function QuoteDraftCard({
             <span>ส่งใบเสนอราคา</span>
           </button>
         </div>
+        
+        {/* ⭐ แสดงสถานะการขอราคาพิเศษ - ย้ายมาด้านล่างปุ่ม LINE */}
+        {specialPriceStatus && (
+          <div className="mt-2 space-y-2">
+            {specialPriceStatus === "pending" && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded">
+                <span>⏳</span>
+                <span>รอการอนุมัติราคาพิเศษ</span>
+              </div>
+            )}
+            {specialPriceStatus === "approved" && (
+              <>
+                <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded">
+                  <span>✅</span>
+                  <span>ราคาพิเศษอนุมัติแล้ว</span>
+                </div>
+                {/* ปุ่มดาวน์โหลด PDF ที่ผู้อนุมัติแนบมา */}
+                {specialPriceRequestNumber && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/approval-pdfs/${specialPriceRequestNumber}`);
+                    }}
+                    className="ml-2 inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded hover:bg-blue-200"
+                    title="ดาวน์โหลดเอกสารที่ผู้อนุมัติแนบมา"
+                  >
+                    <span>📎</span>
+                    <span>ดูเอกสารอนุมัติ</span>
+                  </button>
+                )}
+              </>
+            )}
+            {specialPriceStatus === "rejected" && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded">
+                <span>❌</span>
+                <span>ราคาพิเศษถูกปฏิเสธ</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <p className="mt-1 font-semibold text-gray-800">{customerName}</p>
         <p className="text-xs text-gray-500">รหัสลูกค้า: {customerCode}</p>
@@ -83,10 +132,21 @@ export default function QuoteDraftCard({
 
       {/* Footer buttons */}
       <div className="flex border-t border-gray-200">
+        {/* ⭐ ปุ่มขอราคาพิเศษ - แสดงเฉพาะเมื่อยังไม่มีการขอราคา หรือถูกปฏิเสธ */}
+        {(!specialPriceStatus || specialPriceStatus === 'rejected') && onRequestSpecialPrice && (
+          <button
+            type="button"
+            onClick={onRequestSpecialPrice}
+            className="flex-1 py-2 text-sm font-semibold text-white bg-yellow-500 hover:bg-yellow-600 rounded-bl-2xl"
+          >
+            ขอราคาพิเศษ
+          </button>
+        )}
+        
         <button
           type="button"
           onClick={onEdit}
-          className="flex-1 py-2 text-sm font-semibold text-white bg-[#0084FF] hover:bg-blue-700 rounded-bl-2xl"
+          className={`flex-1 py-2 text-sm font-semibold text-white bg-[#0084FF] hover:bg-blue-700 ${(!specialPriceStatus || specialPriceStatus === 'rejected') && onRequestSpecialPrice ? '' : 'rounded-bl-2xl'}`}
         >
           แก้ไข
         </button>

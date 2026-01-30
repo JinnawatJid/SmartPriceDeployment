@@ -14,6 +14,9 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
   const isGlass = cat === "G";
   const isAluminium = cat === "A";
 
+  // ⭐ ดึงราคา W1 (ราคาอ้างอิงจากระบบ)
+  const w1Price = Number(item.Price_System || calculatedItem?.UnitPrice || item.UnitPrice || item.price || 0);
+
   // สำหรับกระจก
   const currentSqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
   const currentPricePerSheet =
@@ -30,6 +33,7 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
         : 0;
 
   const [pricePerSqft, setPricePerSqft] = useState(currentPricePerSqft);
+  const [showW1Warning, setShowW1Warning] = useState(false); // ⭐ สถานะแสดงคำเตือน
 
   // สำหรับอลูมิเนียม
   const currentUnitPrice =
@@ -63,7 +67,28 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
   const calculatedPricePerSheet = roundUp050(pricePerSqft * currentSqft);
   const calculatedPricePerLine = roundUp050(pricePerKg * weight);
 
+  // ⭐ ตรวจสอบว่าราคาที่แก้ต่ำกว่า W1 หรือไม่
+  const checkBelowW1 = () => {
+    let newPrice = 0;
+    
+    if (isGlass) {
+      newPrice = calculatedPricePerSheet;
+    } else if (isAluminium) {
+      newPrice = calculatedPricePerLine;
+    } else {
+      newPrice = otherPrice;
+    }
+
+    return newPrice < w1Price;
+  };
+
   const handleSave = () => {
+    // ⭐ ตรวจสอบก่อนบันทึก
+    if (checkBelowW1()) {
+      setShowW1Warning(true);
+      return;
+    }
+
     if (isGlass) {
       // บันทึกราคาต่อแผ่น (จากการคำนวณ)
       onSave({
@@ -85,8 +110,64 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
     }
   };
 
+  // ⭐ ยืนยันบันทึกแม้ราคาต่ำกว่า W1
+  const handleConfirmBelowW1 = () => {
+    setShowW1Warning(false);
+    
+    if (isGlass) {
+      onSave({
+        unitPrice: calculatedPricePerSheet,
+        pricePerSqft: pricePerSqft,
+      });
+    } else if (isAluminium) {
+      onSave({
+        unitPrice: calculatedPricePerLine,
+        pricePerKg: pricePerKg,
+        weight: weight,
+      });
+    } else {
+      onSave({
+        unitPrice: otherPrice,
+      });
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      {/* ⭐ Modal คำเตือนราคาต่ำกว่า W1 */}
+      {showW1Warning && (
+        <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-10">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="text-center">
+              <div className="text-5xl mb-4">⚠️</div>
+              <h3 className="text-xl font-bold text-red-600 mb-2">
+                ราคาต่ำกว่า W1
+              </h3>
+              <p className="text-gray-700 mb-4">
+                ราคาที่คุณกำหนดต่ำกว่าราคา W1 (฿{w1Price.toLocaleString()})
+              </p>
+              <p className="text-gray-600 mb-6">
+                กรุณาขอราคาพิเศษจากผู้อนุมัติก่อนดำเนินการต่อ
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowW1Warning(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  แก้ไขราคา
+                </button>
+                <button
+                  onClick={handleConfirmBelowW1}
+                  className="flex-1 px-4 py-2 text-white bg-yellow-500 rounded-lg hover:bg-yellow-600"
+                >
+                  ดำเนินการต่อ (ต้องขอราคา)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
         {/* Header */}
         <div className="px-6 py-4 border-b">

@@ -9,6 +9,7 @@ import QuoteDraftListPage from "./pages/QuoteDraftListPage.jsx";
 import ConfirmedQuotesPage from "./pages/ConfirmedQuotesPage";
 import OrderDetailPage from "./pages/OrderDetailPage.jsx";
 import UpdatePrice from "./pages/UpdatePrice";
+import ApprovalPDFsPage from "./components/special_price_request/ApprovalPDFsPage.jsx";
 
 // --- Layout 1 (สำหรับ Dashboard) ---
 const DashboardLayout = () => (
@@ -48,6 +49,7 @@ function App() {
           <Route path="/quote-drafts" element={<QuoteDraftListPage />} />
           <Route path="/confirmed-quotes" element={<ConfirmedQuotesPage />} />
           <Route path="/order/:id" element={<OrderDetailPage />} />
+          <Route path="/approval-pdfs/:requestNumber" element={<ApprovalPDFsPage />} />
         </Route>
 
         {/* 2.2: CreateQuote (ใช้ WizardLayout) */}

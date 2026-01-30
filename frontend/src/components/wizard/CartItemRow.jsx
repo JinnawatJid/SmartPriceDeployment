@@ -124,74 +124,85 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
 
   return (
     <>
-      {/* ===== MAIN ROW ===== */}
-      <tr className="border-b bg-white hover:bg-gray-50">
-        <td className="w-[40px] px-4 py-3 text-sm text-gray-600">{index + 1}</td>
+              {/* ===== MAIN ROW ===== */}
+              <tr className="border-b bg-white hover:bg-gray-50">
+                <td className="w-[40px] px-4 py-3 text-sm text-gray-600">{index + 1}</td>
 
-        <td className="px-4 py-3 w-[240px]">
-          {editingDesc ? (
-            <input
-              autoFocus
-              value={descDraft}
-              onChange={(e) => setDescDraft(e.target.value)}
-              onBlur={commitDescription}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitDescription();
-                if (e.key === "Escape") {
-                  setDescDraft(item.name || "");
-                  setEditingDesc(false);
-                }
-              }}
-              className="w-full rounded border px-2 py-1 text-xs"
-            />
-          ) : (
-            <p
-              className="font-semibold text-xs cursor-pointer hover:underline"
-              onDoubleClick={() => setEditingDesc(true)}
-              title="ดับเบิลคลิกเพื่อแก้ไขชื่อสินค้า"
-            >
-              {item.name}
-            </p>
-          )}
-          <p className="text-xs text-gray-500">{item.sku}</p>
-        </td>
+                <td className="px-4 py-3 w-[240px]">
+                  {editingDesc ? (
+                    <input
+                      autoFocus
+                      value={descDraft}
+                      onChange={(e) => setDescDraft(e.target.value)}
+                      onBlur={commitDescription}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitDescription();
+                        if (e.key === "Escape") {
+                          setDescDraft(item.name || "");
+                          setEditingDesc(false);
+                        }
+                      }}
+                      className="w-full rounded border px-2 py-1 text-xs"
+                    />
+                  ) : (
+                    <p
+                      className="font-semibold text-xs cursor-pointer hover:underline"
+                      onDoubleClick={() => setEditingDesc(true)}
+                      title="ดับเบิลคลิกเพื่อแก้ไขชื่อสินค้า"
+                    >
+                      {item.name}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500">{item.sku}</p>
+                </td>
 
-        <td className="px-2 py-3 ">
-          <input
-            type="number"
-            value={item.qty}
-            min="1"
-            onChange={handleQtyChange}
-            className="w-14 rounded border p-1 text-center"
-          />
-        </td>
+                <td className="px-2 py-3 w-[100px] ">
+                  <input
+                    type="number"
+                    value={item.qty}
+                    min="1"
+                    onChange={handleQtyChange}
+                    className="w-14 rounded border p-1 text-center"
+                  />
+                </td>
 
-        <td className="px-2 py-3 text-sm w-[80px]">
-          <div className="flex items-center gap-2">
-            <span
-              className="font-semibold cursor-pointer hover:underline text-blue-700"
-              onClick={() => setShowPriceModal(true)}
-              title="คลิกเพื่อแก้ไขราคา"
-            >
-              {Number(displayUnitPrice).toLocaleString("th-TH")}
-            </span>
+                <td className="px-2 py-3 text-sm w-[100px]">
+          <div className="relative flex items-center">
+            
+            {/* ราคาอยู่กลาง */}
+            <div className="mx-auto flex flex-col items-center">
+              <span
+                className="font-semibold cursor-pointer hover:underline text-blue-700 text-center"
+                onClick={() => setShowPriceModal(true)}
+              >
+                {Number(displayUnitPrice).toLocaleString("th-TH")}
+              </span>
 
+              {calculatedItem?.price_source === "history" && (
+                <span className="text-[10px] text-orange-600 font-medium mt-0.5">
+                  ราคาครั้งก่อน
+                </span>
+              )}
+            </div>
+
+            {/* ปุ่มดูประวัติ ชิดขวา */}
             <button
               onClick={() => setOpenPriceHistory((v) => !v)}
-              className="text-gray-400 hover:text-gray-600"
-              title="ดูประวัติราคา"
+              className="absolute right-0 text-gray-400 hover:text-gray-600"
             >
               ❯
             </button>
+
           </div>
         </td>
 
 
-        <td className="px-2 text-sm py-3 font-semibold ">
+
+        <td className="px-2 text-sm py-3 font-semibold text-center ">
           {Number(displayLineTotal).toLocaleString("th-TH")}
         </td>
 
-        <td className="text-start mr-4">
+        <td className="text-start w-[60px] ">
           <button onClick={handleRemove}>
             <TrashIcon />
           </button>
@@ -219,8 +230,15 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
             )}
 
             {!loading && prices.length > 0 && (
-              <div className="rounded-lg border bg-white">
-                <div className="px-4 py-2 font-semibold text-sm bg-gray-50">ประวัติราคา</div>
+              <div className="rounded-b-xl border bg-white ">
+                <div className="px-4 py-2 font-semibold text-sm bg-gray-50 flex justify-between items-center">
+                  <span>ประวัติราคา</span>
+                  {calculatedItem?.price_source === "history" && (
+                    <span className="text-xs text-orange-600 font-medium bg-orange-50 px-2 py-1 rounded">
+                      ✓ ใช้ราคาครั้งก่อน 
+                    </span>
+                  )}
+                </div>
 
                 <div className="divide-y">
                   {prices.slice(0, 2).map((p, i) => (
@@ -245,6 +263,16 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                     </div>
                   ))}
                 </div>
+                
+                {/* ⭐ แสดงราคาระบบปัจจุบันเพื่อเปรียบเทียบ */}
+                {calculatedItem && (
+                  <div className="px-4 py-2 bg-blue-50 border-t text-xs text-gray-600">
+                    <span className="font-medium">ราคาระบบปัจจุบัน:</span>{" "}
+                    <span className="font-semibold text-blue-700">
+                      ฿{Number(displayUnitPrice).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </td>

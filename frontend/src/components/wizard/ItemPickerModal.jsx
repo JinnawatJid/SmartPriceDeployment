@@ -442,7 +442,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
 
       {/* ================= ADDED ITEMS LIST ================= */}
       {selectedItems.length > 0 && (
-        <div className="border rounded-xl bg-gray-50 mt-4 h-[200px]">
+        <div className="border rounded-xl bg-gray-50 mt-4 h-[180px]">
           <div className="px-4 py-2 border-b bg-white rounded-t-xl flex items-center justify-between">
             <div className="text-sm font-semibold text-gray-700">
               รายการที่เพิ่มแล้ว ({selectedItems.length})

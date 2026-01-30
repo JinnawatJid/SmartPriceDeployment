@@ -12,6 +12,8 @@ import GlassPickerModal from "../../components/wizard/GlassPickerModal.jsx";
 import CategoryCard from "../../components/wizard/CategoryCard.jsx";
 import CartItemRow from "../../components/wizard/CartItemRow.jsx";
 import OrderHistoryCard from "../../components/wizard/OrderHistoryCard.jsx";
+import SpecialPriceRequestButton from "../../components/special_price_request/SpecialPriceRequestButton.jsx";
+import SpecialPriceRequestModal from "../../components/special_price_request/SpecialPriceRequestModal_v2.jsx";
 
 import ProductList from "../../components/products/ProductList.jsx";
 import ProductDetail from "../../components/products/ProductDetail.jsx";
@@ -90,6 +92,7 @@ function Step6_Summary({ state, dispatch }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [shippingOpen, setShippingOpen] = useState(false);
   const [glassOpen, setGlassOpen] = useState(false);
+  const [specialPriceModalOpen, setSpecialPriceModalOpen] = useState(false);
 
   // Product browser state
   const [productFilters, setProductFilters] = useState({});
@@ -1382,7 +1385,9 @@ function Step6_Summary({ state, dispatch }) {
 
           {/* กลาง: รายการสินค้า */}
           <div className="col-span-5 p-6 rounded-lg bg-gray-50 mt-3">
-            <h3 className="text-xl font-semibold text-gray-800 mb-3">รายการสินค้า</h3>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-xl font-semibold text-gray-800">รายการสินค้า</h3>
+            </div>
 
             {/* กล่องตาราง (grid ไม่เปลี่ยน) */}
             <div className="rounded-lg border border-gray-200 bg-white">
@@ -1391,10 +1396,10 @@ function Step6_Summary({ state, dispatch }) {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="w-[20px] px-2 pl-4 py-3 text-xs font-bold text-gray-500 text-left">#</th>
-                    <th className="w-[140px]  py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
-                    <th className="w-[40px]  py-3 px-2 text-xs text-start font-bold text-gray-500">จำนวน</th>
+                    <th className="w-[120px]  py-3 text-xs font-bold text-gray-500 text-left">สินค้า</th>
+                    <th className="w-[32px]  py-3 pr-6 text-xs  font-bold text-gray-500">จำนวน</th>
                     <th className="w-[60px]  py-3  text-xs font-bold text-gray-500 text-center">ราคา/หน่วย</th>
-                    <th className="w-[80px]  first-line:px-2 py-3 text-xs font-bold text-gray-500 text-left">ยอดรวม</th>
+                    <th className="w-[80px]  first-line:px-2 py-3 pl-6 text-xs font-bold text-gray-500 text-left">ยอดรวม</th>
                   </tr>
                 </thead>
               </table>
@@ -1627,6 +1632,21 @@ function Step6_Summary({ state, dispatch }) {
         onConfirm={(payload) => {
           dispatch({ type: "ADD_ITEM", payload });
           setGlassOpen(false);
+        }}
+      />
+
+      {/* Special Price Request Modal */}
+      <SpecialPriceRequestModal
+        isOpen={specialPriceModalOpen}
+        onClose={() => setSpecialPriceModalOpen(false)}
+        cart={state.cart}
+        totals={calculation.totals}
+        customer={state.customer}
+        quoteNo={state.quoteNo || "DRAFT"}
+        onSubmitSuccess={(result) => {
+          console.log("Special price request submitted:", result);
+          // อัปเดตสถานะใบเสนอราคาเป็น pending_approval
+          alert("ส่งคำขอราคาพิเศษสำเร็จ! ใบเสนอราคานี้จะรอการอนุมัติก่อนยืนยัน");
         }}
       />
     </div>

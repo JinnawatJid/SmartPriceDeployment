@@ -18,6 +18,7 @@ from item_update import router as item_update_router
 from customer_analytics import router as customer_analytics_router
 from api.router_sq import router as sq_router
 from products_router import api_router
+from special_price_request.router import router as special_price_request_router
 
 from config.config_external_api import CUSTOMER_API_KEY
 
@@ -67,6 +68,7 @@ app.include_router(item_update_router, prefix="/api")
 app.include_router(customer_analytics_router)
 app.include_router(sq_router, prefix="/api")
 app.include_router(api_router, prefix="/api")
+app.include_router(special_price_request_router, prefix="/api")
 
 
 

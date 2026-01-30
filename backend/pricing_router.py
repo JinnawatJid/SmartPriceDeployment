@@ -400,6 +400,47 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
 
     # 👉 ตอนนี้ df_lp schema ตรงกับที่ Price.py ต้องการแล้ว
     df_price = Price(df_lp)
+    
+    # ⭐ เพิ่ม: ตรวจสอบประวัติราคาและใช้ราคาครั้งก่อนถ้าสูงกว่าราคาระบบ
+    from config.db_sqlite import get_conn
+    
+    conn = get_conn()
+    for idx, row in df_price.iterrows():
+        sku = row["sku"]
+        system_price = float(row["NewPrice"])
+        
+        try:
+            # ดึงราคาล่าสุดจากประวัติการซื้อ
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT "Unit Price" AS price
+                FROM "Invoice"
+                WHERE "No." = ?
+                  AND "Sell-to Customer No." = ?
+                ORDER BY "Posting Date" DESC
+                LIMIT 1
+            """, (sku, customer_code))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                last_price = float(result[0] or 0)
+                
+                # ⭐ ถ้าราคาครั้งก่อนสูงกว่าราคาระบบ → ใช้ราคาครั้งก่อน
+                if last_price > system_price:
+                    print(f"✅ SKU {sku}: ใช้ราคาครั้งก่อน {last_price:.2f} (สูงกว่าระบบ {system_price:.2f})")
+                    df_price.at[idx, "NewPrice"] = last_price
+                    df_price.at[idx, "price_source"] = "history"  # ⭐ เพิ่ม flag
+                else:
+                    df_price.at[idx, "price_source"] = "system"
+            else:
+                df_price.at[idx, "price_source"] = "system"
+                
+        except Exception as e:
+            print(f"⚠️ ไม่สามารถตรวจสอบประวัติราคาสำหรับ SKU {sku}: {e}")
+            df_price.at[idx, "price_source"] = "system"
+    
+    conn.close()
 
 
     # ⭐ FIX UNIT (Normal Mode)
@@ -493,6 +534,7 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
             "_LineTotal": row["_LineTotal"],
             "_Tier_Z": row["_Tier_Z"],
             "product_weight": float(row.get("product_weight", 0) or 0),
+            "price_source": row.get("price_source", "system"),  # ⭐ เพิ่ม flag
 
         })
 
