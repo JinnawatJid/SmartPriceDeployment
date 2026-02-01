@@ -58,8 +58,8 @@ def create_request(data: dict) -> dict:
             "quote_no": str,
             "customer_code": str,
             "customer_name": str,
+            "customer_type": str,
             "requester_name": str,
-            "requester_phone": str,
             "request_reason": str,
             "original_total": float,
             "requested_total": float,
@@ -100,11 +100,15 @@ def create_request(data: dict) -> dict:
     
     now = datetime.now().isoformat(timespec="seconds")
     
+    # Debug logging
+    print(f"🔍 Creating request with customer_type: '{data.get('customer_type', '')}'")
+    print(f"🔍 Customer data: code={data.get('customer_code')}, name={data.get('customer_name')}, type={data.get('customer_type')}")
+    
     # Insert header
     cur.execute("""
         INSERT INTO special_price_requests (
-            request_number, quote_no, customer_code, customer_name,
-            requester_name, requester_phone, request_reason,
+            request_number, quote_no, customer_code, customer_name, customer_type,
+            requester_name, request_reason,
             original_total, requested_total, discount_percentage,
             status, approver_email, branch, valid_from, valid_to,
             email_sent_at, created_at, updated_at
@@ -114,8 +118,8 @@ def create_request(data: dict) -> dict:
         data["quote_no"],
         data.get("customer_code", ""),
         data.get("customer_name", ""),
+        data.get("customer_type", ""),
         data["requester_name"],
-        data.get("requester_phone", ""),
         data["request_reason"],
         data["original_total"],
         data["requested_total"],

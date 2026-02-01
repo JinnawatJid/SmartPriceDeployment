@@ -22,14 +22,19 @@ export default function QuoteDraftListPage() {
     const fetchDrafts = async () => {
       try {
         setLoading(true);
-        // ⭐ ดึงทั้ง open และ pending_approval
-        const [openRes, pendingRes] = await Promise.all([
+        // ⭐ ดึงทั้ง open, pending_approval, และ draft (rejected)
+        const [openRes, pendingRes, draftRes] = await Promise.all([
           api.get("/api/quotation", { params: { status: "open" } }),
-          api.get("/api/quotation", { params: { status: "pending_approval" } })
+          api.get("/api/quotation", { params: { status: "pending_approval" } }),
+          api.get("/api/quotation", { params: { status: "draft" } })
         ]);
         
-        // รวม drafts ทั้งสองสถานะ
-        const allDrafts = [...(openRes.data || []), ...(pendingRes.data || [])];
+        // รวม drafts ทั้งสามสถานะ
+        const allDrafts = [
+          ...(openRes.data || []), 
+          ...(pendingRes.data || []),
+          ...(draftRes.data || [])
+        ];
         setDrafts(allDrafts);
       } catch (err) {
         console.error(err);
@@ -134,8 +139,35 @@ export default function QuoteDraftListPage() {
   };
   
   // ⭐ เปิด modal ขอราคาพิเศษ
-  const handleRequestSpecialPrice = (quote) => {
-    setSelectedQuote(quote);
+  const handleRequestSpecialPrice = async (quote) => {
+    // ⭐ ดึงข้อมูลลูกค้าแบบเต็มจาก API เพื่อให้ได้ gen_bus
+    try {
+      const customerCode = quote.customer?.id || quote.customer?.code;
+      if (customerCode) {
+        const response = await api.get("/api/customer/search", {
+          params: { code: customerCode }
+        });
+        
+        // อัปเดต customer object ให้มี gen_bus
+        const enrichedQuote = {
+          ...quote,
+          customer: {
+            ...quote.customer,
+            gen_bus: response.data.gen_bus
+          }
+        };
+        
+        console.log("🔍 Enriched customer data:", enrichedQuote.customer);
+        setSelectedQuote(enrichedQuote);
+      } else {
+        setSelectedQuote(quote);
+      }
+    } catch (error) {
+      console.error("⚠️ Failed to fetch customer data:", error);
+      // ถ้าดึงไม่ได้ ให้ใช้ข้อมูลเดิม
+      setSelectedQuote(quote);
+    }
+    
     setSpecialPriceModalOpen(true);
   };
   
@@ -143,12 +175,17 @@ export default function QuoteDraftListPage() {
   const handleSpecialPriceSuccess = async (result) => {
     // Reload drafts เพื่อดึงสถานะใหม่
     try {
-      const [openRes, pendingRes] = await Promise.all([
+      const [openRes, pendingRes, draftRes] = await Promise.all([
         api.get("/api/quotation", { params: { status: "open" } }),
-        api.get("/api/quotation", { params: { status: "pending_approval" } })
+        api.get("/api/quotation", { params: { status: "pending_approval" } }),
+        api.get("/api/quotation", { params: { status: "draft" } })
       ]);
       
-      const allDrafts = [...(openRes.data || []), ...(pendingRes.data || [])];
+      const allDrafts = [
+        ...(openRes.data || []), 
+        ...(pendingRes.data || []),
+        ...(draftRes.data || [])
+      ];
       setDrafts(allDrafts);
     } catch (err) {
       console.error(err);

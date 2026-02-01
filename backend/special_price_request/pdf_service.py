@@ -26,8 +26,15 @@ def generate_special_price_request_pdf(request_data: dict) -> Path:
     filename = f"{request_data['request_number']}.pdf"
     pdf_path = PDF_STORAGE_PATH / filename
     
+    # ลบไฟล์เก่าถ้ามี (เพื่อให้แน่ใจว่าสร้างใหม่)
+    if pdf_path.exists():
+        print(f"⚠️  Removing old PDF: {pdf_path}")
+        pdf_path.unlink()
+    
     # สร้าง PDF
+    print(f"📄 Generating new PDF: {pdf_path}")
     HTML(string=html_content).write_pdf(pdf_path)
+    print(f"✅ PDF generated: {pdf_path.stat().st_size:,} bytes")
     
     return pdf_path
 
@@ -36,6 +43,14 @@ def _generate_html_template(data: dict) -> str:
     """
     สร้าง HTML Template สำหรับ PDF (แบบย่อ)
     """
+    # Debug logging
+    print(f"\n🔍 PDF Template Data:")
+    print(f"  - customer_code: {data.get('customer_code')}")
+    print(f"  - customer_name: {data.get('customer_name')}")
+    print(f"  - customer_type: '{data.get('customer_type')}'")
+    print(f"  - requester_name: {data.get('requester_name')}")
+    print(f"  - created_at: {data.get('created_at')}")
+    
     # สร้างตารางรายการสินค้า
     items_html = ""
     for idx, item in enumerate(data.get("items", []), 1):
@@ -184,20 +199,24 @@ def _generate_html_template(data: dict) -> str:
                 <div class="info-value">{data.get('created_at', '')}</div>
             </div>
             <div class="info-row">
-                <div class="info-label">ผู้ขอ:</div>
-                <div class="info-value">{data['requester_name']}</div>
+                <div class="info-label">รหัสลูกค้า:</div>
+                <div class="info-value">{data.get('customer_code', '-')}</div>
             </div>
             <div class="info-row">
-                <div class="info-label">เบอร์โทร:</div>
-                <div class="info-value">{data.get('requester_phone', '-')}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">ลูกค้า:</div>
+                <div class="info-label">ชื่อลูกค้า:</div>
                 <div class="info-value">{data.get('customer_name', 'N/A')}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">ประเภทลูกค้า:</div>
+                <div class="info-value">{data.get('customer_type', '-')}</div>
             </div>
             <div class="info-row">
                 <div class="info-label">เลขที่ใบเสนอราคา:</div>
                 <div class="info-value">{data['quote_no']}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">ระยะเวลาใช้ราคา:</div>
+                <div class="info-value">{data.get('valid_from', '-')} ถึง {data.get('valid_to', '-')}</div>
             </div>
         </div>
         
@@ -227,8 +246,8 @@ def _generate_html_template(data: dict) -> str:
         <div class="signature-section">
             <div class="signature-box">
                 <div class="signature-line">
-                    <p style="margin: 5px 0;">ผู้ขอ</p>
-                    <p style="margin: 5px 0; font-size: 11px;">วันที่: ........................</p>
+                    <p style="margin: 5px 0;">ผู้ขอ: {data['requester_name']}</p>
+                    <p style="margin: 5px 0; font-size: 11px;">วันที่: {data.get('created_at', '')}</p>
                 </div>
             </div>
             <div class="signature-box">

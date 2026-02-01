@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../../hooks/useAuth";
 
 const SpecialPriceRequestModal = ({
   isOpen,
@@ -9,6 +10,7 @@ const SpecialPriceRequestModal = ({
   quoteNo = "",
   onSubmitSuccess,
 }) => {
+  const { employee } = useAuth();
   // ⭐ FIX: customer uses 'id' property, not 'code'
   const customerData = customer || { id: "", name: "ลูกค้าทั่วไป" };
 
@@ -18,6 +20,8 @@ const SpecialPriceRequestModal = ({
       console.log("🔍 Customer data:", customer);
       console.log("🔍 Customer id:", customer?.id);
       console.log("🔍 Customer code:", customer?.code);
+      console.log("🔍 Customer gen_bus:", customer?.gen_bus);
+      console.log("🔍 Employee data:", employee);
       console.log("🔍 Cart data:", cart);
       if (cart && cart.length > 0) {
         console.log("🔍 First item:", cart[0]);
@@ -26,11 +30,9 @@ const SpecialPriceRequestModal = ({
         console.log("🔍 First item price:", cart[0].price);
       }
     }
-  }, [isOpen, customer, cart]);
+  }, [isOpen, customer, cart, employee]);
 
   const [formData, setFormData] = useState({
-    requesterName: "",
-    requesterPhone: "",
     requestReason: "",
     approverEmail: "",
     branch: "",
@@ -101,10 +103,6 @@ const SpecialPriceRequestModal = ({
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.requesterName.trim()) {
-      newErrors.requesterName = "กรุณากรอกชื่อผู้ขอ";
-    }
-
     if (!formData.requestReason.trim()) {
       newErrors.requestReason = "กรุณากรอกเหตุผลที่ขอ";
     }
@@ -172,9 +170,8 @@ const SpecialPriceRequestModal = ({
         quote_no: quoteNo || `DRAFT-${Date.now()}`,
         customer_code: customerData.id || customerData.code || "",
         customer_name: customerData.name || "ลูกค้าทั่วไป",
-        requester_name: formData.requesterName,
-        requester_email: "", // ไม่ต้องใส่ email ผู้ขอ
-        requester_phone: formData.requesterPhone,
+        customer_type: customerData.gen_bus || "",
+        requester_name: employee?.name || employee?.employeeName || "พนักงาน",
         request_reason: formData.requestReason,
         original_total: Number(originalTotal) || 0,
         requested_total: Number(requestedTotal) || 0,
@@ -186,6 +183,8 @@ const SpecialPriceRequestModal = ({
       };
 
       console.log("📤 Sending payload:", payload);
+      console.log("🔍 Customer type being sent:", customerData.gen_bus);
+      console.log("🔍 Full customer data:", customerData);
 
       const response = await fetch(
         "http://localhost:8000/api/special-price-requests",
@@ -225,7 +224,7 @@ const SpecialPriceRequestModal = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[80vh] overflow-y-auto">
         {/* Header */}
         <div className="bg-yellow-500 text-white px-6 py-4 flex justify-between items-center sticky top-0">
           <h2 className="text-xl font-bold">ขอราคาพิเศษ</h2>
@@ -253,8 +252,6 @@ const SpecialPriceRequestModal = ({
               </div>
             </div>
           </div>
-
-          {/* เลือกสินค้า */}
           <div className="mb-6">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-bold text-lg">เลือกสินค้าที่ต้องการขอราคาพิเศษ</h3>
@@ -330,51 +327,11 @@ const SpecialPriceRequestModal = ({
             </p>
           </div>
 
-          {/* สรุปราคา - ลบออก */}
-
-          {/* Form Fields */}
+          {/* เลือกสินค้า */}
+          <div className="mb-6"></div>
           <div className="grid grid-cols-2 gap-4 mb-4">
-            {/* ชื่อผู้ขอ */}
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                ชื่อผู้ขอ <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.requesterName}
-                onChange={(e) =>
-                  setFormData({ ...formData, requesterName: e.target.value })
-                }
-                className={`w-full px-3 py-2 border rounded-lg ${
-                  errors.requesterName ? "border-red-500" : "border-gray-300"
-                }`}
-                placeholder="ระบุชื่อ-นามสกุล"
-              />
-              {errors.requesterName && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.requesterName}
-                </p>
-              )}
-            </div>
-
-            {/* เบอร์โทร */}
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                เบอร์โทรศัพท์
-              </label>
-              <input
-                type="tel"
-                value={formData.requesterPhone}
-                onChange={(e) =>
-                  setFormData({ ...formData, requesterPhone: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                placeholder="081-234-5678"
-              />
-            </div>
-
             {/* สาขา */}
-            <div>
+            <div className="col-span-2">
               <label className="block text-sm font-medium mb-1">
                 สาขา <span className="text-red-500">*</span>
               </label>

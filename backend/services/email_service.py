@@ -165,21 +165,7 @@ def send_approval_request(request_data: dict, pdf_path: Path) -> dict:
             
             <hr style="margin: 20px 0;">
             
-            <div class="info-row">
-                <span class="label">ราคาเดิม:</span>
-                <span class="value">฿{request_data['original_total']:,.2f}</span>
-            </div>
-            
-            <div class="info-row">
-                <span class="label">ราคาที่ขอ:</span>
-                <span class="price-highlight">฿{request_data['requested_total']:,.2f}</span>
-            </div>
-            
-            <div class="info-row">
-                <span class="label">ส่วนลด:</span>
-                <span class="value">{request_data['discount_percentage']}%</span>
-            </div>
-            
+    
             <hr style="margin: 20px 0;">
             
             <div class="info-row">

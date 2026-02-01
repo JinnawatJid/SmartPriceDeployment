@@ -141,13 +141,10 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
             <div className="text-center">
               <div className="text-5xl mb-4">⚠️</div>
               <h3 className="text-xl font-bold text-red-600 mb-2">
-                ราคาต่ำกว่า W1
+                กรุณาขอราคาพิเศษจากผู้อนุมัติ
               </h3>
-              <p className="text-gray-700 mb-4">
-                ราคาที่คุณกำหนดต่ำกว่าราคา W1 (฿{w1Price.toLocaleString()})
-              </p>
               <p className="text-gray-600 mb-6">
-                กรุณาขอราคาพิเศษจากผู้อนุมัติก่อนดำเนินการต่อ
+                เลือกสินค้าและแก้ไขราคาที่ต้องการให้เรียบร้อย จากนั้นกด Save Draft และขอราคา
               </p>
               <div className="flex gap-3">
                 <button
@@ -160,7 +157,7 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
                   onClick={handleConfirmBelowW1}
                   className="flex-1 px-4 py-2 text-white bg-yellow-500 rounded-lg hover:bg-yellow-600"
                 >
-                  ดำเนินการต่อ (ต้องขอราคา)
+                  ดำเนินการต่อ 
                 </button>
               </div>
             </div>

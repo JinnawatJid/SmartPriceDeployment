@@ -7,6 +7,11 @@ Email Reply Checker - Background Service
 import time
 import schedule
 import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from special_price_request.email_reply_checker import check_email_replies
 
 # ⭐ ปรับระยะเวลาตรวจสอบได้ที่นี่ (หน่วยเป็นนาที)

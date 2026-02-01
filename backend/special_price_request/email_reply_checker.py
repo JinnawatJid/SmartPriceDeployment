@@ -49,25 +49,44 @@ def check_approval_decision(body: str) -> Optional[Tuple[str, str]]:
     """
     Check if email body contains APPROVE or REJECT
     Returns: (decision, reason) or None
+    
+    ⚠️ IMPORTANT: อ่านเฉพาะบรรทัดแรกที่มี APPROVE หรือ REJECT (ไม่ใช่ในคำแนะนำ)
     """
-    body_upper = body.upper()
+    lines = body.split('\n')
     
-    # Check for APPROVE
-    if 'APPROVE' in body_upper:
-        return ('approve', '')
-    
-    # Check for REJECT with reason
-    if 'REJECT' in body_upper:
-        # Try to extract reason after REJECT
-        lines = body.split('\n')
-        for i, line in enumerate(lines):
-            if 'REJECT' in line.upper():
-                # Get next line as reason
-                if i + 1 < len(lines):
-                    reason = lines[i + 1].strip()
-                    if reason and not reason.startswith('***'):
-                        return ('reject', reason)
-                return ('reject', 'ไม่ระบุเหตุผล')
+    # วนหาบรรทัดแรกที่มี APPROVE หรือ REJECT (ไม่ใช่ในคำแนะนำ)
+    for i, line in enumerate(lines):
+        line_stripped = line.strip()
+        line_upper = line_stripped.upper()
+        
+        # ข้ามบรรทัดว่าง
+        if not line_stripped:
+            continue
+        
+        # ข้ามบรรทัดที่เป็นคำแนะนำ (ขึ้นต้นด้วย *, -, •, หรือ ***)
+        if line_stripped.startswith(('*', '-', '•', '***')):
+            continue
+        
+        # ข้ามบรรทัดที่เป็นส่วนของคำแนะนำ (มีคำว่า "วิธี", "กรุณา")
+        if any(keyword in line for keyword in ['วิธี', 'กรุณา', 'How to', 'Please']):
+            continue
+        
+        # ตรวจสอบ REJECT ก่อน
+        if 'REJECT' in line_upper:
+            # ดึงเหตุผลจากบรรทัดเดียวกัน (หลัง REJECT) หรือบรรทัดถัดไป
+            reason = line_stripped.replace('REJECT', '').strip()
+            
+            # ถ้าไม่มีเหตุผลในบรรทัดเดียวกัน ให้ดูบรรทัดถัดไป
+            if not reason and i + 1 < len(lines):
+                next_line = lines[i + 1].strip()
+                if next_line and not next_line.startswith(('*', '-', '•', '***')):
+                    reason = next_line
+            
+            return ('reject', reason or 'ไม่ระบุเหตุผล')
+        
+        # ตรวจสอบ APPROVE
+        if 'APPROVE' in line_upper:
+            return ('approve', '')
     
     return None
 

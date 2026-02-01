@@ -86,7 +86,7 @@ export default function QuoteDraftCard({
           </div>
         )}
 
-        <p className="mt-1 font-semibold text-gray-800">{customerName}</p>
+        <p className="mt-2 font-semibold text-gray-800">{customerName}</p>
         <p className="text-xs text-gray-500">รหัสลูกค้า: {customerCode}</p>
       </div>
 

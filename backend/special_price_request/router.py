@@ -38,8 +38,8 @@ def create_special_price_request(payload: dict = Body(...)):
         "quote_no": "BSQT-2501/0001",
         "customer_code": "C001",
         "customer_name": "บริษัท ABC",
+        "customer_type": "R",
         "requester_name": "สมชาย ใจดี",
-        "requester_phone": "081-234-5678",
         "request_reason": "ลูกค้าเป็น VIP",
         "original_total": 15000.00,
         "requested_total": 12000.00,
@@ -148,12 +148,24 @@ def get_special_price_request_detail(request_number: str):
 def download_special_price_request_pdf(request_number: str):
     """
     ดาวน์โหลด PDF ของคำขอราคาพิเศษ
+    ถ้าไฟล์ไม่มี จะสร้างใหม่อัตโนมัติ
     """
     try:
         pdf_path = PDF_STORAGE_PATH / f"{request_number}.pdf"
         
+        # ถ้าไฟล์ไม่มี ให้สร้างใหม่
         if not pdf_path.exists():
-            raise HTTPException(404, "PDF file not found")
+            print(f"📄 PDF not found, generating new one for {request_number}")
+            
+            # Get request data
+            request_data = get_request_detail(request_number)
+            
+            if not request_data:
+                raise HTTPException(404, f"Request {request_number} not found")
+            
+            # Generate PDF
+            pdf_path = generate_special_price_request_pdf(request_data)
+            print(f"✅ PDF generated: {pdf_path}")
         
         return FileResponse(
             path=pdf_path,
