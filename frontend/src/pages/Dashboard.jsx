@@ -65,10 +65,18 @@ function Dashboard() {
         });
         const completeList = resComplete.data || [];
 
-        const resDraft = await api.get("/api/quotation", {
-          params: { status: "open" },
-        });
-        const draftList = resDraft.data || [];
+        // ⭐ โหลดใบที่รอดำเนินการ (open, pending_approval, draft)
+        const [resOpen, resPending, resDraft] = await Promise.all([
+          api.get("/api/quotation", { params: { status: "open" } }),
+          api.get("/api/quotation", { params: { status: "pending_approval" } }),
+          api.get("/api/quotation", { params: { status: "draft" } })
+        ]);
+        
+        const pendingList = [
+          ...(resOpen.data || []),
+          ...(resPending.data || []),
+          ...(resDraft.data || [])
+        ];
 
         // ---- 1) ใบเสนอราคาวันนี้ ----
         const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -79,7 +87,7 @@ function Dashboard() {
         setTodayCount(todayCountValue);
 
         // ---- 2) รอดำเนินการ ----
-        setPendingCount(draftList.length);
+        setPendingCount(pendingList.length);
 
         // ---- 3) ลูกค้าที่ติดต่อวันนี้ ----
         const uniqueCustomers = new Set(

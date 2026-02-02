@@ -26,6 +26,8 @@ from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 import os
 import sys
+import threading
+import time
 
 # Ensure logs are flushed immediately to stdout for Windows Console visibility
 sys.stdout.reconfigure(line_buffering=True)
@@ -134,6 +136,42 @@ if os.path.exists(dist_path):
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
+
+# ========================================
+# Background Email Checker Thread
+# ========================================
+def email_checker_background():
+    """
+    Background thread ที่ตรวจสอบ email ทุก 1 นาที
+    รันอัตโนมัติเมื่อ FastAPI start
+    """
+    from special_price_request.email_reply_checker import check_email_replies
+    
+    CHECK_INTERVAL_MINUTES = 1  # ปรับได้ตามต้องการ
+    
+    print("\n" + "="*60)
+    print("🚀 Email Checker Background Service Started")
+    print(f"⏰ Checking emails every {CHECK_INTERVAL_MINUTES} minute(s)")
+    print("="*60 + "\n")
+    
+    while True:
+        try:
+            check_email_replies()
+        except Exception as e:
+            print(f"❌ Error in email checker: {e}")
+        
+        # รอ N นาที
+        time.sleep(CHECK_INTERVAL_MINUTES * 60)
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    เริ่ม background thread เมื่อ FastAPI start
+    """
+    # Start email checker in background thread
+    email_thread = threading.Thread(target=email_checker_background, daemon=True)
+    email_thread.start()
+    print("✅ Email checker thread started")
 
 if __name__ == "__main__":
     import uvicorn
