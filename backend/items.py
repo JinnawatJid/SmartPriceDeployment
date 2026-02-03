@@ -487,11 +487,11 @@ def get_filter_options(
             "thickness": "Aluminium_Thickness",
         },
         "C": {
-            "brand": "C-Line_Brand",
-            "group": "C-Line_Group",
-            "subGroup": "C-Line_SubGroup",
-            "color": "C-Line_Color",
-            "thickness": "C-Line_Thickness",
+            "brand": "CLine_Brand",
+            "group": "CLine_Group",
+            "subGroup": "CLine_SubGroup",
+            "color": "CLine_Color",
+            "thickness": "CLine_Thickness",
         },
         "E": {
             "brand": "Accessories_Brand",

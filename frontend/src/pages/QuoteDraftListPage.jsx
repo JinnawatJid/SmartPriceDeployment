@@ -244,7 +244,7 @@ export default function QuoteDraftListPage() {
         {loading && <p className="text-sm text-gray-500">กำลังโหลดข้อมูล...</p>}
         {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 ">
+        <div className="grid gap-4 grid-cols-3  ">
           {!loading && filtered.length === 0 && (
             <p className="text-sm text-gray-500 col-span-full">ยังไม่มีใบเสนอราคาแบบร่าง</p>
           )}

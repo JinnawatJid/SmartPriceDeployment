@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import math
+import requests
 from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel
 from typing import List, Dict, Any
@@ -402,35 +403,54 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
     df_price = Price(df_lp)
     
     # ⭐ เพิ่ม: ตรวจสอบประวัติราคาและใช้ราคาครั้งก่อนถ้าสูงกว่าราคาระบบ
-    from config.db_sqlite import get_conn
+    from config.config_external_api import INVOICE_API_URL, INVOICE_API_HEADERS
+    from datetime import datetime, timedelta
     
-    conn = get_conn()
+    # ดึงข้อมูล Invoice 6 เดือนย้อนหลัง
+    today = datetime.today()
+    date_from = (today - timedelta(days=180)).date().isoformat()
+    
     for idx, row in df_price.iterrows():
         sku = row["sku"]
         system_price = float(row["NewPrice"])
         
         try:
-            # ดึงราคาล่าสุดจากประวัติการซื้อ
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT "Unit Price" AS price
-                FROM "Invoice"
-                WHERE "No." = ?
-                  AND "Sell-to Customer No." = ?
-                ORDER BY "Posting Date" DESC
-                LIMIT 1
-            """, (sku, customer_code))
+            # ดึงราคาล่าสุดจาก D365 API
+            payload = {
+                "page": 1,
+                "size": 1,
+                "customer_code": {"$eq": customer_code},
+                "sku": {"$eq": sku},
+                "Posting Date": {"$gte": date_from},
+            }
             
-            result = cursor.fetchone()
+            resp = requests.post(
+                INVOICE_API_URL,
+                json=payload,
+                headers=INVOICE_API_HEADERS,
+                timeout=10,
+            )
             
-            if result:
-                last_price = float(result[0] or 0)
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("data") or []
                 
-                # ⭐ ถ้าราคาครั้งก่อนสูงกว่าราคาระบบ → ใช้ราคาครั้งก่อน
-                if last_price > system_price:
-                    print(f"✅ SKU {sku}: ใช้ราคาครั้งก่อน {last_price:.2f} (สูงกว่าระบบ {system_price:.2f})")
-                    df_price.at[idx, "NewPrice"] = last_price
-                    df_price.at[idx, "price_source"] = "history"  # ⭐ เพิ่ม flag
+                if items:
+                    # Sort by Posting Date (ใหม่สุดก่อน)
+                    items_sorted = sorted(
+                        items, 
+                        key=lambda x: x.get("Posting Date", ""), 
+                        reverse=True
+                    )
+                    last_price = float(items_sorted[0].get("Unit Price") or 0)
+                    
+                    # ⭐ ถ้าราคาครั้งก่อนสูงกว่าราคาระบบ → ใช้ราคาครั้งก่อน
+                    if last_price > system_price:
+                        print(f"✅ SKU {sku}: ใช้ราคาครั้งก่อน {last_price:.2f} (สูงกว่าระบบ {system_price:.2f})")
+                        df_price.at[idx, "NewPrice"] = last_price
+                        df_price.at[idx, "price_source"] = "history"  # ⭐ เพิ่ม flag
+                    else:
+                        df_price.at[idx, "price_source"] = "system"
                 else:
                     df_price.at[idx, "price_source"] = "system"
             else:
@@ -439,8 +459,6 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
         except Exception as e:
             print(f"⚠️ ไม่สามารถตรวจสอบประวัติราคาสำหรับ SKU {sku}: {e}")
             df_price.at[idx, "price_source"] = "system"
-    
-    conn.close()
 
 
     # ⭐ FIX UNIT (Normal Mode)

@@ -93,7 +93,7 @@ export default function GypsumPicker({ onSelect }) {
         value={brand}
         options={options.brand}
         onChange={handleBrandChange}
-        width={170}
+        width={300}
       />
 
       <CustomDropdown
@@ -101,7 +101,7 @@ export default function GypsumPicker({ onSelect }) {
         value={group}
         options={options.group}
         onChange={handleGroupChange}
-        width={240}
+        width={300}
       />
 
       <CustomDropdown
@@ -109,7 +109,7 @@ export default function GypsumPicker({ onSelect }) {
         value={subGroup}
         options={options.subGroup}
         onChange={handleSubGroupChange}
-        width={240}
+        width={300}
       />
 
       <CustomDropdown
@@ -117,7 +117,7 @@ export default function GypsumPicker({ onSelect }) {
         value={color}
         options={options.color}
         onChange={handleColorChange}
-        width={180}
+        width={300}
       />
 
       <CustomDropdown
@@ -125,12 +125,12 @@ export default function GypsumPicker({ onSelect }) {
         value={thickness}
         options={options.thickness}
         onChange={handleThicknessChange}
-        width={180}
+        width={300}
       />
 
       <button
         onClick={handleClearAll}
-        className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
+        className="w-[100px] h-[40px] mt-6 px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
       >
         Clear All
       </button>

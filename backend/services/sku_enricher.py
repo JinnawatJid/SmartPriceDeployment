@@ -6,17 +6,17 @@
 
 import pandas as pd
 from functools import lru_cache
-from config.db_sqlite import get_conn
+from config.db_mssql import get_mssql_conn
 
 
 # ==================================================
-# Mapping Loader (cached)
+# Mapping Loader (cached) - ใช้ MSSQL
 # ==================================================
 
 @lru_cache(maxsize=32)
 def load_mapping(table_name: str):
-    conn = get_conn()
-    df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+    conn = get_mssql_conn()
+    df = pd.read_sql_query(f'SELECT * FROM {table_name}', conn)
     conn.close()
 
     return {
@@ -26,13 +26,13 @@ def load_mapping(table_name: str):
 
 
 # ==================================================
-# Glass SubGroup loader (Type + Code → Name) (cached)
+# Glass SubGroup loader (Type + Code → Name) (cached) - ใช้ MSSQL
 # ==================================================
 
 @lru_cache(maxsize=8)
 def load_glass_subgroup_mapping():
-    conn = get_conn()
-    df = pd.read_sql_query('SELECT Type, Code, Name FROM "Glass_SubGroup"', conn)
+    conn = get_mssql_conn()
+    df = pd.read_sql_query('SELECT Type, Code, Name FROM Glass_SubGroup', conn)
     conn.close()
 
     out = {}
@@ -139,9 +139,9 @@ def enrich_cline(sku: str):
     if not parsed:
         return {}
 
-    brand_map = load_mapping("C-Line_Brand")
-    group_map = load_mapping("C-Line_Group")
-    sub_map   = load_mapping("C-Line_SubGroup")
+    brand_map = load_mapping("CLine_Brand")
+    group_map = load_mapping("CLine_Group")
+    sub_map   = load_mapping("CLine_SubGroup")
 
     return {
         **parsed,

@@ -86,12 +86,13 @@ export default function AccessoriesPicker({ onSelect }) {
   };
 
   return (
-    <div className="flex items-end justify-between p-3 border rounded-xl bg-gray-50 mt-3">
+    <div className="grid grid-cols-3 p-3 border rounded-xl bg-gray-50 mt-3">
       <CustomDropdown
         label="Brand"
         value={brand}
         options={options.brand}
         onChange={handleBrandChange}
+        width={300}
       />
 
       <CustomDropdown
@@ -107,6 +108,7 @@ export default function AccessoriesPicker({ onSelect }) {
         value={subGroup}
         options={options.subGroup}
         onChange={handleSubGroupChange}
+        width={300}
       />
 
       <CustomDropdown
@@ -114,6 +116,7 @@ export default function AccessoriesPicker({ onSelect }) {
         value={color}
         options={options.color}
         onChange={handleColorChange}
+        width={300}
       />
 
       <CustomDropdown
@@ -121,12 +124,12 @@ export default function AccessoriesPicker({ onSelect }) {
         value={character}
         options={options.character}
         onChange={handleCharacterChange}
-        width={100}
+        width={300}
       />
 
       <button
         onClick={handleClearAll}
-        className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
+        className="px-4 py-2 w-[100px] h-[40px] mt-6 text-sm border rounded-lg hover:bg-gray-100"
       >
         Clear All
       </button>

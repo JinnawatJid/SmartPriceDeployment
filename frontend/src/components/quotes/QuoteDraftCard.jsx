@@ -25,7 +25,7 @@ export default function QuoteDraftCard({
 }) {
   const navigate = useNavigate();
   return (
-    <div className="flex flex-col  rounded-2xl border border-gray-200 bg-white shadow-md transition-shadow">
+    <div className="flex flex-col   rounded-2xl border border-gray-200 bg-white shadow-md transition-shadow">
       {/* Header */}
       <div className="border-b border-gray-200 px-5 py-3">
         <div className="flex items-start justify-between gap-2">

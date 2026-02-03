@@ -99,7 +99,7 @@ export default function SealantPicker({ onSelect }) {
         value={subGroup}
         options={options.subGroup}
         onChange={handleSubGroupChange}
-        width={240}
+        width={280}
       />
 
       <CustomDropdown
@@ -112,7 +112,7 @@ export default function SealantPicker({ onSelect }) {
 
       <button
         onClick={handleClearAll}
-        className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
+        className="px-4 py-2  w-[100px] h-[40px] mt-6 text-sm border rounded-lg hover:bg-gray-100"
       >
         Clear All
       </button>

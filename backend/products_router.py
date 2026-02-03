@@ -9,7 +9,7 @@ import pandas as pd
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 
-from config.db_sqlite import get_conn
+from config.db_mssql import get_mssql_conn
 from services.sku_enricher import enrich_by_category
 
 # ==========================================================
@@ -19,14 +19,15 @@ api_router = APIRouter()
 
 
 # ==========================================================
-# SHARED: SQLite helpers
+# SHARED: Database helpers
 # ==========================================================
 ITEMS_TABLE_NAME = "Items_Test"
 
 
 def _read_table(table: str) -> pd.DataFrame:
-    conn = get_conn()
-    df = pd.read_sql_query(f'SELECT * FROM "{table}"', conn)
+    """ดึงข้อมูลจาก MSSQL"""
+    conn = get_mssql_conn()
+    df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
     conn.close()
     df.columns = [c.strip() for c in df.columns]
     return df
@@ -384,11 +385,11 @@ CL = SkuCategorySpec(
     min_len=12,
     slices={"brand": slice(1, 3), "group": slice(3, 5), "subGroup": slice(5, 8), "color": slice(8, 10), "thickness": slice(10, 12)},
     pad={"brand": 2, "group": 2, "subGroup": 3, "color": 2, "thickness": 2},
-    map_brand="C-ผLine_Brand",
-    map_group="C-Line_Group",
-    map_subgroup="C-Line_SubGroup",
-    map_color="C-Line_Color",
-    map_thickness="C-Line_Thickness",
+    map_brand="CLine_Brand",
+    map_group="CLine_Group",
+    map_subgroup="CLine_SubGroup",
+    map_color="CLine_Color",
+    map_thickness="CLine_Thickness",
     master_keys={"brand": "brands", "group": "groups", "subGroup": "subGroups", "color": "colors", "thickness": "thickness"},
 )
 
@@ -408,11 +409,11 @@ def get_cline_items(
     filters = {"brand": brand, "group": group, "subGroup": subGroup, "color": color, "thickness": thickness}
     q = _apply_filters(df, filters, CL.pad)
 
-    brand_map = load_code_name_mapping("C-Line_Brand")
-    group_map = load_code_name_mapping("C-Line_Group")
-    sub_map = load_code_name_mapping("C-Line_SubGroup")
-    color_map = load_code_name_mapping("C-Line_Color")
-    thick_map = load_code_name_mapping("C-Line_Thickness")
+    brand_map = load_code_name_mapping("CLine_Brand")
+    group_map = load_code_name_mapping("CLine_Group")
+    sub_map = load_code_name_mapping("CLine_SubGroup")
+    color_map = load_code_name_mapping("CLine_Color")
+    thick_map = load_code_name_mapping("CLine_Thickness")
 
     results = []
     for _, row in q.iterrows():
@@ -464,11 +465,11 @@ def cline_options():
         return [{"code": k, "name": v} for k, v in mapping.items()]
 
     return {
-        "brands": mapping_to_list(load_code_name_mapping("C-Line_Brand")),
-        "groups": mapping_to_list(load_code_name_mapping("C-Line_Group")),
-        "subGroups": mapping_to_list(load_code_name_mapping("C-Line_SubGroup")),
-        "colors": mapping_to_list(load_code_name_mapping("C-Line_Color")),
-        "thickness": mapping_to_list(load_code_name_mapping("C-Line_Thickness")),
+        "brands": mapping_to_list(load_code_name_mapping("CLine_Brand")),
+        "groups": mapping_to_list(load_code_name_mapping("CLine_Group")),
+        "subGroups": mapping_to_list(load_code_name_mapping("CLine_SubGroup")),
+        "colors": mapping_to_list(load_code_name_mapping("CLine_Color")),
+        "thickness": mapping_to_list(load_code_name_mapping("CLine_Thickness")),
     }
 
 
@@ -788,25 +789,27 @@ def load_glass_data():
     
     print("📥 Loading glass data from database...")
     
-    conn = get_conn()
+    # ⚡ ใช้ MSSQL สำหรับ Items_Test
+    conn = get_mssql_conn()
     cur = conn.cursor()
 
     # ⚡ ใช้ SQL ที่มี WHERE clause เพื่อกรองที่ database level
+    # ⚠️ MSSQL column names: No, Description, Inventory, Variant_Mandatory_if_Exists, Product_Group, Product_Sub_Group
     cur.execute("""
         SELECT
-            [No.],
+            No,
             Description,
             Inventory,
-            [Variant Mandatory if Exists],
-            [Product Group],
-            [Product Sub Group]
+            Variant_Mandatory_if_Exists,
+            Product_Group,
+            Product_Sub_Group
         FROM Items_Test
-        WHERE [No.] LIKE 'G%'
-        ORDER BY [No.]
+        WHERE No LIKE 'G%'
+        ORDER BY No
     """)
     rows = cur.fetchall()
 
-    # โหลด mapping tables
+    # โหลด mapping tables (ใช้ MSSQL)
     cur.execute("SELECT Code, Name FROM Glass_Brand")
     brand_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
 
@@ -819,6 +822,7 @@ def load_glass_data():
     cur.execute("SELECT Type, Code, Name FROM Glass_SubGroup")
     subgroup_map = {(str(t).zfill(2), str(c).zfill(3)): n for t, c, n in cur.fetchall()}
 
+    # ปิด connection
     conn.close()
 
     # ⚡ สร้าง result พร้อม enrich
@@ -929,33 +933,36 @@ class GlassCalcRequest(BaseModel):
 def calc_glass(req: GlassCalcRequest):
     parsed = parse_glass_sku(req.sku)
 
-    conn = get_conn()
+    # ⚡ ใช้ MSSQL สำหรับ mapping tables
+    conn = get_mssql_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT Name FROM Glass_Brand WHERE Code=?", (parsed["brand"],))
-    brandName = (cur.fetchone() or [""])[0]
+    row = cur.fetchone()
+    brandName = row.Name if row else ""
 
     cur.execute("SELECT Name FROM Glass_Color WHERE Code=?", (parsed["color"],))
-    colorName = (cur.fetchone() or [""])[0]
+    row = cur.fetchone()
+    colorName = row.Name if row else ""
 
     cur.execute("SELECT Code, Name FROM Glass_Group")
-    type_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
+    type_map = {str(r.Code).zfill(2): r.Name for r in cur.fetchall()}
 
     cur.execute("""
         SELECT Name
         FROM Glass_SubGroup
         WHERE Type=? AND Code=?
     """, (parsed["type"], parsed["subGroup"]))
-    subGroupName = (cur.fetchone() or [""])[0]
+    row = cur.fetchone()
+    subGroupName = row.Name if row else ""
 
     typeName = type_map.get(parsed["type"], "")
-    conn.close()
 
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""SELECT R2 FROM Items_Test WHERE [No.] = ?""", (req.sku,))
+    # ⚡ ดึงราคา R2 จาก Items_Test
+    cur.execute("""SELECT R2 FROM Items_Test WHERE No = ?""", (req.sku,))
     row = cur.fetchone()
-    price_r2 = row[0] if row and row[0] else 0
+    price_r2 = row.R2 if row and row.R2 else 0
+    
     conn.close()
 
     total_price_r2 = price_r2 * req.sqftRounded

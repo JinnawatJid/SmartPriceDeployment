@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from special_price_request.email_reply_checker import check_email_replies
 
 # ⭐ ปรับระยะเวลาตรวจสอบได้ที่นี่ (หน่วยเป็นนาที)
-CHECK_INTERVAL_MINUTES = 1  # เปลี่ยนเป็น 1, 2, 5, 10 ตามต้องการ
+CHECK_INTERVAL_MINUTES = 5  # เปลี่ยนเป็น 1, 2, 5, 10 ตามต้องการ
 
 
 def job():
