@@ -1,4 +1,4 @@
-# customer.py — MSSQL Database Version
+﻿# customer.py — MSSQL Database Version
 from fastapi import APIRouter, Query, HTTPException
 from config.db_mssql import get_mssql_conn
 
@@ -269,11 +269,11 @@ def search_customer_list_from_db(query: str) -> list:
 
 
 # =====================================================
-# GET /customer/search-list → dropdown (autocomplete)
+# GET /customer/list → dropdown (autocomplete)
 # =====================================================
-@router.get("/search-list")
-@router.post("/search-list")
-def search_customer_list(
+@router.get("/list")
+@router.post("/list")
+def search_customer_list_v2(
     q: str = Query(..., min_length=1),
 ):
     """
@@ -288,3 +288,41 @@ def search_customer_list(
     # ใช้ MSSQL Database เท่านั้น
     return search_customer_list_from_db(q)
 
+
+# =====================================================
+# GET /customer/search-list → dropdown (autocomplete) - DEPRECATED
+# =====================================================
+@router.get("/search-list")
+@router.post("/search-list")
+def search_customer_list(
+    q: str = Query(..., min_length=1),
+):
+    """
+    ค้นหารายชื่อลูกค้าจาก MSSQL Database (สำหรับ autocomplete)
+    [DEPRECATED: ใช้ /list แทน]
+    
+    Parameters:
+        - q: คำค้นหา (ค้นหาจาก code, name, phone)
+    
+    Returns:
+        List of customers (max 15 results)
+    """
+    # ใช้ MSSQL Database เท่านั้น
+    return search_customer_list_from_db(q)
+
+
+# =====================================================
+# GET /customer/{customer_id} → ดึงข้อมูลลูกค้าตาม ID
+# =====================================================
+@router.get("/{customer_id}")
+def get_customer_by_id(customer_id: str):
+    """
+    ดึงข้อมูลลูกค้าตาม customer_id (รหัสลูกค้า)
+    
+    Parameters:
+        - customer_id: รหัสลูกค้า
+    
+    Returns:
+        Customer data with analytics
+    """
+    return search_customer_from_db(code=customer_id)

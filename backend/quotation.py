@@ -439,9 +439,27 @@ def list_quotations(status: str = None):
             if req_row:
                 request_number = req_row["request_number"]
 
+        cart_items = [
+            {
+                "sku": ln["ItemCode"],
+                "name": ln["ItemName"],
+                "qty": ln["Quantity"],
+                "price": ln["UnitPrice"],
+                "Price_System": ln.get("Price_System", 0),
+                "lineTotal": ln["TotalPrice"],
+                "category": ln["Category"],
+                "unit": ln["Unit"],
+                "sqft_sheet": ln.get("Sqft_Sheet") or 0,
+                "product_weight": ln.get("ProductWeight") or 0,
+                "variantCode": ln.get("VariantCode", ""),
+            }
+            for ln in lines
+        ]
+
         result.append({
             "quoteNo": quote_no,
             "id": quote_no,
+            "status": h.get("Status", "draft"),  # ⭐ เพิ่ม status
             "customer": {
                 "id": h["CustomerCode"],
                 "code": h["CustomerCode"],
@@ -461,22 +479,8 @@ def list_quotations(status: str = None):
             },
             "specialPriceRequestId": request_number,  # ⭐ ส่ง request_number แทน id
             "specialPriceStatus": h.get("special_price_status"),
-            "cart": [
-                {
-                    "sku": ln["ItemCode"],
-                    "name": ln["ItemName"],
-                    "qty": ln["Quantity"],
-                    "price": ln["UnitPrice"],
-                    "Price_System": ln.get("Price_System", 0),
-                    "lineTotal": ln["TotalPrice"],
-                    "category": ln["Category"],
-                    "unit": ln["Unit"],
-                    "sqft_sheet": ln.get("Sqft_Sheet") or 0,
-                    "product_weight": ln.get("ProductWeight") or 0,
-                    "variantCode": ln.get("VariantCode", ""),
-                }
-                for ln in lines
-            ]
+            "cart": cart_items,
+            "items": cart_items,  # ⭐ alias สำหรับ frontend
         })
 
     conn.close()

@@ -195,11 +195,12 @@ export default function OrderDetailPage() {
                     const isGlass =
                       (item.category || String(item.sku || "").slice(0, 1)).toUpperCase() === "G";
 
-                    const sqft = Number(item.sqft_sheet ?? 0);
+                    // ✅ ถ้าเป็นกระจก → แสดงราคาต่อแผ่น (lineTotal / qty)
+                    // ✅ ถ้าไม่ใช่กระจก → แสดงราคาต่อหน่วย (price)
                     const displayPrice =
-                      isGlass && sqft > 0
-                        ? item.price * sqft // บาท / แผ่น
-                        : item.price; // หน่วยปกติ
+                      isGlass && item.qty > 0
+                        ? item.lineTotal / item.qty // ราคาต่อแผ่น
+                        : item.price; // ราคาต่อหน่วยปกติ
 
                     return fmt(displayPrice);
                   })()}

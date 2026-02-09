@@ -149,10 +149,13 @@ function Dashboard() {
           </div>
 
           {/* Card 2: ลูกค้าที่ติดต่อ */}
-          <div className="rounded-[30px] p-8 shadow-lg bg-[#c1c1c1]">
+          <div 
+            className="rounded-[30px] p-8 shadow-lg bg-white cursor-pointer hover:bg-gray-100"
+            onClick={() => navigate("/customers-today")}
+          >
             <div className="flex justify-between items-start ">
               {/* Icon */}
-              <div className="rounded-xl bg-[#4a4b4a] p-3 shadow-md">
+              <div className="rounded-xl bg-[#05A628] p-3 shadow-md">
                 <img src="/assets/people-icon.svg" alt="People Icon" className="w-8 h-8" />
               </div>
               {/* Text */}
