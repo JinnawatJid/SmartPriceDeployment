@@ -367,13 +367,23 @@ function CustomerDetail() {
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                    {customer.name?.substring(0, 2).toUpperCase() || "??"}
+                    {customer.name?.substring(0, 1).toUpperCase() || "??"}
                   </div>
                   <div>
                     <h4 className="text-xl font-bold">{customer.name || "-"}</h4>
-                    <p className="text-sm text-gray-600">รหัส: {customer.code || customerId}</p>
-                    <span className="inline-block mt-1 px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
-                      ลูกค้าเครดิต
+                    <p className="text-sm text-gray-600">รหัส: {customer.id || customerId}</p>
+                    <span className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                      customer.payment_terms && 
+                      customer.payment_terms !== "0" && 
+                      customer.payment_terms.toUpperCase() !== "CASH"
+                        ? "bg-green-100 text-green-800" 
+                        : "bg-blue-100 text-blue-800"
+                    }`}>
+                      {customer.payment_terms && 
+                       customer.payment_terms !== "0" && 
+                       customer.payment_terms.toUpperCase() !== "CASH"
+                        ? "ลูกค้าเครดิต" 
+                        : "ลูกค้าเงินสด"}
                     </span>
                   </div>
                 </div>
@@ -381,7 +391,7 @@ function CustomerDetail() {
                 <div className="border-t pt-4 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-600">รหัสลูกค้า:</span>
-                    <span className="font-semibold">{customer.code || customerId}</span>
+                    <span className="font-semibold">{customer.id || customerId}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">ชื่อลูกค้า:</span>
@@ -393,11 +403,11 @@ function CustomerDetail() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">วันที่เป็นลูกค้า:</span>
-                    <span className="font-semibold">15 มกราคม 2024</span>
+                    <span className="font-semibold">{customer.customer_date ? formatDate(customer.customer_date) : "-"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">ประเภทลูกค้า:</span>
-                    <span className="font-semibold">Retail</span>
+                    <span className="font-semibold">{customer.gen_bus || "-"}</span>
                   </div>
                 </div>
               </div>
