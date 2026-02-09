@@ -19,7 +19,7 @@ def row_to_item(row) -> dict:
         "inventory": int(row.Inventory or 0),
         "unit": row.Base_Unit_of_Measure,
         "category": row.Inventory_Posting_Group,
-        "isVariant": str(row.Variant_Mandatory_if_Exists).strip().upper() == "YES",
+        "isVariant": bool(row.Variant_Mandatory_if_Exists),
         "prices": {
             "R1": row.R1 or 0,
             "R2": row.R2 or 0,

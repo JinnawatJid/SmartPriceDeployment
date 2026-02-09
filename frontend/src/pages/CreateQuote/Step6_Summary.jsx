@@ -252,6 +252,14 @@ function Step6_Summary({ state, dispatch }) {
               accum_6m: Number(state.customer?.accum_6m || 0),
               frequency: Number(state.customer?.frequency || 0),
               gen_bus: state.customer?.gen_bus,
+              
+              // ⭐ sales by category (สำหรับคำนวณ relevantSales ตาม product_group)
+              sales_g_cust: Number(state.customer?.sales_g_cust || 0),
+              sales_a_cust: Number(state.customer?.sales_a_cust || 0),
+              sales_s_cust: Number(state.customer?.sales_s_cust || 0),
+              sales_y_cust: Number(state.customer?.sales_y_cust || 0),
+              sales_c_cust: Number(state.customer?.sales_c_cust || 0),
+              sales_e_cust: Number(state.customer?.sales_e_cust || 0),
 
               shippingCustomerPay: Number(state.shippingCustomerPay || 0),
             },
@@ -267,21 +275,7 @@ function Step6_Summary({ state, dispatch }) {
               category: it.category,
               unit: it.unit ?? "",
               product_weight: it.product_weight ?? 0,
-
-              relevantSales:
-                it.category === "S"
-                  ? Number(state.customer?.sales_s_cust ?? 0)
-                  : it.category === "G"
-                    ? Number(state.customer?.sales_g_cust ?? 0)
-                    : it.category === "A"
-                      ? Number(state.customer?.sales_a_cust ?? 0)
-                      : it.category === "C"
-                        ? Number(state.customer?.sales_c_cust ?? 0)
-                        : it.category === "E"
-                          ? Number(state.customer?.sales_e_cust ?? 0)
-                          : it.category === "Y"
-                            ? Number(state.customer?.sales_y_cust ?? 0)
-                            : 0,
+              // ⭐ ลบ relevantSales ออก - ให้ backend คำนวณเองจาก product_group
             })),
           });
 
@@ -369,6 +363,14 @@ function Step6_Summary({ state, dispatch }) {
             accum_6m: Number(state.customer?.accum_6m || 0),
             frequency: Number(state.customer?.frequency || 0),
             gen_bus: state.customer?.gen_bus,
+            
+            // ⭐ sales by category (สำหรับคำนวณ relevantSales ตาม product_group)
+            sales_g_cust: Number(state.customer?.sales_g_cust || 0),
+            sales_a_cust: Number(state.customer?.sales_a_cust || 0),
+            sales_s_cust: Number(state.customer?.sales_s_cust || 0),
+            sales_y_cust: Number(state.customer?.sales_y_cust || 0),
+            sales_c_cust: Number(state.customer?.sales_c_cust || 0),
+            sales_e_cust: Number(state.customer?.sales_e_cust || 0),
 
             shippingCustomerPay: Number(state.shippingCustomerPay || 0),
           },
@@ -384,22 +386,7 @@ function Step6_Summary({ state, dispatch }) {
             category: it.category,
             unit: it.unit ?? "",
             DeliveryType: state.deliveryType,
-            _RelevantSales: state._RelevantSales ?? 0,
-
-            relevantSales:
-              it.category === "S"
-                ? Number(state.customer?.sales_s_cust ?? 0)
-                : it.category === "G"
-                  ? Number(state.customer?.sales_g_cust ?? 0)
-                  : it.category === "A"
-                    ? Number(state.customer?.sales_a_cust ?? 0)
-                    : it.category === "C"
-                      ? Number(state.customer?.sales_c_cust ?? 0)
-                      : it.category === "E"
-                        ? Number(state.customer?.sales_e_cust ?? 0)
-                        : it.category === "Y"
-                          ? Number(state.customer?.sales_y_cust ?? 0)
-                          : 0,
+            // ⭐ ลบ relevantSales ออก - ให้ backend คำนวณเองจาก product_group
           })),
         });
 

@@ -169,14 +169,28 @@ def LevelPrice(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # ---------------- Gen Bus (map เป็น 0.x) ----------------
+    # ---------------- Gen Bus (map เป็น 0.x) ----------------
     if col_genbus:
         df["_GenBusRaw"] = (
             df[col_genbus].astype(str).str.strip().str.upper()
         )
-        # Map ค่า (W=0.5, R=0.2, P=0.0) และ map 0-1 ไป 0-100
-        df["_GenBusScore_Z"] = df["_GenBusRaw"].map(GENBUS_MAP).fillna(0.0) * 100
+
+        def map_genbus(val: str) -> float:
+            if val in GENBUS_MAP:
+                return GENBUS_MAP[val]
+            if val == "I":
+                return GENBUS_MAP["W"]   # I → W
+            return GENBUS_MAP["R"]       # อื่น ๆ → R
+
+        df["_GenBusScore_Z"] = (
+            df["_GenBusRaw"]
+            .apply(map_genbus)
+            .fillna(GENBUS_MAP["R"])
+            * 100
+        )
     else:
-        df["_GenBusScore_Z"] = 0.0 # ถ้าไม่มีข้อมูล GenBus ให้เป็น 0
+        df["_GenBusScore_Z"] = 0.0
+
 
     # --- 3. รวมคะแนน (Weighted Average) ---
     df["_Score_Z"] = (

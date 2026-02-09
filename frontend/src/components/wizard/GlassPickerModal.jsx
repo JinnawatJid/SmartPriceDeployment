@@ -137,6 +137,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       if (colorFilter) params.color = colorFilter;
       if (thickFilter) params.thickness = thickFilter;
       if (searchQuery && searchQuery.trim()) params.search = searchQuery.trim();
+      if (variantOnly) params.isVariant = true;
 
       const res = await api.get("/api/glass/list", { params });
       
@@ -380,10 +381,8 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   // -------------------------
   if (!open) return null;
 
-  // ⚡ กรอง variant ฝั่ง client (เพราะ backend ยังไม่รองรับ)
-  const filteredList = variantOnly 
-    ? glassList.filter(item => item.isVariant)
-    : glassList;
+  // ⚡ backend กรองให้แล้ว ไม่ต้องกรองฝั่ง client
+  const filteredList = glassList;
 
   const isVariantReady = () => {
     if (!isVariant) return true; // non-variant พร้อมเสมอ
@@ -506,9 +505,9 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
                 </thead>
 
                 <tbody>
-                  {filteredList.map((item) => (
+                  {filteredList.map((item, idx) => (
                     <GlassTableRow
-                      key={item.sku}
+                      key={`${item.sku}-${idx}`}
                       item={item}
                       isActive={selectedItem?.sku === item.sku}
                       onClick={() => setSelectedItem(item)}

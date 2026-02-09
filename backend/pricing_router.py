@@ -76,6 +76,12 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
     # No items
     if not req.cart:
         return {"items": [], "subtotal": 0, "customer_tier": "N/A"}
+    
+    # ⭐ ไม่ต้องดึง product_group จาก SKU ตัวแรกแล้ว
+    # จะใช้ category (Inventory_Posting_Group) ของแต่ละสินค้าแทน
+    
+    print(f"🔍 DEBUG: All SKUs in cart: {[item.sku for item in req.cart]}")
+    print(f"🔍 DEBUG: Customer Data keys: {list(req.customerData.keys())}")
 
     # Load Items DB
     def load_items_by_skus(skus: list[str]) -> pd.DataFrame:
@@ -145,6 +151,9 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
     # Attach customer data
     for k, v in req.customerData.items():
         df_calc[k] = v
+    
+    # ⭐ ไม่ต้องเพิ่ม product_group แบบเดิมแล้ว
+    # จะใช้ category ของแต่ละสินค้าแทน
 
     df_calc["payment_terms"] = (
         req.customerData.get("payment_terms")
@@ -232,14 +241,29 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
     df_calc["DeliveryType"] = "1" if req.deliveryType.upper() == "PICKUP" else "0"
 
     # -----------------------------
-    # MAP relevantSales FROM FE (SAFE)
+    # MAP relevantSales FROM CUSTOMER DATA (ตาม category ของแต่ละสินค้า)
     # -----------------------------
-    if "relevantSales" in df_calc.columns:
-        df_calc["_RelevantSales"] = pd.to_numeric(
-            df_calc["relevantSales"], errors="coerce"
-        ).fillna(0)
-    else:
-        df_calc["_RelevantSales"] = 0
+    # ⭐ คำนวณ relevantSales ตาม category (Inventory_Posting_Group) ของแต่ละสินค้า
+    print(f"🔍 DEBUG: Calculating relevantSales per item based on category")
+    
+    def get_relevant_sales_for_category(row):
+        """คำนวณ relevantSales ตาม category ของสินค้า"""
+        category = row.get('category', None)
+        
+        if not category or category not in ['G', 'A', 'S', 'Y', 'C', 'E']:
+            # Fallback: ใช้ relevantSales จาก FE ถ้ามี
+            return row.get('relevantSales', 0)
+        
+        sales_key = f"sales_{category.lower()}_cust"
+        sales_value = row.get(sales_key, 0)
+        
+        print(f"  SKU {row.get('sku', 'N/A')}: category={category} → {sales_key}={sales_value}")
+        
+        return sales_value
+    
+    # Apply ให้แต่ละแถว
+    df_calc["_RelevantSales"] = df_calc.apply(get_relevant_sales_for_category, axis=1)
+    df_calc["_RelevantSales"] = pd.to_numeric(df_calc["_RelevantSales"], errors="coerce").fillna(0)
 
 
 

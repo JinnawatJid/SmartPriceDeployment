@@ -2,20 +2,13 @@
 # -----------------------------------------------------
 # Customer Analytics API
 # - ใช้ส่งข้อมูลให้ทีมอื่น / เพื่อน
-# - วิเคราะห์จาก Invoice โดยตรง
+# - ดึงข้อมูลจาก Database Cache (ไม่ต้องเรียก D365 API)
 # - ไม่ผูกกับ pricing / quote flow
 # -----------------------------------------------------
 
 from fastapi import APIRouter, Query, HTTPException
-import pandas as pd
-from datetime import datetime, timedelta
-import requests
-from config.config_external_api import (
-    INVOICE_API_URL,
-    INVOICE_API_HEADERS,
-)
-
-
+from config.db_mssql import get_mssql_conn
+from config.cache_config import USE_DATABASE_CACHE
 
 router = APIRouter(
     prefix="/api/customer-analytics",
@@ -26,207 +19,134 @@ router = APIRouter(
 # Helpers
 # =====================================================
 
-def classify_group(no):
+def get_customer_analytics_from_db(customer_code: str) -> dict:
     """
-    ใช้ตัวอักษรตัวแรกของ SKU
-    G A S Y C E
+    ดึงข้อมูล analytics ของลูกค้าจาก database
+    
+    Returns:
+        dict with customer analytics data
     """
-    if not isinstance(no, str) or len(no) == 0:
-        return None
-    return no[0].upper()
-
-
-def load_invoice_by_customer_api(
-    customer_code: str,
-    months: int,
-    anchor_date: str | None,
-) -> pd.DataFrame:
-    rows = []
-
-    page = 1
-    size = 500
-    max_page = 10
-
-    if anchor_date:
-        anchor = pd.to_datetime(anchor_date)
-    else:
-        anchor = datetime.today()
-
-    date_to = anchor.date().isoformat()
-    date_from = (anchor - timedelta(days=30 * months)).date().isoformat()
-
-    while True:
-        payload = {
-            "page": page,
-            "size": size,
-
-            # ✅ D365 filter syntax
-            "customer_code": {"$eq": customer_code},
-            "Posting Date": {
-                "$gte": date_from,
-                "$lte": date_to,
-            },
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT 
+                customer_code, customer_name, accum_6m, frequency,
+                sales_g_cust, sales_a_cust, sales_s_cust, 
+                sales_y_cust, sales_c_cust, sales_e_cust,
+                calculation_date
+            FROM Customer
+            WHERE customer_code = ?
+        """
+        
+        cursor.execute(query, (customer_code,))
+        row = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"ไม่พบข้อมูลลูกค้า: {customer_code}")
+        
+        return {
+            "customer_code": row.customer_code or "",
+            "customer_name": row.customer_name or "",
+            "accum_6m": float(row.accum_6m or 0),
+            "frequency": int(row.frequency or 0),
+            "sales_g_cust": float(row.sales_g_cust or 0),
+            "sales_a_cust": float(row.sales_a_cust or 0),
+            "sales_s_cust": float(row.sales_s_cust or 0),
+            "sales_y_cust": float(row.sales_y_cust or 0),
+            "sales_c_cust": float(row.sales_c_cust or 0),
+            "sales_e_cust": float(row.sales_e_cust or 0),
+            "calculation_date": str(row.calculation_date) if row.calculation_date else None,
         }
-
-        resp = requests.post(
-            INVOICE_API_URL,
-            json=payload,
-            headers=INVOICE_API_HEADERS,
-            timeout=30,
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting customer analytics from database: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"ไม่สามารถดึงข้อมูล analytics ได้: {str(e)}"
         )
-        resp.raise_for_status()
-
-        data = resp.json()
-        items = data.get("data") or []
-
-        if not items:
-            break
-
-        rows.extend(items)
-
-        if len(items) < size:
-            break
-
-        page += 1
-        if page > max_page:
-            break
-
-    if not rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows)
-
-    # ---- normalize column ให้เหมือน SQLite เดิม ----
-    rename_map = {
-        "sku": "No.",
-    }
-    for src, dst in rename_map.items():
-        if src in df.columns:
-            df[dst] = df[src]
-
-    df["Posting Date"] = pd.to_datetime(df["Posting Date"], errors="coerce")
-
-    return df
-
-
-
-def resolve_anchor_and_cutoff(inv: pd.DataFrame, months: int, anchor_date: str | None):
-    """
-    กำหนด anchor date และ cutoff date
-
-    - ถ้า caller ส่ง anchor_date มา → ใช้ค่านั้น
-    - ถ้าไม่ส่ง → ใช้ Posting Date ล่าสุดใน Invoice
-    """
-    inv["Posting Date"] = pd.to_datetime(inv["Posting Date"], errors="coerce")
-
-    if anchor_date:
-        anchor = pd.to_datetime(anchor_date)
-    else:
-        anchor = inv["Posting Date"].max()
-
-    if pd.isna(anchor):
-        return None, None
-
-    cutoff = anchor - timedelta(days=30 * months)
-    return anchor, cutoff
 
 
 # =====================================================
-# API 1: Monthly Summary
+# API 1: Monthly Summary (Simplified - ใช้ข้อมูลจาก DB)
 # =====================================================
 @router.get("/monthly-summary")
 def customer_monthly_summary(
     customer_code: str = Query(..., description="รหัสลูกค้า เช่น 08015AY-1"),
     months: int = Query(6, ge=1, le=24, description="จำนวนเดือนย้อนหลัง (default = 6)"),
     anchor_date: str | None = Query(
-        None, description="วันที่อ้างอิง เช่น 2025-06-30 (ถ้าไม่ส่ง จะใช้วันที่ล่าสุดใน Invoice)"
+        None, description="วันที่อ้างอิง (ไม่ใช้งานแล้ว - ใช้ calculation_date จาก DB)"
     ),
 ):
     """
     ====================================================
-    JSON Response Example
+    ⚠️ API นี้ถูกปรับให้ใช้ข้อมูลจาก Database Cache
     ====================================================
+    
+    เนื่องจากข้อมูลถูกคำนวณไว้แล้วใน table Customer (6 เดือนย้อนหลัง)
+    API นี้จึงส่งข้อมูล summary กลับไปแทน
+    
+    ถ้าต้องการข้อมูลรายเดือนแบบละเอียด ต้องเก็บ Invoice ลง DB ด้วย
+    
+    JSON Response:
     {
       "customer": "08015AY-1",
-      "anchor_date": "2025-06-30",
+      "customer_name": "บริษัท ทดสอบ จำกัด",
+      "calculation_date": "2025-02-09",
       "months": 6,
-      "monthly": [
-        { "month": "2025-01", "amount": 120000.50 },
-        { "month": "2025-02", "amount": 98000.00 }
-      ],
-      "total": 218000.50
+      "total": 218000.50,
+      "frequency": 15,
+      "note": "ข้อมูลจาก database cache (6 เดือนย้อนหลัง)"
     }
-
-    Field explanation:
-    - customer      : รหัสลูกค้า
-    - anchor_date   : วันที่อ้างอิงว่า “6 เดือนล่าสุด” คือถึงวันไหน
-    - months        : window ที่ใช้คำนวณ
-    - monthly[]     : ยอดขายรายเดือน (Amount Including VAT)
-    - total         : ยอดรวมทั้งหมดในช่วงนี้
     ====================================================
     """
-
-    inv = load_invoice_by_customer_api(
-        customer_code=customer_code,
-        months=months,
-        anchor_date=anchor_date,
-    )
-
-
-    if inv.empty:
-        return {
-            "customer": customer_code,
-            "anchor_date": anchor_date,
-            "months": months,
-            "monthly": [],
-            "total": 0.0,
-        }
-
-    anchor, cutoff = resolve_anchor_and_cutoff(inv, months, anchor_date)
-    if anchor is None:
-        raise HTTPException(status_code=400, detail="ไม่สามารถกำหนด anchor date ได้")
-
-    inv = inv[inv["Posting Date"] >= cutoff]
-    inv["year_month"] = inv["Posting Date"].dt.to_period("M").astype(str)
-
-    grp = (
-        inv.groupby("year_month")["Amount Including VAT"]
-        .sum()
-        .sort_index()
-    )
-
-    monthly = [
-        {"month": ym, "amount": float(val)}
-        for ym, val in grp.items()
-    ]
-
+    
+    if not USE_DATABASE_CACHE:
+        raise HTTPException(
+            status_code=503,
+            detail="API นี้ต้องการ USE_DATABASE_CACHE=True"
+        )
+    
+    analytics = get_customer_analytics_from_db(customer_code)
+    
     return {
         "customer": customer_code,
-        "anchor_date": anchor.date().isoformat(),
-        "months": months,
-        "monthly": monthly,
-        "total": float(grp.sum()),
+        "customer_name": analytics["customer_name"],
+        "calculation_date": analytics["calculation_date"],
+        "months": 6,  # Fixed at 6 months (ตามที่เก็บใน DB)
+        "total": analytics["accum_6m"],
+        "frequency": analytics["frequency"],
+        "note": "ข้อมูลจาก database cache (6 เดือนย้อนหลัง) - ไม่มีรายละเอียดรายเดือน",
     }
 
 
 # =====================================================
-# API 2: Category Summary
+# API 2: Category Summary (ใช้ข้อมูลจาก DB)
 # =====================================================
 @router.get("/category-summary")
 def customer_category_summary(
     customer_code: str = Query(..., description="รหัสลูกค้า เช่น 08015AY-1"),
-    months: int = Query(6, ge=1, le=24, description="จำนวนเดือนย้อนหลัง (default = 6)"),
+    months: int = Query(6, ge=1, le=24, description="จำนวนเดือนย้อนหลัง (ไม่ใช้งานแล้ว - fixed at 6)"),
     anchor_date: str | None = Query(
-        None, description="วันที่อ้างอิง เช่น 2025-06-30"
+        None, description="วันที่อ้างอิง (ไม่ใช้งานแล้ว - ใช้ calculation_date จาก DB)"
     ),
 ):
     """
     ====================================================
-    JSON Response 
+    ✅ API นี้ใช้ข้อมูลจาก Database Cache
     ====================================================
+    
+    JSON Response:
     {
       "customer": "08015AY-1",
-      "anchor_date": "2025-06-30",
+      "customer_name": "บริษัท ทดสอบ จำกัด",
+      "calculation_date": "2025-02-09",
       "months": 6,
       "by_category": {
         "G": 320000.0,
@@ -241,47 +161,40 @@ def customer_category_summary(
     }
 
     Field explanation:
-    - by_category        : ยอดขายแยกตามประเภทสินค้า (SKU ตัวแรก)
-    - relevant_category : กลุ่มสินค้าที่มียอดขายสูงสุด
-    - relevant_sales    : ยอดขายของกลุ่มนั้น
+    - by_category        : ยอดขายแยกตามประเภทสินค้า (G, A, S, Y, C, E)
+    - relevant_category  : กลุ่มสินค้าที่มียอดขายสูงสุด
+    - relevant_sales     : ยอดขายของกลุ่มนั้น
     ====================================================
     """
-
-    inv = load_invoice_by_customer_api(
-        customer_code=customer_code,
-        months=months,
-        anchor_date=anchor_date,
-    )
-
-
-    if inv.empty:
-        return {
-            "customer": customer_code,
-            "anchor_date": anchor_date,
-            "months": months,
-            "by_category": {},
-            "relevant_category": None,
-            "relevant_sales": 0.0,
-        }
-
-    anchor, cutoff = resolve_anchor_and_cutoff(inv, months, anchor_date)
-    if anchor is None:
-        raise HTTPException(status_code=400, detail="ไม่สามารถกำหนด anchor date ได้")
-
-    inv = inv[inv["Posting Date"] >= cutoff]
-    inv["group"] = inv["No."].apply(classify_group)
-
-    grp = (
-        inv.groupby("group")["Amount Including VAT"]
-        .sum()
-        .sort_values(ascending=False)
-    )
-
+    
+    if not USE_DATABASE_CACHE:
+        raise HTTPException(
+            status_code=503,
+            detail="API นี้ต้องการ USE_DATABASE_CACHE=True"
+        )
+    
+    analytics = get_customer_analytics_from_db(customer_code)
+    
+    # สร้าง by_category dict
+    by_category = {
+        "G": analytics["sales_g_cust"],
+        "A": analytics["sales_a_cust"],
+        "S": analytics["sales_s_cust"],
+        "Y": analytics["sales_y_cust"],
+        "C": analytics["sales_c_cust"],
+        "E": analytics["sales_e_cust"],
+    }
+    
+    # หา category ที่มียอดสูงสุด
+    relevant_category = max(by_category, key=by_category.get)
+    relevant_sales = by_category[relevant_category]
+    
     return {
         "customer": customer_code,
-        "anchor_date": anchor.date().isoformat(),
-        "months": months,
-        "by_category": {k: float(v) for k, v in grp.items()},
-        "relevant_category": grp.index[0] if not grp.empty else None,
-        "relevant_sales": float(grp.iloc[0]) if not grp.empty else 0.0,
+        "customer_name": analytics["customer_name"],
+        "calculation_date": analytics["calculation_date"],
+        "months": 6,  # Fixed at 6 months
+        "by_category": by_category,
+        "relevant_category": relevant_category if relevant_sales > 0 else None,
+        "relevant_sales": relevant_sales,
     }

@@ -829,7 +829,7 @@ def load_glass_data():
     result = []
     for sku, desc, inv, vmand, product_group, product_sub_group in rows:
         parsed = parse_glass_sku(sku)
-        is_variant = str(vmand or "").strip().upper() == "YES"
+        is_variant = vmand == 1
 
         brandName = brand_map.get(parsed["brand"], "")
         colorName = color_map.get(parsed["color"], "")
@@ -876,6 +876,7 @@ def get_glass_list(
     color: Optional[str] = Query(None),
     thickness: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    isVariant: Optional[bool] = Query(None),
 ):
     """⚡ ดึงรายการกระจก (มี cache + pagination)"""
     
@@ -894,6 +895,10 @@ def get_glass_list(
         if color and item["color"] != color:
             continue
         if thickness and item["thickness"] != thickness:
+            continue
+        
+        # ⚡ isVariant filter
+        if isVariant is not None and item["isVariant"] != isVariant:
             continue
         
         # ⚡ search filter
