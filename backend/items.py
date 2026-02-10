@@ -230,6 +230,90 @@ def get_items_list_light(
     }
 
 
+# ======================================================
+# GET /items/search (Full-Text Search)
+# ⭐ ต้องอยู่ก่อน /{sku} เพื่อไม่ให้ FastAPI คิดว่า "search" คือ SKU
+# ⭐ รองรับ Full-Text Search ถ้ามี Full-Text Index
+# ======================================================
+@router.get("/search")
+def full_text_search_items(q: str = Query(..., min_length=2)):
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+
+    q_clean = q.strip()
+    
+    # ⭐ ตรวจสอบว่ามี Full-Text Index หรือไม่
+    cursor.execute("""
+        SELECT COUNT(*) as has_fulltext
+        FROM sys.fulltext_indexes 
+        WHERE object_id = OBJECT_ID('Items_Test')
+    """)
+    has_fulltext = cursor.fetchone().has_fulltext > 0
+
+    if has_fulltext:
+        # ✅ ใช้ Full-Text Search (เร็วกว่า LIKE มาก)
+        # CONTAINS: ค้นหาคำที่ขึ้นต้นด้วย (prefix search)
+        # FREETEXT: ค้นหาแบบ fuzzy (ค้นหาคำที่คล้ายกัน)
+        
+        # ถ้าเป็นตัวเลข/SKU → ใช้ CONTAINS กับ prefix
+        # ถ้าเป็นข้อความ → ใช้ FREETEXT
+        if q_clean.replace('-', '').replace('.', '').isalnum():
+            # SKU search (prefix)
+            search_term = f'"{q_clean}*"'
+            sql = f"""
+                SELECT TOP 50 *
+                FROM {TABLE_NAME}
+                WHERE CONTAINS((No, No_2, Description, AlternateName), ?)
+                ORDER BY 
+                    CASE 
+                        WHEN No LIKE ? THEN 1
+                        WHEN No_2 LIKE ? THEN 2
+                        WHEN Description LIKE ? THEN 3
+                        ELSE 4
+                    END,
+                    No
+            """
+            q_like = f"{q_clean}%"
+            cursor.execute(sql, search_term, q_like, q_like, q_like)
+        else:
+            # Text search (fuzzy)
+            sql = f"""
+                SELECT TOP 50 *
+                FROM {TABLE_NAME}
+                WHERE FREETEXT((Description, AlternateName), ?)
+                   OR CONTAINS((No, No_2), ?)
+                ORDER BY No
+            """
+            search_term = f'"{q_clean}*"'
+            cursor.execute(sql, q_clean, search_term)
+    else:
+        # ❌ ไม่มี Full-Text Index → ใช้ LIKE (ช้ากว่า)
+        q_like = f"%{q_clean}%"
+        sql = f"""
+            SELECT TOP 50 *
+            FROM {TABLE_NAME}
+            WHERE
+                No LIKE ?
+                OR No_2 LIKE ?
+                OR Description LIKE ?
+                OR AlternateName LIKE ?
+            ORDER BY 
+                CASE 
+                    WHEN No LIKE ? THEN 1
+                    WHEN No_2 LIKE ? THEN 2
+                    WHEN Description LIKE ? THEN 3
+                    ELSE 4
+                END,
+                No
+        """
+        q_start = f"{q_clean}%"
+        cursor.execute(sql, q_like, q_like, q_like, q_like, q_start, q_start, q_start)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [row_to_item(r) for r in rows]
+
 
 # ======================================================
 # ✅ NEW: GET /items/{sku}
@@ -269,10 +353,6 @@ def get_item_detail(sku: str):
     item = row_to_item(row)
 
     # ⭐ enrich เฉพาะตอนนี้
-    extra = enrich_by_category(item["category"], item["sku"]) or {}
-    item.update(extra)
-
-    return item
     extra = enrich_by_category(item["category"], item["sku"]) or {}
     item.update(extra)
 
@@ -340,33 +420,6 @@ def get_related_items(sku: str, limit: int = 50):
         "total": len(rows),
         "product_group": product_group,
     }
-
-
-# ======================================================
-# GET /items/search (ยังใช้ได้ แต่ LIMIT ไว้)
-# ======================================================
-@router.get("/search")
-def full_text_search_items(q: str = Query(..., min_length=3)):
-    conn = get_mssql_conn()
-    cursor = conn.cursor()
-
-    q_like = f"%{q.strip()}%"
-
-    sql = f"""
-        SELECT TOP 50 *
-        FROM {TABLE_NAME}
-        WHERE
-            No LIKE ?
-            OR No_2 LIKE ?
-            OR Description LIKE ?
-            OR AlternateName LIKE ?
-    """
-
-    cursor.execute(sql, q_like, q_like, q_like, q_like)
-    rows = cursor.fetchall()
-    conn.close()
-
-    return [row_to_item(r) for r in rows]
 
 
 # ======================================================

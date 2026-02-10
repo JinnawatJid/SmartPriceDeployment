@@ -1308,22 +1308,20 @@ function Step6_Summary({ state, dispatch }) {
               </div>
             )}
 
-            <div className="col-span-2 relative">
+            <div className="relative mb-4">
+              <h3 className="text-xl font-semibold text-gray-800 mb-3">ค้นหาสินค้า</h3>
               <input
                 type="text"
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 onFocus={() => setShowDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                 placeholder="ค้นหาสินค้า (SKU / ชื่อ )"
-                className="w-full mb-2 rounded-lg border px-4 py-2 text-sm
-               focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full mb-2 rounded-lg border px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
 
               {showDropdown && searchResults.length > 0 && (
-                <div
-                  className="absolute z-50 mt-1 w-full rounded-lg border bg-white shadow-lg
-                 max-h-96 overflow-y-auto"
-                >
+                <div className="absolute z-50 mt-1 w-full rounded-lg border bg-white shadow-lg max-h-96 overflow-y-auto">
                   {searchResults.map((it) => (
                     <div
                       key={it.sku}

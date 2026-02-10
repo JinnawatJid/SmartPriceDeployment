@@ -189,7 +189,8 @@ def search_customer(
 def search_customer_list_from_db(query: str) -> list:
     """
     Search customer list from database for autocomplete.
-    Uses smart ranking: exact match first, then starts-with, then contains
+    Uses Full-Text Search if available, otherwise falls back to LIKE.
+    Smart ranking: exact match first, then starts-with, then contains
     
     Args:
         query: Search query string
@@ -201,51 +202,139 @@ def search_customer_list_from_db(query: str) -> list:
         conn = get_mssql_conn()
         cursor = conn.cursor()
         
-        q_clean = query.strip().lower()
+        q_clean = query.strip()
+        q_lower = q_clean.lower()
         
         # Normalize phone query
         q_phone = "".join(ch for ch in query if ch.isdigit())
         
-        # Smart search with ranking:
-        # 1. Exact match (rank 1)
-        # 2. Starts with (rank 2)
-        # 3. Contains (rank 3)
-        sql = """
-            SELECT TOP 15
-                customer_code, 
-                customer_name, 
-                phone, 
-                tax_no,
-                CASE
-                    -- Exact match (highest priority)
-                    WHEN LOWER(customer_code) = ? THEN 1
-                    WHEN LOWER(customer_name) = ? THEN 1
-                    -- Starts with (medium priority)
-                    WHEN LOWER(customer_code) LIKE ? THEN 2
-                    WHEN LOWER(customer_name) LIKE ? THEN 2
-                    -- Contains (lowest priority)
-                    ELSE 3
-                END AS rank
-            FROM Customer
-            WHERE 
-                LOWER(customer_code) LIKE ?
-                OR LOWER(customer_name) LIKE ?
-                OR REPLACE(REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '(', ''), ')', '') LIKE ?
-            ORDER BY 
-                rank ASC,
-                LEN(customer_code) ASC,
-                customer_name ASC
-        """
+        # ⭐ ตรวจสอบว่ามี Full-Text Index หรือไม่
+        cursor.execute("""
+            SELECT COUNT(*) as has_fulltext
+            FROM sys.fulltext_indexes 
+            WHERE object_id = OBJECT_ID('Customer')
+        """)
+        has_fulltext = cursor.fetchone().has_fulltext > 0
         
-        cursor.execute(sql, (
-            q_clean,                    # exact match code
-            q_clean,                    # exact match name
-            f"{q_clean}%",              # starts with code
-            f"{q_clean}%",              # starts with name
-            f"%{q_clean}%",             # contains code
-            f"%{q_clean}%",             # contains name
-            f"%{q_phone}%"              # contains phone
-        ))
+        if has_fulltext:
+            #ใช้ Full-Text Search 
+            # CONTAINS: ค้นหาคำที่ขึ้นต้นด้วย (prefix search)
+            # FREETEXT: ค้นหาแบบ fuzzy (ค้นหาคำที่คล้ายกัน)
+            
+            # ถ้าเป็นตัวเลข/รหัส → ใช้ CONTAINS กับ prefix
+            # ถ้าเป็นข้อความ → ใช้ FREETEXT
+            if q_clean.replace('-', '').replace('.', '').isalnum() and not any(ord(c) > 127 for c in q_clean):
+                # Code/Phone search (prefix)
+                search_term = f'"{q_clean}*"'
+                sql = """
+                    SELECT TOP 15
+                        customer_code, 
+                        customer_name, 
+                        phone, 
+                        tax_no,
+                        CASE
+                            WHEN LOWER(customer_code) = ? THEN 1
+                            WHEN LOWER(customer_code) LIKE ? THEN 2
+                            WHEN CONTAINS(customer_code, ?) THEN 3
+                            WHEN CONTAINS(phone, ?) THEN 4
+                            ELSE 5
+                        END AS rank
+                    FROM Customer
+                    WHERE 
+                        CONTAINS((customer_code, phone), ?)
+                        OR LOWER(customer_code) LIKE ?
+                        OR REPLACE(REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '(', ''), ')', '') LIKE ?
+                    ORDER BY 
+                        rank ASC,
+                        LEN(customer_code) ASC,
+                        customer_name ASC
+                """
+                q_start = f"{q_lower}%"
+                q_contains = f"%{q_phone}%"
+                cursor.execute(sql, (
+                    q_lower,        # exact match
+                    q_start,        # starts with
+                    search_term,    # fulltext contains code
+                    search_term,    # fulltext contains phone
+                    search_term,    # fulltext search
+                    q_start,        # like starts with
+                    q_contains      # phone contains
+                ))
+            else:
+                # Name search (fuzzy + exact)
+                sql = """
+                    SELECT TOP 15
+                        customer_code, 
+                        customer_name, 
+                        phone, 
+                        tax_no,
+                        CASE
+                            WHEN LOWER(customer_name) = ? THEN 1
+                            WHEN LOWER(customer_name) LIKE ? THEN 2
+                            WHEN FREETEXT(customer_name, ?) THEN 3
+                            ELSE 4
+                        END AS rank
+                    FROM Customer
+                    WHERE 
+                        FREETEXT(customer_name, ?)
+                        OR LOWER(customer_name) LIKE ?
+                        OR LOWER(customer_code) LIKE ?
+                    ORDER BY 
+                        rank ASC,
+                        LEN(customer_code) ASC,
+                        customer_name ASC
+                """
+                q_start = f"{q_lower}%"
+                q_contains = f"%{q_lower}%"
+                cursor.execute(sql, (
+                    q_lower,        # exact match
+                    q_start,        # starts with
+                    q_clean,        # freetext check
+                    q_clean,        # freetext search
+                    q_contains,     # like contains name
+                    q_contains      # like contains code
+                ))
+        else:
+            # ❌ ไม่มี Full-Text Index → ใช้ LIKE (ช้ากว่า)
+            sql = """
+                SELECT TOP 15
+                    customer_code, 
+                    customer_name, 
+                    phone, 
+                    tax_no,
+                    CASE
+                        -- Exact match (highest priority)
+                        WHEN LOWER(customer_code) = ? THEN 1
+                        WHEN LOWER(customer_name) = ? THEN 1
+                        -- Starts with (medium priority)
+                        WHEN LOWER(customer_code) LIKE ? THEN 2
+                        WHEN LOWER(customer_name) LIKE ? THEN 2
+                        -- Contains (lowest priority)
+                        ELSE 3
+                    END AS rank
+                FROM Customer
+                WHERE 
+                    LOWER(customer_code) LIKE ?
+                    OR LOWER(customer_name) LIKE ?
+                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '(', ''), ')', '') LIKE ?
+                ORDER BY 
+                    rank ASC,
+                    LEN(customer_code) ASC,
+                    customer_name ASC
+            """
+            
+            q_start = f"{q_lower}%"
+            q_contains = f"%{q_lower}%"
+            cursor.execute(sql, (
+                q_lower,                    # exact match code
+                q_lower,                    # exact match name
+                q_start,                    # starts with code
+                q_start,                    # starts with name
+                q_contains,                 # contains code
+                q_contains,                 # contains name
+                f"%{q_phone}%"              # contains phone
+            ))
+        
         rows = cursor.fetchall()
         
         result = [
@@ -265,6 +354,8 @@ def search_customer_list_from_db(query: str) -> list:
         
     except Exception as e:
         print(f"❌ Error searching customer list from database: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 

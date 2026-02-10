@@ -74,56 +74,129 @@ def get_customer_analytics_from_db(customer_code: str) -> dict:
 
 
 # =====================================================
-# API 1: Monthly Summary (Simplified - ใช้ข้อมูลจาก DB)
+# API 1: Monthly Summary (แยกรายเดือน)
 # =====================================================
 @router.get("/monthly-summary")
 def customer_monthly_summary(
     customer_code: str = Query(..., description="รหัสลูกค้า เช่น 08015AY-1"),
-    months: int = Query(6, ge=1, le=24, description="จำนวนเดือนย้อนหลัง (default = 6)"),
-    anchor_date: str | None = Query(
-        None, description="วันที่อ้างอิง (ไม่ใช้งานแล้ว - ใช้ calculation_date จาก DB)"
-    ),
+    months: int = Query(6, ge=1, le=12, description="จำนวนเดือนย้อนหลัง (default = 6, รวมเดือนปัจจุบัน)"),
 ):
     """
-    ====================================================
-    ⚠️ API นี้ถูกปรับให้ใช้ข้อมูลจาก Database Cache
-    ====================================================
-    
-    เนื่องจากข้อมูลถูกคำนวณไว้แล้วใน table Customer (6 เดือนย้อนหลัง)
-    API นี้จึงส่งข้อมูล summary กลับไปแทน
-    
-    ถ้าต้องการข้อมูลรายเดือนแบบละเอียด ต้องเก็บ Invoice ลง DB ด้วย
+    ดึงยอดซื้อแยกรายเดือน (รวมเดือนปัจจุบัน) จาก D365 API
     
     JSON Response:
     {
-      "customer": "08015AY-1",
-      "customer_name": "บริษัท ทดสอบ จำกัด",
-      "calculation_date": "2025-02-09",
+      "customer": "08015AY",
+      "anchor_date": "2025-06-28",
       "months": 6,
-      "total": 218000.50,
-      "frequency": 15,
-      "note": "ข้อมูลจาก database cache (6 เดือนย้อนหลัง)"
+      "monthly": [
+        {"month": "2025-01", "amount": 1832844.36},
+        {"month": "2025-02", "amount": 1390871.59},
+        ...
+      ],
+      "total": 9917398.51
     }
-    ====================================================
     """
     
-    if not USE_DATABASE_CACHE:
+    try:
+        import requests
+        from datetime import datetime, timedelta
+        from collections import defaultdict
+        from config.config_external_api import INVOICE_API_URL, INVOICE_API_HEADERS
+        
+        # คำนวณวันที่เริ่มต้น (months เดือนย้อนหลัง รวมเดือนปัจจุบัน)
+        today = datetime.today()
+        anchor_date = today.date().isoformat()
+        start_date = (today - timedelta(days=months * 31)).date().isoformat()
+        
+        # ดึงข้อมูล invoice จาก API
+        all_invoices = []
+        page = 1
+        max_page = 10
+        
+        while page <= max_page:
+            payload = {
+                "page": page,
+                "size": 200,
+                "customer_code": {"$eq": customer_code},
+                "Posting Date": {"$gte": start_date}
+            }
+            
+            try:
+                resp = requests.post(
+                    INVOICE_API_URL,
+                    json=payload,
+                    headers=INVOICE_API_HEADERS,
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                items = data.get("data") or []
+                
+                if not items:
+                    break
+                
+                all_invoices.extend(items)
+                
+                if len(items) < 200:
+                    break
+                    
+                page += 1
+                
+            except Exception as e:
+                print(f"❌ Error loading invoices from API (page {page}): {e}")
+                break
+        
+        # จัดกลุ่มตามเดือน
+        monthly_sales = defaultdict(float)
+        
+        for inv in all_invoices:
+            posting_date = inv.get("Posting Date")
+            if not posting_date:
+                continue
+            
+            # แปลงวันที่เป็น YYYY-MM
+            try:
+                date_obj = datetime.fromisoformat(posting_date.replace("Z", "+00:00"))
+                month_key = date_obj.strftime("%Y-%m")
+                
+                amount = float(inv.get("Amount Including VAT") or 0)
+                monthly_sales[month_key] += amount
+                    
+            except Exception as e:
+                print(f"⚠️ Error parsing date {posting_date}: {e}")
+                continue
+        
+        # สร้าง monthly array (เรียงตามลำดับเดือน)
+        monthly = []
+        total = 0
+        
+        for month_key in sorted(monthly_sales.keys()):
+            amount = monthly_sales[month_key]
+            monthly.append({
+                "month": month_key,
+                "amount": round(amount, 2)
+            })
+            total += amount
+        
+        return {
+            "customer": customer_code,
+            "anchor_date": anchor_date,
+            "months": months,
+            "monthly": monthly,
+            "total": round(total, 2)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting monthly summary: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
-            status_code=503,
-            detail="API นี้ต้องการ USE_DATABASE_CACHE=True"
+            status_code=500,
+            detail=f"ไม่สามารถดึงข้อมูลรายเดือนได้: {str(e)}"
         )
-    
-    analytics = get_customer_analytics_from_db(customer_code)
-    
-    return {
-        "customer": customer_code,
-        "customer_name": analytics["customer_name"],
-        "calculation_date": analytics["calculation_date"],
-        "months": 6,  # Fixed at 6 months (ตามที่เก็บใน DB)
-        "total": analytics["accum_6m"],
-        "frequency": analytics["frequency"],
-        "note": "ข้อมูลจาก database cache (6 เดือนย้อนหลัง) - ไม่มีรายละเอียดรายเดือน",
-    }
 
 
 # =====================================================
