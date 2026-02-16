@@ -5,7 +5,7 @@ import pyodbc
 # =========================
 MSSQL_CONFIG = {
     "server": "192.192.0.220,50681",        # เช่น localhost หรือ 192.168.x.x
-    "database": "SP681",    # DB ที่มี Items_Test
+    "database": "SP681",    # DB ที่มี Item_Master, Item_Price
     "username": "sp681_user",                    # หรือ user ที่ใช้จริง
     "password": "Tng#kmitl2",
     "driver": "{ODBC Driver 17 for SQL Server}",

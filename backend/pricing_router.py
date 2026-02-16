@@ -2,13 +2,14 @@ import pandas as pd
 import numpy as np
 import math
 import requests
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
 from LevelPrice import LevelPrice
 from price import Price
 from config.db_mssql import get_mssql_conn
+from auth_dependency import get_branch_code
 
 
 router = APIRouter(prefix="/api/pricing", tags=["pricing"])
@@ -71,7 +72,7 @@ def round_up_050(x: float) -> float:
 #  MAIN ENDPOINT
 # -------------------------------
 @router.post("/calculate")
-async def calculate_pricing(req: PricingRequest = Body(...)):
+async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = Depends(get_branch_code)):
 
     # No items
     if not req.cart:
@@ -80,6 +81,7 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
     # ⭐ ไม่ต้องดึง product_group จาก SKU ตัวแรกแล้ว
     # จะใช้ category (Inventory_Posting_Group) ของแต่ละสินค้าแทน
     
+    print(f"🔍 DEBUG: Branch Code from JWT: '{branch_code}'")
     print(f"🔍 DEBUG: All SKUs in cart: {[item.sku for item in req.cart]}")
     print(f"🔍 DEBUG: Customer Data keys: {list(req.customerData.keys())}")
 
@@ -91,25 +93,30 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
         conn = get_mssql_conn()
         placeholders = ",".join(["?"] * len(skus))
 
+        # Updated to use Item_Master + Item_Price with branch filtering
         sql = f"""
             SELECT
-                No AS sku,
-                No_2 AS sku2,
-                Inventory_Posting_Group AS category,
-                Base_Unit_of_Measure,
-                Package_Size AS pkg_size,
-                Product_Weight,
-                Sqft_Sheet,
-                R1, R2, W1, W2,
-                Product_Group,
-                Product_Sub_Group,
-                AlternateName,
-                RE
-            FROM Items_Test
-            WHERE No IN ({placeholders})
+                im.SKU AS sku,
+                im.No_2 AS sku2,
+                im.Inventory_Posting_Group AS category,
+                im.Base_Unit_of_Measure,
+                ip.PackageSize AS pkg_size,
+                0 AS Product_Weight,
+                0 AS Sqft_Sheet,
+                ip.R1, ip.R2, ip.W1, ip.W2,
+                im.Product_Group,
+                im.Product_Sub_Group,
+                ip.AlternateName,
+                0 AS RE
+            FROM Item_Master im
+            LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+            WHERE im.SKU IN ({placeholders})
         """
 
-        df = pd.read_sql(sql, conn, params=skus)
+        # Add branch_code as first parameter, then SKUs
+        params = [branch_code] + skus
+        print(f"🔍 DEBUG SQL: branch_code='{branch_code}', skus={skus[:3]}...")  # Show first 3 SKUs
+        df = pd.read_sql(sql, conn, params=params)
         conn.close()
 
         if df.empty:
@@ -118,6 +125,10 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
         # normalize price columns (เหมือนของเดิม)
         for c in ["R1", "R2", "W1", "W2"]:
             df[f"price{c}"] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+        
+        print(f"🔍 DEBUG: Loaded {len(df)} items, sample prices:")
+        if not df.empty:
+            print(df[["sku", "R1", "R2", "priceR1", "priceR2"]].head(3).to_string(index=False))
 
         df["pkg_size"] = pd.to_numeric(df.get("pkg_size"), errors="coerce").fillna(1)
         df["product_weight"] = pd.to_numeric(df.get("Product_Weight"), errors="coerce").fillna(0)
@@ -168,7 +179,7 @@ async def calculate_pricing(req: PricingRequest = Body(...)):
     df_items = load_items_by_skus(cart_skus)
 
     if df_items.empty:
-        raise HTTPException(500, "ไม่สามารถโหลด Items_Test ตาม SKU ใน cart")
+        raise HTTPException(500, "ไม่สามารถโหลด Item_Master ตาม SKU ใน cart")
 
     print("ITEMS COLUMNS =", df_items.columns.tolist())
     # Merge item data

@@ -13,3 +13,5 @@ openpyxl
 annotated-types
 requests
 schedule
+cachetools
+apscheduler

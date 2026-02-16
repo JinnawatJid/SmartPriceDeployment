@@ -21,7 +21,8 @@ api_router = APIRouter()
 # ==========================================================
 # SHARED: Database helpers
 # ==========================================================
-ITEMS_TABLE_NAME = "Items_Test"
+# ⭐ Updated to use Item_Master table
+ITEMS_TABLE_NAME = "Item_Master"
 
 
 def _read_table(table: str) -> pd.DataFrame:
@@ -185,7 +186,7 @@ def load_items_sqlite() -> pd.DataFrame:
 
     # category
     if "Inventory Posting Group" not in df.columns:
-        raise HTTPException(500, "❌ Missing Inventory Posting Group in Items_Test")
+        raise HTTPException(500, "❌ Missing Inventory Posting Group in Item_Master")
     df["category"] = df["Inventory Posting Group"].astype(str).str.upper().str.strip()
 
     # prices (keep keys priceR1..W2 same, just normalize numeric once)
@@ -763,15 +764,47 @@ _glass_cache = {
 
 
 def parse_glass_sku(sku: str):
-    return {
-        "brand": sku[1:3],
-        "type": sku[3:5],
-        "subGroup": sku[5:8],
-        "color": sku[8:10],
-        "thickness": sku[10:12],
-        "width": int(sku[12:15]),
-        "height": int(sku[15:18]),
-    }
+    """
+    Parse glass SKU with validation.
+    Expected format: GBBTTSSSCCTTWWWHHH (18 characters)
+    G = Glass category
+    BB = Brand (2 digits)
+    TT = Type (2 digits)
+    SSS = SubGroup (3 digits)
+    CC = Color (2 digits)
+    TT = Thickness (2 digits)
+    WWW = Width (3 digits, can be 000 for template SKU)
+    HHH = Height (3 digits, can be 000 for template SKU)
+    """
+    # Validate SKU length
+    if not sku or len(sku) != 18:
+        return None
+    
+    # Skip non-glass SKU
+    if not sku.startswith('G'):
+        return None
+    
+    try:
+        width_str = sku[12:15]
+        height_str = sku[15:18]
+        
+        # Convert to int (allow 0 for template SKUs)
+        width = int(width_str) if width_str.strip() else 0
+        height = int(height_str) if height_str.strip() else 0
+        
+        return {
+            "brand": sku[1:3],
+            "type": sku[3:5],
+            "subGroup": sku[5:8],
+            "color": sku[8:10],
+            "thickness": sku[10:12],
+            "width": width,
+            "height": height,
+        }
+    except (ValueError, IndexError) as e:
+        # Return None for invalid SKU format
+        print(f"⚠️ Failed to parse SKU {sku}: {e}")
+        return None
 
 
 def load_glass_data():
@@ -789,23 +822,23 @@ def load_glass_data():
     
     print("📥 Loading glass data from database...")
     
-    # ⚡ ใช้ MSSQL สำหรับ Items_Test
+    # ⚡ ใช้ MSSQL สำหรับ Item_Master
     conn = get_mssql_conn()
     cur = conn.cursor()
 
     # ⚡ ใช้ SQL ที่มี WHERE clause เพื่อกรองที่ database level
-    # ⚠️ MSSQL column names: No, Description, Inventory, Variant_Mandatory_if_Exists, Product_Group, Product_Sub_Group
+    # ⚠️ MSSQL column names: SKU, Description, Variant_Mandatory, Product_Group, Product_Sub_Group
     cur.execute("""
         SELECT
-            No,
+            SKU AS No,
             Description,
-            Inventory,
-            Variant_Mandatory_if_Exists,
+            0 AS Inventory,
+            Variant_Mandatory AS Variant_Mandatory_if_Exists,
             Product_Group,
             Product_Sub_Group
-        FROM Items_Test
-        WHERE No LIKE 'G%'
-        ORDER BY No
+        FROM Item_Master
+        WHERE SKU LIKE 'G%'
+        ORDER BY SKU
     """)
     rows = cur.fetchall()
 
@@ -827,9 +860,20 @@ def load_glass_data():
 
     # ⚡ สร้าง result พร้อม enrich
     result = []
+    variant_counts = {}  # Track variant_mandatory values
     for sku, desc, inv, vmand, product_group, product_sub_group in rows:
         parsed = parse_glass_sku(sku)
-        is_variant = vmand == 1
+        
+        # Skip invalid SKU
+        if parsed is None:
+            print(f"⚠️ Skipping invalid glass SKU: {sku}")
+            continue
+        
+        # Track variant_mandatory values for debugging
+        variant_counts[vmand] = variant_counts.get(vmand, 0) + 1
+        
+        # Convert to int for comparison (database returns string)
+        is_variant = int(vmand) == 2 if vmand else False  # 2 = มี variant, 1 = ไม่มี variant
 
         brandName = brand_map.get(parsed["brand"], "")
         colorName = color_map.get(parsed["color"], "")
@@ -861,7 +905,15 @@ def load_glass_data():
     # บันทึกลง cache
     _glass_cache["data"] = result
     _glass_cache["timestamp"] = current_time
+    
+    # Count variant items
+    variant_count = sum(1 for item in result if item["isVariant"])
+    non_variant_count = len(result) - variant_count
+    
     print(f"💾 Glass data cached ({len(result)} items, TTL: {_glass_cache['ttl']}s)")
+    print(f"📊 Variant_Mandatory distribution: {variant_counts}")
+    print(f"   → Variant items (isVariant=true): {variant_count}")
+    print(f"   → Non-variant items (isVariant=false): {non_variant_count}")
     
     return result
 
@@ -963,10 +1015,15 @@ def calc_glass(req: GlassCalcRequest):
 
     typeName = type_map.get(parsed["type"], "")
 
-    # ⚡ ดึงราคา R2 จาก Items_Test
-    cur.execute("""SELECT R2 FROM Items_Test WHERE No = ?""", (req.sku,))
+    # ⚡ ดึงราคา R2 จาก Item_Price (default branch 00TR)
+    # TODO: Add branch_code parameter if needed
+    cur.execute("""
+        SELECT R2 
+        FROM Item_Price 
+        WHERE SKU = ? AND BranchCode = '00TR'
+    """, (req.sku,))
     row = cur.fetchone()
-    price_r2 = row.R2 if row and row.R2 else 0
+    price_r2 = float(row.R2) if row and row.R2 else 0.0
     
     conn.close()
 

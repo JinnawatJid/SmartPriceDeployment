@@ -80,10 +80,10 @@ def load_items_by_skus(skus: list[str]) -> pd.DataFrame:
 
     sql = f"""
         SELECT
-            No AS sku,
+            SKU AS sku,
             RE
-        FROM Items_Test
-        WHERE No IN ({placeholders})
+        FROM Item_Master
+        WHERE SKU IN ({placeholders})
     """
 
     df = pd.read_sql(sql, conn, params=skus)

@@ -1,0 +1,7 @@
+2026-02-13 15:46:55 - root - INFO - ============================================================
+2026-02-13 15:46:55 - root - INFO - Logging system initialized
+2026-02-13 15:46:55 - root - INFO - Log directory: C:\Users\HP\Desktop\Quetung\SmartPriceDeployment\logs
+2026-02-13 15:46:55 - root - INFO - Log level: INFO
+2026-02-13 15:46:55 - root - INFO - Log format: %(asctime)s - %(name)s - %(levelname)s - %(message)s
+2026-02-13 15:46:55 - root - INFO - Log rotation: Daily at midnight, 30-day retention
+2026-02-13 15:46:55 - root - INFO - ============================================================

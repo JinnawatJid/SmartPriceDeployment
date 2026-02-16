@@ -1,37 +1,44 @@
 # items_mssql.py
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from services.sku_enricher import enrich_by_category, load_mapping
 from config.db_mssql import get_mssql_conn
+from auth_dependency import get_branch_code
 
 router = APIRouter(prefix="/items", tags=["items"])
-
-TABLE_NAME = "Items_Test"
 
 
 # ======================================================
 # Helper: Convert DB row → API item (🔥 SHAPE เดิม)
 # ======================================================
-def row_to_item(row) -> dict:
+def row_to_item(row, branch_code: str, inventory_service=None) -> dict:
+    # Inventory set to 0 (BC API/Database not available)
+    inventory = 0
+    
+    # Log for debugging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"row_to_item: SKU={row.SKU}, branch_code={branch_code}, R1={row.R1}, R2={row.R2}")
+    
     return {
-        "sku": row.No,
-        "sku2": row.No_2,
-        "name": row.Description,
-        "inventory": int(row.Inventory or 0),
-        "unit": row.Base_Unit_of_Measure,
-        "category": row.Inventory_Posting_Group,
-        "isVariant": bool(row.Variant_Mandatory_if_Exists),
+        "sku": row.SKU,
+        "sku2": row.No_2 or "",
+        "name": row.Description or "",
+        "inventory": inventory,
+        "unit": row.Base_Unit_of_Measure or "",
+        "category": row.Inventory_Posting_Group or "",
+        "isVariant": bool(row.Variant_Mandatory == 2),  # 2 = มี variant, 1 = ไม่มี variant
         "prices": {
             "R1": row.R1 or 0,
             "R2": row.R2 or 0,
             "W1": row.W1 or 0,
             "W2": row.W2 or 0,
         },
-        "pkg_size": row.Package_Size or 1,
-        "product_weight": row.Product_Weight or 0,
-        "sqft_sheet": row.Sqft_Sheet,
-        "product_group": row.Product_Group,
-        "product_sub_group": row.Product_Sub_Group,
-        "alternate_names": row.AlternateName,
+        "pkg_size": row.PackageSize or 1,
+        "product_weight": 0,  # Not in new schema
+        "sqft_sheet": None,  # Not in new schema
+        "product_group": row.Product_Group or "",
+        "product_sub_group": row.Product_Sub_Group or "",
+        "alternate_names": row.AlternateName or "",
     }
 
 
@@ -43,18 +50,21 @@ def get_item_categories():
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
+    # ⭐ Filter to show only allowed categories: G, A, C, Y, S, E
     cursor.execute("""
         SELECT
             Inventory_Posting_Group AS name,
             COUNT(*) AS count
-        FROM Items_Test
+        FROM Item_Master
+        WHERE Inventory_Posting_Group IN ('G', 'A', 'C', 'Y', 'S', 'E')
         GROUP BY Inventory_Posting_Group
+        ORDER BY Inventory_Posting_Group
     """)
 
     rows = cursor.fetchall()
     conn.close()
 
-    return [{"name": r.name, "count": r.count} for r in rows]
+    return [{"name": r[0], "count": r[1]} for r in rows]
 
 
 # ======================================================
@@ -64,6 +74,7 @@ def get_item_categories():
 @router.get("/categories/{category_name}/list")
 def get_items_list_light(
     category_name: str,
+    branch_code: str = Depends(get_branch_code),
     limit: int = 10,
     offset: int = 0,
     # ⭐ เพิ่ม filter parameters
@@ -79,100 +90,100 @@ def get_items_list_light(
     cursor = conn.cursor()
 
     # ⭐ สร้าง WHERE clause สำหรับ filter
-    where_clauses = ["Inventory_Posting_Group = ?"]
-    params = [category_name.upper()]
+    where_clauses = ["im.Inventory_Posting_Group = ?"]
+    params = [category_name.upper()]  # category first
 
     # ⭐ Filter by SKU pattern (Aluminium: ABBGGSSSCCTT)
     if category_name.upper() == "A":
         if brand:
-            where_clauses.append("SUBSTRING(No, 2, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
             params.append(brand.zfill(2))
         if group:
-            where_clauses.append("SUBSTRING(No, 4, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
             params.append(group.zfill(2))
         if subGroup:
-            where_clauses.append("SUBSTRING(No, 6, 3) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
             params.append(subGroup.zfill(3))
         if color:
-            where_clauses.append("SUBSTRING(No, 9, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
             params.append(color.zfill(2))
         if thickness:
-            where_clauses.append("SUBSTRING(No, 11, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
             params.append(thickness.zfill(2))
 
     # ⭐ Filter by SKU pattern (C-Line: CBBGGSSSCCTT)
     elif category_name.upper() == "C":
         if brand:
-            where_clauses.append("SUBSTRING(No, 2, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
             params.append(brand.zfill(2))
         if group:
-            where_clauses.append("SUBSTRING(No, 4, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
             params.append(group.zfill(2))
         if subGroup:
-            where_clauses.append("SUBSTRING(No, 6, 3) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
             params.append(subGroup.zfill(3))
         if color:
-            where_clauses.append("SUBSTRING(No, 9, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
             params.append(color.zfill(2))
         if thickness:
-            where_clauses.append("SUBSTRING(No, 11, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
             params.append(thickness.zfill(2))
 
     # ⭐ Filter by SKU pattern (Accessories: EBBBGGSSCCX)
     elif category_name.upper() == "E":
         if brand:
-            where_clauses.append("SUBSTRING(No, 2, 3) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 2, 3) = ?")
             params.append(brand.zfill(3))
         if group:
-            where_clauses.append("SUBSTRING(No, 5, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 5, 2) = ?")
             params.append(group.zfill(2))
         if subGroup:
-            where_clauses.append("SUBSTRING(No, 7, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 7, 2) = ?")
             params.append(subGroup.zfill(2))
         if color:
-            where_clauses.append("SUBSTRING(No, 9, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
             params.append(color.zfill(2))
         if character:
-            where_clauses.append("SUBSTRING(No, 11, 1) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 11, 1) = ?")
             params.append(character)
 
     # ⭐ Filter by SKU pattern (Sealant: SBBGGGCC)
     elif category_name.upper() == "S":
         if brand:
-            where_clauses.append("SUBSTRING(No, 2, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
             params.append(brand.zfill(2))
         if group:
-            where_clauses.append("SUBSTRING(No, 4, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
             params.append(group.zfill(2))
         if subGroup:
-            where_clauses.append("SUBSTRING(No, 6, 3) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
             params.append(subGroup.zfill(3))
         if color:
-            where_clauses.append("SUBSTRING(No, 9, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
             params.append(color.zfill(2))
 
     # ⭐ Filter by SKU pattern (Gypsum: YBBGGSCCCTT...)
     elif category_name.upper() == "Y":
         if brand:
-            where_clauses.append("SUBSTRING(No, 2, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
             params.append(brand.zfill(2))
         if group:
-            where_clauses.append("SUBSTRING(No, 4, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
             params.append(group.zfill(2))
         if subGroup:
-            where_clauses.append("SUBSTRING(No, 6, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 6, 2) = ?")
             params.append(subGroup.zfill(2))
         if color:
-            where_clauses.append("SUBSTRING(No, 8, 3) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 8, 3) = ?")
             params.append(color.zfill(3))
         if thickness:
-            where_clauses.append("SUBSTRING(No, 11, 2) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
             params.append(thickness.zfill(2))
 
     # ⭐ เพิ่ม search filter (ค้นหาใน SKU, SKU2, Description, AlternateName)
     if search and search.strip():
         search_term = f"%{search.strip()}%"
-        where_clauses.append("(No LIKE ? OR No_2 LIKE ? OR Description LIKE ? OR AlternateName LIKE ?)")
+        where_clauses.append("(im.SKU LIKE ? OR im.No_2 LIKE ? OR im.Description LIKE ? OR ip.AlternateName LIKE ?)")
         params.extend([search_term, search_term, search_term, search_term])
 
     where_sql = " AND ".join(where_clauses)
@@ -180,46 +191,47 @@ def get_items_list_light(
     # ⭐ นับจำนวนทั้งหมดตาม filter
     count_sql = f"""
         SELECT COUNT(*) AS total
-        FROM Items_Test
+        FROM Item_Master im
+        INNER JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
         WHERE {where_sql}
     """
-    cursor.execute(count_sql, *params)
-    total = cursor.fetchone().total
+    cursor.execute(count_sql, branch_code, *params)
+    total = cursor.fetchone()[0]
 
     # ⭐ ดึงข้อมูลตาม limit/offset + filter
     sql = f"""
         SELECT
-            No            AS sku,
-            No_2          AS sku2,
-            Description   AS name,
-            Inventory     AS inventory,
-            Base_Unit_of_Measure AS unit,
-            Product_Group AS product_group,
-            Product_Sub_Group AS product_sub_group,
-            AlternateName AS alternate_names
-        FROM Items_Test
+            im.SKU,
+            im.No_2,
+            im.Description,
+            im.Base_Unit_of_Measure,
+            im.Product_Group,
+            im.Product_Sub_Group,
+            ip.AlternateName
+        FROM Item_Master im
+        INNER JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
         WHERE {where_sql}
-        ORDER BY No
+        ORDER BY im.SKU
         OFFSET ? ROWS
         FETCH NEXT ? ROWS ONLY
     """
 
-    cursor.execute(sql, *params, offset, limit)
+    cursor.execute(sql, branch_code, *params, offset, limit)
     rows = cursor.fetchall()
     conn.close()
 
     return {
         "items": [
             {
-                "sku": r.sku,
-                "SKU": r.sku,  # ⭐ เพิ่ม uppercase version สำหรับ compatibility
-                "sku2": r.sku2,
-                "name": r.name,
-                "inventory": int(r.inventory or 0),
-                "unit": r.unit,
-                "product_group": r.product_group,
-                "product_sub_group": r.product_sub_group,
-                "alternate_names": r.alternate_names,
+                "sku": r[0],
+                "SKU": r[0],  # ⭐ เพิ่ม uppercase version สำหรับ compatibility
+                "sku2": r[1] or "",
+                "name": r[2] or "",
+                "inventory": 0,  # Not fetched in light list for performance
+                "unit": r[3] or "",
+                "product_group": r[4] or "",
+                "product_sub_group": r[5] or "",
+                "alternate_names": r[6] or "",
             }
             for r in rows
         ],
@@ -236,7 +248,10 @@ def get_items_list_light(
 # ⭐ รองรับ Full-Text Search ถ้ามี Full-Text Index
 # ======================================================
 @router.get("/search")
-def full_text_search_items(q: str = Query(..., min_length=2)):
+def full_text_search_items(
+    q: str = Query(..., min_length=1),
+    branch_code: str = Depends(get_branch_code)
+):
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
@@ -246,103 +261,143 @@ def full_text_search_items(q: str = Query(..., min_length=2)):
     cursor.execute("""
         SELECT COUNT(*) as has_fulltext
         FROM sys.fulltext_indexes 
-        WHERE object_id = OBJECT_ID('Items_Test')
+        WHERE object_id = OBJECT_ID('Item_Master')
     """)
-    has_fulltext = cursor.fetchone().has_fulltext > 0
+    has_fulltext = cursor.fetchone()[0] > 0
 
     if has_fulltext:
         # ✅ ใช้ Full-Text Search (เร็วกว่า LIKE มาก)
-        # CONTAINS: ค้นหาคำที่ขึ้นต้นด้วย (prefix search)
-        # FREETEXT: ค้นหาแบบ fuzzy (ค้นหาคำที่คล้ายกัน)
-        
-        # ถ้าเป็นตัวเลข/SKU → ใช้ CONTAINS กับ prefix
-        # ถ้าเป็นข้อความ → ใช้ FREETEXT
         if q_clean.replace('-', '').replace('.', '').isalnum():
             # SKU search (prefix)
             search_term = f'"{q_clean}*"'
-            sql = f"""
-                SELECT TOP 50 *
-                FROM {TABLE_NAME}
-                WHERE CONTAINS((No, No_2, Description, AlternateName), ?)
+            sql = """
+                SELECT TOP 50
+                    im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
+                    im.Inventory_Posting_Group, im.Variant_Mandatory,
+                    ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
+                    im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+                FROM Item_Master im
+                LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+                WHERE CONTAINS((im.SKU, im.No_2, im.Description), ?)
+                   OR CONTAINS((ip.AlternateName), ?)
                 ORDER BY 
                     CASE 
-                        WHEN No LIKE ? THEN 1
-                        WHEN No_2 LIKE ? THEN 2
-                        WHEN Description LIKE ? THEN 3
+                        WHEN im.SKU LIKE ? THEN 1
+                        WHEN im.No_2 LIKE ? THEN 2
+                        WHEN im.Description LIKE ? THEN 3
                         ELSE 4
                     END,
-                    No
+                    im.SKU
             """
             q_like = f"{q_clean}%"
-            cursor.execute(sql, search_term, q_like, q_like, q_like)
+            cursor.execute(sql, branch_code, search_term, search_term, q_like, q_like, q_like)
         else:
             # Text search (fuzzy)
-            sql = f"""
-                SELECT TOP 50 *
-                FROM {TABLE_NAME}
-                WHERE FREETEXT((Description, AlternateName), ?)
-                   OR CONTAINS((No, No_2), ?)
-                ORDER BY No
+            sql = """
+                SELECT TOP 50
+                    im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
+                    im.Inventory_Posting_Group, im.Variant_Mandatory,
+                    ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
+                    im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+                FROM Item_Master im
+                LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+                WHERE FREETEXT((im.Description), ?)
+                   OR FREETEXT((ip.AlternateName), ?)
+                   OR CONTAINS((im.SKU, im.No_2), ?)
+                ORDER BY im.SKU
             """
             search_term = f'"{q_clean}*"'
-            cursor.execute(sql, q_clean, search_term)
+            cursor.execute(sql, branch_code, q_clean, q_clean, search_term)
     else:
         # ❌ ไม่มี Full-Text Index → ใช้ LIKE (ช้ากว่า)
         q_like = f"%{q_clean}%"
-        sql = f"""
-            SELECT TOP 50 *
-            FROM {TABLE_NAME}
+        sql = """
+            SELECT TOP 50
+                im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
+                im.Inventory_Posting_Group, im.Variant_Mandatory,
+                ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
+                im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+            FROM Item_Master im
+            LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
             WHERE
-                No LIKE ?
-                OR No_2 LIKE ?
-                OR Description LIKE ?
-                OR AlternateName LIKE ?
+                im.SKU LIKE ?
+                OR im.No_2 LIKE ?
+                OR im.Description LIKE ?
+                OR ip.AlternateName LIKE ?
             ORDER BY 
                 CASE 
-                    WHEN No LIKE ? THEN 1
-                    WHEN No_2 LIKE ? THEN 2
-                    WHEN Description LIKE ? THEN 3
+                    WHEN im.SKU LIKE ? THEN 1
+                    WHEN im.No_2 LIKE ? THEN 2
+                    WHEN im.Description LIKE ? THEN 3
                     ELSE 4
                 END,
-                No
+                im.SKU
         """
         q_start = f"{q_clean}%"
-        cursor.execute(sql, q_like, q_like, q_like, q_like, q_start, q_start, q_start)
+        cursor.execute(sql, branch_code, q_like, q_like, q_like, q_like, q_start, q_start, q_start)
 
     rows = cursor.fetchall()
     conn.close()
 
-    return [row_to_item(r) for r in rows]
+    # Convert rows to dict-like objects
+    class Row:
+        def __init__(self, data):
+            self.SKU = data[0]
+            self.No_2 = data[1]
+            self.Description = data[2]
+            self.Base_Unit_of_Measure = data[3]
+            self.Inventory_Posting_Group = data[4]
+            self.Variant_Mandatory = data[5]
+            self.R1 = data[6]
+            self.R2 = data[7]
+            self.W1 = data[8]
+            self.W2 = data[9]
+            self.PackageSize = data[10]
+            self.Product_Group = data[11]
+            self.Product_Sub_Group = data[12]
+            self.AlternateName = data[13]
+
+    return [row_to_item(Row(r), branch_code, None) for r in rows]
 
 
 # ======================================================
 # ✅ NEW: GET /items/{sku}
 # 👉 FULL DETAIL + enrich (ตอนกด dropdown)
-# 👉 รองรับทั้ง SKU (No) และ SKU2 (No_2)
+# 👉 รองรับทั้ง SKU และ SKU2 (No_2)
 # ======================================================
 @router.get("/{sku}")
-def get_item_detail(sku: str):
+def get_item_detail(sku: str, branch_code: str = Depends(get_branch_code)):
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
-    # ⭐ ลองหาจาก No ก่อน
-    sql = f"""
-        SELECT *
-        FROM {TABLE_NAME}
-        WHERE No = ?
+    # ⭐ ลองหาจาก SKU ก่อน
+    sql = """
+        SELECT
+            im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
+            im.Inventory_Posting_Group, im.Variant_Mandatory,
+            ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
+            im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+        FROM Item_Master im
+        LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+        WHERE im.SKU = ?
     """
 
-    cursor.execute(sql, sku)
+    cursor.execute(sql, branch_code, sku)
     row = cursor.fetchone()
     
     # ⭐ ถ้าไม่เจอ ลองหาจาก No_2
     if not row:
-        sql = f"""
-            SELECT *
-            FROM {TABLE_NAME}
-            WHERE No_2 = ?
+        sql = """
+            SELECT
+                im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
+                im.Inventory_Posting_Group, im.Variant_Mandatory,
+                ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
+                im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+            FROM Item_Master im
+            LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+            WHERE im.No_2 = ?
         """
-        cursor.execute(sql, sku)
+        cursor.execute(sql, branch_code, sku)
         row = cursor.fetchone()
 
     conn.close()
@@ -350,7 +405,25 @@ def get_item_detail(sku: str):
     if not row:
         raise HTTPException(404, "Item not found")
 
-    item = row_to_item(row)
+    # Convert row to dict-like object
+    class Row:
+        def __init__(self, data):
+            self.SKU = data[0]
+            self.No_2 = data[1]
+            self.Description = data[2]
+            self.Base_Unit_of_Measure = data[3]
+            self.Inventory_Posting_Group = data[4]
+            self.Variant_Mandatory = data[5]
+            self.R1 = data[6]
+            self.R2 = data[7]
+            self.W1 = data[8]
+            self.W2 = data[9]
+            self.PackageSize = data[10]
+            self.Product_Group = data[11]
+            self.Product_Sub_Group = data[12]
+            self.AlternateName = data[13]
+
+    item = row_to_item(Row(row), branch_code, None)
 
     # ⭐ enrich เฉพาะตอนนี้
     extra = enrich_by_category(item["category"], item["sku"]) or {}
@@ -364,40 +437,39 @@ def get_item_detail(sku: str):
 # 👉 ดึงสินค้าที่อยู่ใน Product Group เดียวกัน (LIGHT VERSION - เร็ว)
 # ======================================================
 @router.get("/related/{sku}")
-def get_related_items(sku: str, limit: int = 50):
+def get_related_items(sku: str, limit: int = 50, branch_code: str = Depends(get_branch_code)):
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
     # ⭐ หา product_group ของ SKU นี้ก่อน (เร็ว)
-    sql = f"""
+    sql = """
         SELECT Product_Group
-        FROM {TABLE_NAME}
-        WHERE No = ? OR No_2 = ?
+        FROM Item_Master
+        WHERE SKU = ? OR No_2 = ?
     """
     cursor.execute(sql, sku, sku)
     row = cursor.fetchone()
 
-    if not row or not row.Product_Group:
+    if not row or not row[0]:
         conn.close()
         return {"items": [], "total": 0}
 
-    product_group = row.Product_Group
+    product_group = row[0]
 
     # ⭐ ดึงสินค้าใน Product Group เดียวกัน (LIGHT - เฉพาะข้อมูลที่จำเป็น)
     sql = f"""
         SELECT TOP {limit}
-            No            AS sku,
-            No_2          AS sku2,
-            Description   AS name,
-            Inventory     AS inventory,
-            Base_Unit_of_Measure AS unit,
-            Product_Group AS product_group,
-            Product_Sub_Group AS product_sub_group
-        FROM {TABLE_NAME}
-        WHERE Product_Group = ?
-          AND No != ?
-          AND (No_2 IS NULL OR No_2 != ?)
-        ORDER BY No
+            im.SKU,
+            im.No_2,
+            im.Description,
+            im.Base_Unit_of_Measure,
+            im.Product_Group,
+            im.Product_Sub_Group
+        FROM Item_Master im
+        WHERE im.Product_Group = ?
+          AND im.SKU != ?
+          AND (im.No_2 IS NULL OR im.No_2 != ?)
+        ORDER BY im.SKU
     """
     cursor.execute(sql, product_group, sku, sku)
     rows = cursor.fetchall()
@@ -406,14 +478,14 @@ def get_related_items(sku: str, limit: int = 50):
     return {
         "items": [
             {
-                "sku": r.sku,
-                "SKU": r.sku,
-                "sku2": r.sku2,
-                "name": r.name,
-                "inventory": int(r.inventory or 0),
-                "unit": r.unit,
-                "product_group": r.product_group,
-                "product_sub_group": r.product_sub_group,
+                "sku": r[0],
+                "SKU": r[0],
+                "sku2": r[1] or "",
+                "name": r[2] or "",
+                "inventory": 0,  # Not fetched for performance
+                "unit": r[3] or "",
+                "product_group": r[4] or "",
+                "product_sub_group": r[5] or "",
             }
             for r in rows
         ],
@@ -429,6 +501,7 @@ def get_related_items(sku: str, limit: int = 50):
 @router.get("/categories/{category_name}/filter-options")
 def get_filter_options(
     category_name: str,
+    branch_code: str = Depends(get_branch_code),
     brand: str = None,
     group: str = None,
     subGroup: str = None,
@@ -440,13 +513,13 @@ def get_filter_options(
     cursor = conn.cursor()
 
     # ⭐ สร้าง WHERE clause สำหรับ filter (เหมือนกับ list endpoint)
-    where_clauses = ["Inventory_Posting_Group = ?"]
+    where_clauses = ["im.Inventory_Posting_Group = ?"]
     params = [category_name.upper()]
 
     # Helper function สำหรับเพิ่ม filter
     def add_filter(field_slice, value, pad_len):
         if value:
-            where_clauses.append(f"SUBSTRING(No, {field_slice[0]}, {field_slice[1]}) = ?")
+            where_clauses.append(f"SUBSTRING(im.SKU, {field_slice[0]}, {field_slice[1]}) = ?")
             params.append(value.zfill(pad_len))
 
     # ⭐ Filter by SKU pattern ตาม category
@@ -459,11 +532,11 @@ def get_filter_options(
         
         # Define extraction for each field
         field_extracts = {
-            "brand": "SUBSTRING(No, 2, 2)",
-            "group": "SUBSTRING(No, 4, 2)",
-            "subGroup": "SUBSTRING(No, 6, 3)",
-            "color": "SUBSTRING(No, 9, 2)",
-            "thickness": "SUBSTRING(No, 11, 2)",
+            "brand": "SUBSTRING(im.SKU, 2, 2)",
+            "group": "SUBSTRING(im.SKU, 4, 2)",
+            "subGroup": "SUBSTRING(im.SKU, 6, 3)",
+            "color": "SUBSTRING(im.SKU, 9, 2)",
+            "thickness": "SUBSTRING(im.SKU, 11, 2)",
         }
 
     elif category_name.upper() == "C":
@@ -474,11 +547,11 @@ def get_filter_options(
         add_filter((11, 2), thickness, 2)
         
         field_extracts = {
-            "brand": "SUBSTRING(No, 2, 2)",
-            "group": "SUBSTRING(No, 4, 2)",
-            "subGroup": "SUBSTRING(No, 6, 3)",
-            "color": "SUBSTRING(No, 9, 2)",
-            "thickness": "SUBSTRING(No, 11, 2)",
+            "brand": "SUBSTRING(im.SKU, 2, 2)",
+            "group": "SUBSTRING(im.SKU, 4, 2)",
+            "subGroup": "SUBSTRING(im.SKU, 6, 3)",
+            "color": "SUBSTRING(im.SKU, 9, 2)",
+            "thickness": "SUBSTRING(im.SKU, 11, 2)",
         }
 
     elif category_name.upper() == "E":
@@ -487,15 +560,15 @@ def get_filter_options(
         add_filter((7, 2), subGroup, 2)
         add_filter((9, 2), color, 2)
         if character:
-            where_clauses.append("SUBSTRING(No, 11, 1) = ?")
+            where_clauses.append("SUBSTRING(im.SKU, 11, 1) = ?")
             params.append(character)
         
         field_extracts = {
-            "brand": "SUBSTRING(No, 2, 3)",
-            "group": "SUBSTRING(No, 5, 2)",
-            "subGroup": "SUBSTRING(No, 7, 2)",
-            "color": "SUBSTRING(No, 9, 2)",
-            "character": "SUBSTRING(No, 11, 1)",
+            "brand": "SUBSTRING(im.SKU, 2, 3)",
+            "group": "SUBSTRING(im.SKU, 5, 2)",
+            "subGroup": "SUBSTRING(im.SKU, 7, 2)",
+            "color": "SUBSTRING(im.SKU, 9, 2)",
+            "character": "SUBSTRING(im.SKU, 11, 1)",
         }
 
     elif category_name.upper() == "S":
@@ -505,10 +578,10 @@ def get_filter_options(
         add_filter((9, 2), color, 2)
         
         field_extracts = {
-            "brand": "SUBSTRING(No, 2, 2)",
-            "group": "SUBSTRING(No, 4, 2)",
-            "subGroup": "SUBSTRING(No, 6, 3)",
-            "color": "SUBSTRING(No, 9, 2)",
+            "brand": "SUBSTRING(im.SKU, 2, 2)",
+            "group": "SUBSTRING(im.SKU, 4, 2)",
+            "subGroup": "SUBSTRING(im.SKU, 6, 3)",
+            "color": "SUBSTRING(im.SKU, 9, 2)",
         }
 
     elif category_name.upper() == "Y":
@@ -519,11 +592,11 @@ def get_filter_options(
         add_filter((11, 2), thickness, 2)
         
         field_extracts = {
-            "brand": "SUBSTRING(No, 2, 2)",
-            "group": "SUBSTRING(No, 4, 2)",
-            "subGroup": "SUBSTRING(No, 6, 2)",
-            "color": "SUBSTRING(No, 8, 3)",
-            "thickness": "SUBSTRING(No, 11, 2)",
+            "brand": "SUBSTRING(im.SKU, 2, 2)",
+            "group": "SUBSTRING(im.SKU, 4, 2)",
+            "subGroup": "SUBSTRING(im.SKU, 6, 2)",
+            "color": "SUBSTRING(im.SKU, 8, 3)",
+            "thickness": "SUBSTRING(im.SKU, 11, 2)",
         }
     else:
         return {}
@@ -551,7 +624,7 @@ def get_filter_options(
             "group": "Accessories_Group",
             "subGroup": "Accessories_SubGroup",
             "color": "Accessories_Color",
-            "character": "Character",  # ⭐ แก้ไขชื่อ table
+            "character": "Character",
         },
         "S": {
             "brand": "Sealant_Brand",
@@ -581,7 +654,7 @@ def get_filter_options(
     for field_name, extract_sql in field_extracts.items():
         sql = f"""
             SELECT DISTINCT {extract_sql} AS value
-            FROM Items_Test
+            FROM Item_Master im
             WHERE {where_sql}
             ORDER BY value
         """
@@ -589,7 +662,7 @@ def get_filter_options(
         rows = cursor.fetchall()
         
         # ⭐ แปลงเป็น {code, name} พร้อม code ขึ้นหน้า
-        codes = [r.value for r in rows if r.value]
+        codes = [r[0] for r in rows if r[0]]
         mapping = mappings.get(field_name, {})
         result[field_name] = [
             {

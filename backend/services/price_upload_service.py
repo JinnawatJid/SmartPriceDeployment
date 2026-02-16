@@ -1,0 +1,417 @@
+"""
+Price Upload Service
+
+This service handles price file uploads (CSV or Excel) and updates the Item_Price table.
+It validates file format, required columns, and SKU existence before processing.
+
+Features:
+- Support for CSV and Excel (.xlsx, .xls) formats
+- Column validation (SKU, SDM, R2, R1, W2, W1)
+- SKU existence validation against Item_Master
+- Upsert logic (update existing, insert new)
+- Error handling with detailed summary
+"""
+
+import logging
+import os
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime
+import pandas as pd
+
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class UploadResult:
+    """Result of a price upload operation"""
+    total_rows: int
+    successful_updates: int
+    errors: int
+    error_details: List[str]
+
+
+class ValidationError(Exception):
+    """Raised when file validation fails"""
+    pass
+
+
+class PriceUploadService:
+    """
+    Service for processing price file uploads and updating Item_Price table.
+    
+    Responsibilities:
+    - Validate file format (CSV or Excel)
+    - Validate required columns
+    - Validate SKU existence in Item_Master
+    - Upsert prices to Item_Price table
+    - Track upload statistics
+    """
+    
+    # Required columns in price file
+    REQUIRED_COLUMNS = ["SDM", "R2", "R1", "W2", "W1"]
+    
+    # Accepted SKU column names (in order of preference)
+    SKU_COLUMN_NAMES = ["SKU", "No_", "Item_No", "No", "ItemNo"]
+    
+    # Branch code for this upload (set via process_upload)
+    _branch_code = None
+    
+    # Supported file extensions
+    SUPPORTED_EXTENSIONS = [".csv", ".xlsx", ".xls"]
+    
+    def __init__(self, db_connection):
+        """
+        Initialize Price Upload Service.
+        
+        Args:
+            db_connection: Database connection (pyodbc connection)
+        """
+        self.db_connection = db_connection
+        logger.info("PriceUploadService initialized")
+    
+    def process_upload(self, file_path: str, branch_code: str) -> UploadResult:
+        """
+        Process price file (CSV or Excel) and update Item_Price table.
+        
+        Process:
+        1. Validate file format and required columns
+        2. Parse file into list of price records
+        3. For each row:
+           - Validate SKU exists in Item_Master
+           - Skip rows with invalid SKU and log warning
+           - Upsert to Item_Price table (update if exists, insert if not)
+           - Set UpdatedAt timestamp
+        4. Return summary with total_rows, successful_updates, errors
+        
+        Args:
+            file_path: Path to uploaded file
+        
+        Returns:
+            UploadResult with statistics (total_rows, successful, errors)
+        
+        Raises:
+            ValidationError: When file format is invalid or required columns missing
+        """
+        self._branch_code = branch_code
+        logger.info(f"Processing price upload: {file_path} for branch: {branch_code}")
+        
+        # Validate file format
+        self._validate_file_format(file_path)
+        
+        # Parse file
+        try:
+            price_data = self._parse_file(file_path)
+        except Exception as e:
+            logger.error(f"Failed to parse file: {str(e)}")
+            raise ValidationError(f"Failed to parse file: {str(e)}")
+        
+        # Validate required columns
+        self._validate_columns(price_data)
+        
+        # Process each row
+        total_rows = len(price_data)
+        successful_updates = 0
+        errors = 0
+        error_details = []
+        
+        logger.info(f"Processing {total_rows} price records")
+        
+        for idx, row in enumerate(price_data, start=1):
+            try:
+                # Use the detected SKU column name
+                sku = row.get(self._sku_column, "").strip()
+                
+                # Skip empty SKU
+                if not sku:
+                    error_msg = f"Row {idx}: Empty SKU"
+                    logger.warning(error_msg)
+                    error_details.append(error_msg)
+                    errors += 1
+                    continue
+                
+                # Validate SKU exists in Item_Master
+                if not self._sku_exists(sku):
+                    error_msg = f"Row {idx}: SKU '{sku}' not found in Item_Master"
+                    logger.warning(error_msg)
+                    error_details.append(error_msg)
+                    errors += 1
+                    continue
+                
+                # Extract price values
+                # Try to get PackageSize from Excel, default to 1 if not present or invalid
+                package_size = self._parse_decimal(row.get("PackageSize"))
+                if package_size is None or package_size <= 0:
+                    package_size = 1
+                
+                # Get AlternateName if present (optional field)
+                alternate_name = row.get("AlternateName", "")
+                if alternate_name and isinstance(alternate_name, str):
+                    alternate_name = alternate_name.strip()
+                else:
+                    alternate_name = None
+                
+                price_record = {
+                    "SKU": sku,
+                    "BranchCode": self._branch_code,
+                    "SDM": self._parse_decimal(row.get("SDM")),
+                    "R2": self._parse_decimal(row.get("R2")),
+                    "R1": self._parse_decimal(row.get("R1")),
+                    "W2": self._parse_decimal(row.get("W2")),
+                    "W1": self._parse_decimal(row.get("W1")),
+                    "PackageSize": package_size,
+                    "AlternateName": alternate_name
+                }
+                
+                # Upsert price
+                self._upsert_price(price_record)
+                successful_updates += 1
+                logger.debug(f"Successfully processed SKU: {sku}")
+            
+            except Exception as e:
+                error_msg = f"Row {idx}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                error_details.append(error_msg)
+                errors += 1
+                # Continue processing remaining rows
+        
+        # Log summary
+        logger.info(
+            f"Price upload completed: "
+            f"total_rows={total_rows}, "
+            f"successful_updates={successful_updates}, "
+            f"errors={errors}"
+        )
+        
+        return UploadResult(
+            total_rows=total_rows,
+            successful_updates=successful_updates,
+            errors=errors,
+            error_details=error_details
+        )
+    
+    def _validate_file_format(self, file_path: str):
+        """
+        Validate file format is CSV or Excel.
+        
+        Args:
+            file_path: Path to file
+        
+        Raises:
+            ValidationError: If file format is not supported
+        """
+        if not os.path.exists(file_path):
+            raise ValidationError(f"File not found: {file_path}")
+        
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
+        if file_ext not in self.SUPPORTED_EXTENSIONS:
+            raise ValidationError(
+                f"Unsupported file format: {file_ext}. "
+                f"Supported formats: {', '.join(self.SUPPORTED_EXTENSIONS)}"
+            )
+        
+        logger.debug(f"File format validated: {file_ext}")
+    
+    def _parse_file(self, file_path: str) -> List[Dict]:
+        """
+        Parse CSV or Excel file into list of dictionaries.
+        
+        Args:
+            file_path: Path to file
+        
+        Returns:
+            List of dictionaries, one per row
+        
+        Raises:
+            Exception: If file cannot be parsed
+        """
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
+        try:
+            if file_ext == ".csv":
+                df = pd.read_csv(file_path)
+            elif file_ext in [".xlsx", ".xls"]:
+                df = pd.read_excel(file_path, engine="openpyxl" if file_ext == ".xlsx" else None)
+            else:
+                raise ValidationError(f"Unsupported file extension: {file_ext}")
+            
+            # Convert DataFrame to list of dictionaries
+            records = df.to_dict("records")
+            logger.debug(f"Parsed {len(records)} records from file")
+            
+            return records
+        
+        except Exception as e:
+            logger.error(f"Error parsing file: {str(e)}")
+            raise
+    
+    def _validate_columns(self, price_data: List[Dict]):
+        """
+        Validate required columns exist in parsed data.
+        
+        Args:
+            price_data: List of price records
+        
+        Raises:
+            ValidationError: If required columns are missing
+        """
+        if not price_data:
+            raise ValidationError("File is empty")
+        
+        # Get columns from first row
+        actual_columns = set(price_data[0].keys())
+        required_columns = set(self.REQUIRED_COLUMNS)
+        
+        # Check for SKU column (accept multiple variations)
+        sku_column = None
+        for col_name in self.SKU_COLUMN_NAMES:
+            if col_name in actual_columns:
+                sku_column = col_name
+                break
+        
+        if not sku_column:
+            raise ValidationError(
+                f"Missing SKU column. Expected one of: {', '.join(self.SKU_COLUMN_NAMES)}"
+            )
+        
+        # Store the SKU column name for later use
+        self._sku_column = sku_column
+        logger.debug(f"Using SKU column: {sku_column}")
+        
+        # Check other required columns
+        missing_columns = required_columns - actual_columns
+        
+        if missing_columns:
+            raise ValidationError(
+                f"Missing required columns: {', '.join(sorted(missing_columns))}"
+            )
+        
+        logger.debug("All required columns present")
+    
+    def _sku_exists(self, sku: str) -> bool:
+        """
+        Check if SKU exists in Item_Master table.
+        
+        Args:
+            sku: SKU to check
+        
+        Returns:
+            True if SKU exists, False otherwise
+        """
+        cursor = self.db_connection.cursor()
+        try:
+            cursor.execute(
+                "SELECT COUNT(*) FROM Item_Master WHERE SKU = ?",
+                (sku,)
+            )
+            count = cursor.fetchone()[0]
+            return count > 0
+        finally:
+            cursor.close()
+    
+    def _parse_decimal(self, value) -> Optional[float]:
+        """
+        Parse decimal value from various input types.
+        
+        Args:
+            value: Value to parse (can be string, number, or None)
+        
+        Returns:
+            Float value or None if invalid
+        """
+        if pd.isna(value) or value is None or value == "":
+            return None
+        
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid decimal value: {value}")
+            return None
+    
+    def _upsert_price(self, price_data: Dict):
+        """
+        Insert or update price in Item_Price table.
+        
+        Logic:
+        - Check if SKU exists in Item_Price
+        - If exists: UPDATE all price fields and UpdatedAt
+        - If not exists: INSERT with UpdatedAt = current timestamp
+        
+        Args:
+            price_data: Dictionary with SKU and price fields
+        
+        Raises:
+            Exception: If database operation fails
+        """
+        sku = price_data["SKU"]
+        
+        cursor = self.db_connection.cursor()
+        try:
+            branch_code = price_data["BranchCode"]
+            
+            # Check if price record exists for this SKU and Branch
+            cursor.execute(
+                "SELECT COUNT(*) FROM Item_Price WHERE SKU = ? AND BranchCode = ?",
+                (sku, branch_code)
+            )
+            exists = cursor.fetchone()[0] > 0
+            
+            if exists:
+                # Update existing price
+                cursor.execute(
+                    """
+                    UPDATE Item_Price
+                    SET SDM = ?,
+                        R2 = ?,
+                        R1 = ?,
+                        W2 = ?,
+                        W1 = ?,
+                        PackageSize = ?,
+                        AlternateName = ?,
+                        UpdatedAt = GETDATE()
+                    WHERE SKU = ? AND BranchCode = ?
+                    """,
+                    (
+                        price_data["SDM"],
+                        price_data["R2"],
+                        price_data["R1"],
+                        price_data["W2"],
+                        price_data["W1"],
+                        price_data["PackageSize"],
+                        price_data["AlternateName"],
+                        sku,
+                        branch_code
+                    )
+                )
+                self.db_connection.commit()
+                logger.debug(f"Updated price for SKU: {sku}, Branch: {branch_code}")
+            
+            else:
+                # Insert new price with UpdatedAt timestamp
+                cursor.execute(
+                    """
+                    INSERT INTO Item_Price (
+                        SKU, BranchCode, SDM, R2, R1, W2, W1, PackageSize, AlternateName, UpdatedAt
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
+                    """,
+                    (
+                        sku,
+                        branch_code,
+                        price_data["SDM"],
+                        price_data["R2"],
+                        price_data["R1"],
+                        price_data["W2"],
+                        price_data["W1"],
+                        price_data["PackageSize"],
+                        price_data["AlternateName"]
+                    )
+                )
+                self.db_connection.commit()
+                logger.debug(f"Inserted new price for SKU: {sku}, Branch: {branch_code}")
+        
+        finally:
+            cursor.close()

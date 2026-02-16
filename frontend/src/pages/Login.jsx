@@ -57,7 +57,7 @@ function Login() {
             ให้คุณนำไฟล์โลโก้ (เช่น logo.png) ไปไว้ในโฟลเดอร์ /public
             แล้วอ้างอิงตามนี้ครับ
           */}
-          <img src="/assets/TANGNAMGLASSy.png" alt="Smart Pricing Logo" className="h-25 " />
+          <img src="/assets/favicon.png" alt="Smart Pricing Logo" className="h-25 " />
         </div>
 
         {/* 4. หัวข้อ "Login" */}

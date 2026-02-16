@@ -20,8 +20,12 @@ from api.router_sq import router as sq_router
 from products_router import api_router
 from special_price_request.router import router as special_price_request_router
 from cache_refresh_router import router as cache_refresh_router
+from item_master_router import router as item_master_router
+from admin_router import router as admin_router
+from branch import router as branch_router
 
 from config.config_external_api import CUSTOMER_API_KEY
+# from logging_config import setup_logging
 
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
@@ -29,6 +33,11 @@ import os
 import sys
 import threading
 import time
+import logging
+
+# Set up logging configuration
+# setup_logging(log_dir="logs", log_level="INFO")
+logger = logging.getLogger(__name__)
 
 # Ensure logs are flushed immediately to stdout for Windows Console visibility
 sys.stdout.reconfigure(line_buffering=True)
@@ -52,7 +61,13 @@ env = Environment(loader=FileSystemLoader(BASE_DIR))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all for flexibility in offline/docker envs
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",  # Alternative dev port
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "*"  # Allow all for flexibility
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,6 +88,9 @@ app.include_router(sq_router, prefix="/api")
 app.include_router(api_router, prefix="/api")
 app.include_router(special_price_request_router, prefix="/api")
 app.include_router(cache_refresh_router)
+app.include_router(item_master_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
+app.include_router(branch_router)
 
 
 
@@ -112,6 +130,10 @@ if not os.path.exists(dist_path):
     # Try looking in the parent directory (development mode)
     dist_path = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
 
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
+
 if os.path.exists(dist_path):
     print(f"Serving static files from: {dist_path}")
     app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
@@ -134,10 +156,6 @@ if os.path.exists(dist_path):
 
         # Fallback to index.html for SPA routing
         return FileResponse(os.path.join(dist_path, "index.html"))
-
-@app.get("/api/health")
-def health_check():
-    return {"status": "ok"}
 
 # ========================================
 # Background Email Checker Thread
@@ -168,27 +186,81 @@ def email_checker_background():
 @app.on_event("startup")
 async def startup_event():
     """
-    เริ่ม background thread เมื่อ FastAPI start
+    Initialize application services on startup
     """
+    logger.info("="*60)
+    logger.info("Application startup initiated")
+    logger.info("="*60)
+    
     # Start email checker in background thread
-    email_thread = threading.Thread(target=email_checker_background, daemon=True)
-    email_thread.start()
-    print("✅ Email checker thread started")
+    try:
+        email_thread = threading.Thread(target=email_checker_background, daemon=True)
+        email_thread.start()
+        logger.info("✅ Email checker thread started")
+        print("✅ Email checker thread started")
+    except Exception as e:
+        logger.error(f"Failed to start email checker: {e}", exc_info=True)
+        print(f"⚠️  Failed to start email checker: {e}")
+    
+    # Start sync job scheduler for Item Master data
+    # from sync_scheduler import start_scheduler
+    # try:
+    #     start_scheduler()
+    #     logger.info("✅ Item Master sync job scheduler started (runs every 6 hours)")
+    #     print("✅ Item Master sync job scheduler started")
+    # except Exception as e:
+    #     logger.error(f"Failed to start sync job scheduler: {e}", exc_info=True)
+    #     print(f"⚠️  Failed to start sync job scheduler: {e}")
+    
+    logger.info("Application startup completed")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """
+    Gracefully shutdown application services
+    """
+    logger.info("="*60)
+    logger.info("Application shutdown initiated")
+    logger.info("="*60)
+    
+    # Stop sync job scheduler
+    # from sync_scheduler import stop_scheduler
+    # try:
+    #     stop_scheduler()
+    #     logger.info("✅ Sync job scheduler stopped")
+    #     print("✅ Sync job scheduler stopped")
+    # except Exception as e:
+    #     logger.error(f"Error stopping sync job scheduler: {e}", exc_info=True)
+    #     print(f"⚠️  Error stopping sync job scheduler: {e}")
+    
+    logger.info("Application shutdown completed")
 
 if __name__ == "__main__":
     import uvicorn
-    # Enable logging for debugging
-    # We use line buffering instead of redirecting to file, so the .bat pause can capture it.
+    
     print("--- Starting Server ---")
+    logger.info("Starting Smart Pricing API server")
 
+    # Check for required API keys
     if not CUSTOMER_API_KEY:
+        warning_msg = "CUSTOMER_API_KEY is not set or empty! Please create a .env file with your API keys."
+        logger.warning(warning_msg)
         print("\n" + "="*60)
-        print(" [WARNING] CUSTOMER_API_KEY is not set or empty!")
-        print(" Please create a .env file with your API keys.")
+        print(f" [WARNING] {warning_msg}")
         print("="*60 + "\n")
+    
+    # Check for Item Master sync API keys
+    item_api_url = os.getenv("ITEM_API_URL")
+    item_api_key = os.getenv("ITEM_API_KEY")
+    if not item_api_url or not item_api_key:
+        warning_msg = "ITEM_API_URL or ITEM_API_KEY not set. Item Master sync will not work."
+        logger.warning(warning_msg)
+        print(f"⚠️  {warning_msg}")
 
     # Pass the app object directly instead of the import string "main:app"
     # This prevents "Could not import module 'main'" errors in frozen (PyInstaller) environments
+    logger.info("Starting uvicorn server on 0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False, log_level="info")
 
 
