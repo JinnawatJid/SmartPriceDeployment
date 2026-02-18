@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import api from "../../services/api";
 
 const SpecialPriceRequestModal = ({
   isOpen,
@@ -186,32 +187,17 @@ const SpecialPriceRequestModal = ({
       console.log("🔍 Customer type being sent:", customerData.gen_bus);
       console.log("🔍 Full customer data:", customerData);
 
-      const response = await fetch(
-        "http://localhost:8000/api/special-price-requests",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const result = await response.json();
+      const response = await api.post("/api/special-price-requests", payload);
+      const result = response.data;
       console.log("📥 Response:", result);
 
-      if (response.ok) {
-        alert(
-          `✅ ${result.message}\nเลขที่คำขอ: ${result.request_number}\n\nกรุณาตรวจสอบ Email ของผู้อนุมัติ`
-        );
-        if (onSubmitSuccess) {
-          onSubmitSuccess(result);
-        }
-        onClose();
-      } else {
-        console.error("❌ Error response:", result);
-        alert(`❌ เกิดข้อผิดพลาด: ${result.detail || JSON.stringify(result)}`);
+      alert(
+        `✅ ${result.message}\nเลขที่คำขอ: ${result.request_number}\n\nกรุณาตรวจสอบ Email ของผู้อนุมัติ`
+      );
+      if (onSubmitSuccess) {
+        onSubmitSuccess(result);
       }
+      onClose();
     } catch (error) {
       console.error("❌ Error submitting request:", error);
       alert("❌ เกิดข้อผิดพลาดในการส่งคำขอ กรุณาลองใหม่อีกครั้ง");
