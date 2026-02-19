@@ -18,7 +18,10 @@ function GlassTableRow({ item, isActive, onClick }) {
       `}
       onClick={onClick}
     >
-      <td className="col-span-2 p-2 truncate">{item.sku}</td>
+      <td className="col-span-2 p-2 truncate">
+        <div className="text-xs">{item.sku}</div>
+        {item.sku2 && <div className="text-xs text-gray-500">{item.sku2}</div>}
+      </td>
       <td className={`col-span-4 p-2 truncate ${isSelected ? 'text-blue-600 font-semibold' : ''}`}>
         {isSelected && <span className="mr-1">✓</span>}
         {item.description}
@@ -52,7 +55,6 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
   // SELECTION
   const [selectedItem, setSelectedItem] = useState(null);
-  const [variantCode, setVariantCode] = useState("");
 
   // SIZE INPUTS
   const [width, setWidth] = useState("");
@@ -67,6 +69,9 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   const [qtyCustomer, setQtyCustomer] = useState(1);
   const [qtySku, setQtySku] = useState(1);
   const [priceMode, setPriceMode] = useState("actual");
+
+  // ⭐ MULTI-SELECT STATE
+  const [selectedItems, setSelectedItems] = useState([]);
 
   // FILTER OPTIONS
   const [filterOptions, setFilterOptions] = useState({
@@ -139,10 +144,14 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       if (searchQuery && searchQuery.trim()) params.search = searchQuery.trim();
       if (variantOnly) params.isVariant = true;
 
+      console.log('🔍 Glass search params:', params);
+
       const res = await api.get("/api/glass/list", { params });
       
       const newItems = res.data.items || [];
       const totalCount = res.data.total || 0;
+
+      console.log(`✅ Glass search results: ${newItems.length}/${totalCount} items`);
 
       setGlassList((prev) => (reset ? newItems : [...prev, ...newItems]));
       setTotal(totalCount);
@@ -215,7 +224,6 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   }, [selectedItem]);
 
   useEffect(() => {
-    setVariantCode("");
     setWidth("");
     setHeight("");
   }, [selectedItem]);
@@ -242,6 +250,9 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       setQtySku(1);
       setCalcResult(null);
       setPriceMode("actual");
+      setSelectedItems([]); // ⭐ รีเซ็ตรายการที่เลือก
+      setUnitW("inch");
+      setUnitH("inch");
     }
   }, [open]);
 
@@ -324,9 +335,9 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   }
 
   // -------------------------
-  // CONFIRM
+  // ADD TO LIST (แทนการปิด modal ทันที)
   // -------------------------
-  function handleConfirm() {
+  function handleAddToList() {
     if (!calcResult || !selectedItem) return;
 
     const sqftPerPiece = Number(calcResult.sqft || 0);
@@ -337,14 +348,17 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
     // 2) เลือก sqft ที่ต้องใช้คิดราคา
     const sqftToCharge = priceMode === "actual" ? calcResult.actualSqft : skuSqft;
 
+    // 🔑 3) สร้าง Variant Code อัตโนมัติ
+    const autoVariantCode = isVariant ? generateVariantCode() : null;
+
     // 🔑 4) สร้างชื่อใหม่ (Variant / Non-Variant)
     const finalName =
-      isVariant && variantCode
-        ? `${selectedItem.description} ${variantCode}`
+      isVariant && autoVariantCode
+        ? `${selectedItem.description} ${autoVariantCode}`
         : selectedItem.description;
 
-    // 5) ส่งกลับ Step6
-    onConfirm({
+    // 5) สร้าง item object
+    const itemToAdd = {
       // --- identity ---
       sku: selectedItem.sku,
       name: finalName,
@@ -359,10 +373,10 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       qty: Number(qtyCustomer), // จำนวนแผ่น
       sqft_sheet: Number(sqftPerPiece),
       skuSqft,
-      unit: "แผ่น", // sqft ตาม SKU (เผื่อ audit)
+      unit: "แผ่น",
 
       // --- cut / variant meta ---
-      variantCode: isVariant ? variantCode : null,
+      variantCode: autoVariantCode,
       widthRaw: calcResult.widthRaw,
       heightRaw: calcResult.heightRaw,
       widthRounded: calcResult.widthRounded,
@@ -371,8 +385,59 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       // --- flags ---
       priceMode,
       isDraftItem: false,
+    };
+
+    // 6) เพิ่มลงรายการ
+    setSelectedItems((prev) => [...prev, itemToAdd]);
+
+    // 7) รีเซ็ตเฉพาะฟอร์มขนาด (ไม่รีเซ็ต selectedItem เพื่อให้เลือกขนาดอื่นได้ต่อ)
+    if (isVariant) {
+      // สำหรับ variant: รีเซ็ตเฉพาะขนาด
+      setWidth("");
+      setHeight("");
+      setQtyCustomer(1);
+      setCalcResult(null);
+      // ⭐ ไม่รีเซ็ต selectedItem และ unit เพื่อให้เลือกขนาดอื่นของ SKU เดียวกันได้
+    } else {
+      // สำหรับ non-variant: รีเซ็ตทั้งหมด
+      setSelectedItem(null);
+      setWidth("");
+      setHeight("");
+      setQtyCustomer(1);
+      setCalcResult(null);
+    }
+  }
+
+  // -------------------------
+  // REMOVE FROM LIST
+  // -------------------------
+  function handleRemoveFromList(index) {
+    setSelectedItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // -------------------------
+  // CLEAR ALL
+  // -------------------------
+  function handleClearAll() {
+    setSelectedItems([]);
+    setSelectedItem(null);
+    setWidth("");
+    setHeight("");
+    setQtyCustomer(1);
+    setCalcResult(null);
+  }
+
+  // -------------------------
+  // CONFIRM ALL
+  // -------------------------
+  function handleConfirmAll() {
+    if (selectedItems.length === 0) return;
+
+    selectedItems.forEach((item) => {
+      onConfirm(item);
     });
 
+    setSelectedItems([]);
     onClose();
   }
 
@@ -384,9 +449,26 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   // ⚡ backend กรองให้แล้ว ไม่ต้องกรองฝั่ง client
   const filteredList = glassList;
 
+  // ⭐ สร้าง Variant Code อัตโนมัติ
+  const generateVariantCode = () => {
+    if (!width || !height) return "";
+    
+    // แปลงหน่วยเป็นตัวพิมพ์ใหญ่
+    const unitWUpper = unitW.toUpperCase();
+    const unitHUpper = unitH.toUpperCase();
+    
+    // ถ้าหน่วยเดียวกัน ใช้รูปแบบ "กว้างxยาวหน่วย"
+    if (unitW === unitH) {
+      return `${width}x${height}${unitWUpper}`;
+    }
+    
+    // ถ้าหน่วยต่างกัน ใช้รูปแบบ "กว้างหน่วย1xยาวหน่วย2"
+    return `${width}${unitWUpper}x${height}${unitHUpper}`;
+  };
+
   const isVariantReady = () => {
     if (!isVariant) return true; // non-variant พร้อมเสมอ
-    return variantCode && width && height;
+    return width && height;
   };
 
   const brandDropdownOptions = filterOptions.brands;
@@ -409,7 +491,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
         {/* SEARCH */}
         <input
           className="w-full border p-2 rounded my-3"
-          placeholder="ค้นหา SKU / ชื่อสินค้า / SubGroup..."
+          placeholder="ค้นหา SKU / รหัส 2 / ชื่อสินค้า / SubGroup..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -546,32 +628,54 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
         {/* SIZE SECTION */}
         {selectedItem && isVariant && (
-          <div className="border rounded p-3 mb-3">
-            <div className="grid grid-cols-2 gap-4">
-              {/* VARIANT CODE */}
-              <div className="col-span-2">
-                <label>Variant Code</label>
-                <input
-                  className="border p-1 w-full"
-                  placeholder="เช่น 1000x1050MM"
-                  value={variantCode}
-                  onChange={(e) => setVariantCode(e.target.value)}
-                />
-              </div>
+          <div className="border rounded p-3 mb-3 bg-blue-50">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-blue-900">
+                กำลังเลือก: {selectedItem.description}
+              </h3>
+              <button
+                onClick={() => {
+                  setSelectedItem(null);
+                  setWidth("");
+                  setHeight("");
+                  setQtyCustomer(1);
+                  setCalcResult(null);
+                }}
+                className="text-xs px-2 py-1 border rounded hover:bg-white"
+              >
+                เปลี่ยน SKU
+              </button>
+            </div>
 
+            {/* ⭐ แสดง Variant Code ที่จะถูกสร้าง */}
+            {width && height && (
+              <div className="mb-3 p-2 bg-white rounded border border-blue-200">
+                <div className="text-xs text-gray-600 mb-1">Variant Code ที่จะสร้าง:</div>
+                <div className="text-sm font-semibold text-blue-700">
+                  {generateVariantCode()}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
               {/* WIDTH */}
               <div>
-                <label>กว้าง</label>
+                <label className="text-sm font-medium">กว้าง</label>
                 <div className="flex gap-2">
                   <input
-                    className="border p-1 w-full"
+                    className="border p-2 w-full rounded"
+                    type="number"
+                    placeholder="เช่น 1000"
                     value={width}
                     onChange={(e) => setWidth(e.target.value)}
                   />
                   <select
-                    className="border p-1"
+                    className="border p-2 rounded"
                     value={unitW}
-                    onChange={(e) => setUnitW(e.target.value)}
+                    onChange={(e) => {
+                      setUnitW(e.target.value);
+                      setUnitH(e.target.value); // ⭐ เปลี่ยนหน่วยยาวตาม
+                    }}
                   >
                     <option value="inch">inch</option>
                     <option value="cm">cm</option>
@@ -583,15 +687,17 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
               {/* HEIGHT */}
               <div>
-                <label>ยาว</label>
+                <label className="text-sm font-medium">ยาว</label>
                 <div className="flex gap-2">
                   <input
-                    className="border p-1 w-full"
+                    className="border p-2 w-full rounded"
+                    type="number"
+                    placeholder="เช่น 1200"
                     value={height}
                     onChange={(e) => setHeight(e.target.value)}
                   />
                   <select
-                    className="border p-1"
+                    className="border p-2 rounded"
                     value={unitH}
                     onChange={(e) => setUnitH(e.target.value)}
                   >
@@ -605,9 +711,9 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
               {/* QTY CUSTOMER */}
               <div className="col-span-2">
-                <label>จำนวนแผ่น</label>
+                <label className="text-sm font-medium">จำนวนแผ่น</label>
                 <input
-                  className="border p-1 w-full"
+                  className="border p-2 w-full rounded"
                   type="number"
                   min={1}
                   value={qtyCustomer}
@@ -620,11 +726,26 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
         {/* ---------- NON-VARIANT ---------- */}
         {selectedItem && !isVariant && (
-          <div className="border rounded p-3 mb-3">
+          <div className="border rounded p-3 mb-3 bg-green-50">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-green-900">
+                กำลังเลือก: {selectedItem.description}
+              </h3>
+              <button
+                onClick={() => {
+                  setSelectedItem(null);
+                  setQtyCustomer(1);
+                  setCalcResult(null);
+                }}
+                className="text-xs px-2 py-1 border rounded hover:bg-white"
+              >
+                เปลี่ยน SKU
+              </button>
+            </div>
             <div>
-              <label>จำนวนแผ่น</label>
+              <label className="text-sm font-medium">จำนวนแผ่น</label>
               <input
-                className="border p-1 w-full"
+                className="border p-2 w-full rounded"
                 type="number"
                 min={1}
                 value={qtyCustomer}
@@ -636,39 +757,113 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
         {/* RESULT SECTION */}
         {calcResult && (
-          <div className="p-3 border rounded bg-green-50 mb-3">
-            <h3 className="font-bold text-green-700 mb-2">ผลการคำนวณ</h3>
+          <div className="p-4 border rounded bg-gradient-to-r from-green-50 to-blue-50 mb-3">
+            <h3 className="font-bold text-green-700 mb-3">ผลการคำนวณ</h3>
 
-            <p>
-              ขนาดปัดลงฟุตแล้ว: {calcResult.width} × {calcResult.height} นิ้ว
-            </p>
-            <p>พื้นที่ต่อแผ่น: {calcResult.sqft.toFixed(2)} ตารางฟุต</p>
-            <p className="font-bold ">
-              พื้นที่รวม ({qtyCustomer} แผ่น): {(calcResult.sqft * qtyCustomer).toFixed(2)} ตารางฟุต
-            </p>
+            <div className="space-y-1 text-sm mb-3">
+              <p>
+                ขนาดปัดลงฟุตแล้ว: <span className="font-semibold">{calcResult.width} × {calcResult.height} นิ้ว</span>
+              </p>
+              <p>
+                พื้นที่ต่อแผ่น: <span className="font-semibold">{calcResult.sqft.toFixed(2)} ตารางฟุต</span>
+              </p>
+              <p className="font-bold text-base">
+                พื้นที่รวม ({qtyCustomer} แผ่น): <span className="text-green-700">{(calcResult.sqft * qtyCustomer).toFixed(2)} ตารางฟุต</span>
+              </p>
+            </div>
 
-            {/* CONFIRM ACTION */}
+            {/* ADD TO LIST ACTION */}
             {selectedItem && (
-              <div className=" bg-green-50 mt-3">
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={handleConfirm}
+                  onClick={handleAddToList}
                   disabled={!isVariantReady()}
-                  className={`px-4 py-2 rounded text-white ${
+                  className={`flex-1 px-4 py-2 rounded-lg text-white font-medium ${
                     isVariantReady()
-                      ? "bg-green-600 hover:bg-green-700"
+                      ? "bg-blue-600 hover:bg-blue-700 shadow-md"
                       : "bg-gray-400 cursor-not-allowed"
                   }`}
                 >
-                  เพิ่มลงใบเสนอราคา
+                  {isVariant ? "เพิ่มขนาดนี้ลงรายการ" : "เพิ่มลงรายการ"}
                 </button>
 
                 {isVariant && !isVariantReady() && (
-                  <div className="text-xs text-gray-600 mt-2">
-                    * กรุณากรอก Variant Code และขนาดให้ครบก่อน
+                  <div className="text-xs text-gray-600">
+                    * กรุณากรอกขนาดกว้างและยาวให้ครบก่อน
                   </div>
                 )}
               </div>
             )}
+
+            {isVariant && isVariantReady() && (
+              <div className="text-xs text-blue-600 mt-2 bg-blue-100 p-2 rounded">
+                💡 เคล็ดลับ: หลังจากเพิ่มแล้ว คุณสามารถกรอกขนาดอื่นของ SKU เดียวกันได้เลย
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= SELECTED ITEMS LIST ================= */}
+        {selectedItems.length > 0 && (
+          <div className="border rounded-xl bg-gray-50 mt-4">
+            <div className="px-4 py-2 border-b bg-white rounded-t-xl flex items-center justify-between">
+              <div className="text-sm font-semibold text-gray-700">
+                รายการที่เลือกแล้ว ({selectedItems.length})
+              </div>
+              <button
+                onClick={handleClearAll}
+                className="text-xs px-3 py-1 border rounded-lg hover:bg-gray-50"
+              >
+                ล้างทั้งหมด
+              </button>
+            </div>
+
+            <div className="max-h-[200px] overflow-y-auto p-3 space-y-2">
+              {selectedItems.map((item, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between bg-white border rounded-lg px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">
+                      {item.name}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      SKU: {item.sku}
+                      {item.isVariant && item.variantCode && ` (${item.variantCode})`}
+                      {" • "}{item.qty} แผ่น • {item.sqft_sheet.toFixed(2)} ตร.ฟุต/แผ่น
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleRemoveFromList(index)}
+                    className="ml-3 text-sm px-3 py-1 border rounded-lg hover:bg-red-50 hover:border-red-200"
+                    title="ลบรายการนี้"
+                  >
+                    ลบ
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ================= SUMMARY BAR ================= */}
+        {selectedItems.length > 0 && (
+          <div className="pt-4 mt-4 border-t flex justify-between items-center bg-white">
+            <div className="text-sm text-gray-700">
+              เลือกแล้ว {selectedItems.length} รายการ • รวม{" "}
+              {selectedItems.reduce((sum, item) => sum + item.qty, 0)} แผ่น
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmAll}
+                className="px-5 py-2 bg-green-600 text-white rounded-lg
+                           hover:bg-green-700 shadow"
+              >
+                ยืนยันรายการ
+              </button>
+            </div>
           </div>
         )}
       </div>

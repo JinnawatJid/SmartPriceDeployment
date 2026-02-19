@@ -827,10 +827,11 @@ def load_glass_data():
     cur = conn.cursor()
 
     # ⚡ ใช้ SQL ที่มี WHERE clause เพื่อกรองที่ database level
-    # ⚠️ MSSQL column names: SKU, Description, Variant_Mandatory, Product_Group, Product_Sub_Group
+    # ⚠️ MSSQL column names: SKU, No_2, Description, Variant_Mandatory, Product_Group, Product_Sub_Group
     cur.execute("""
         SELECT
             SKU AS No,
+            No_2,
             Description,
             0 AS Inventory,
             Variant_Mandatory AS Variant_Mandatory_if_Exists,
@@ -861,7 +862,7 @@ def load_glass_data():
     # ⚡ สร้าง result พร้อม enrich
     result = []
     variant_counts = {}  # Track variant_mandatory values
-    for sku, desc, inv, vmand, product_group, product_sub_group in rows:
+    for sku, sku2, desc, inv, vmand, product_group, product_sub_group in rows:
         parsed = parse_glass_sku(sku)
         
         # Skip invalid SKU
@@ -882,6 +883,7 @@ def load_glass_data():
 
         result.append({
             "sku": sku,
+            "sku2": sku2 or "",
             "description": desc,
             "isVariant": is_variant,
             "inventory": inv,
@@ -930,12 +932,157 @@ def get_glass_list(
     search: Optional[str] = Query(None),
     isVariant: Optional[bool] = Query(None),
 ):
-    """⚡ ดึงรายการกระจก (มี cache + pagination)"""
+    """⚡ ดึงรายการกระจก (รองรับ Full-Text Search + cache)"""
     
-    # โหลดจาก cache
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"🔍 Glass search request: search='{search}', brand={brand}, type={type}, subGroup={subGroup}, color={color}, thickness={thickness}, isVariant={isVariant}")
+    
+    # ⚡ ถ้ามี search term ให้ใช้ database query แทน cache (เพื่อใช้ Full-Text Search)
+    if search and search.strip():
+        conn = get_mssql_conn()
+        cur = conn.cursor()
+        
+        search_term = search.strip()
+        
+        # ตรวจสอบว่ามี Full-Text Index หรือไม่
+        cur.execute("""
+            SELECT COUNT(*) as has_fulltext
+            FROM sys.fulltext_indexes 
+            WHERE object_id = OBJECT_ID('Item_Master')
+        """)
+        has_fulltext = cur.fetchone()[0] > 0
+        
+        # สร้าง WHERE clause สำหรับ filter
+        where_clauses = ["im.SKU LIKE 'G%'"]
+        params = []
+        
+        if brand:
+            where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
+            params.append(brand)
+        if type:
+            where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
+            params.append(type)
+        if subGroup:
+            where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
+            params.append(subGroup)
+        if color:
+            where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
+            params.append(color)
+        if thickness:
+            where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
+            params.append(thickness)
+        if isVariant is not None:
+            where_clauses.append("im.Variant_Mandatory = ?")
+            params.append(2 if isVariant else 1)
+        
+        # เพิ่ม search condition
+        if has_fulltext:
+            # ใช้ Full-Text Search
+            search_pattern = f'"{search_term}*"'
+            where_clauses.append("(CONTAINS((im.SKU, im.No_2, im.Description), ?) OR im.SKU LIKE ? OR im.No_2 LIKE ?)")
+            params.extend([search_pattern, f"%{search_term}%", f"%{search_term}%"])
+        else:
+            # ใช้ LIKE
+            where_clauses.append("(im.SKU LIKE ? OR im.No_2 LIKE ? OR im.Description LIKE ?)")
+            params.extend([f"%{search_term}%", f"%{search_term}%", f"%{search_term}%"])
+        
+        where_sql = " AND ".join(where_clauses)
+        
+        logger.info(f"📊 SQL WHERE: {where_sql}")
+        logger.info(f"📊 SQL PARAMS: {params}")
+        
+        # นับจำนวนทั้งหมด
+        count_sql = f"""
+            SELECT COUNT(*) as total
+            FROM Item_Master im
+            WHERE {where_sql}
+        """
+        cur.execute(count_sql, *params)
+        total = cur.fetchone()[0]
+        
+        logger.info(f"✅ Found {total} items matching search")
+        
+        # ดึงข้อมูล
+        sql = f"""
+            SELECT
+                im.SKU,
+                im.No_2,
+                im.Description,
+                im.Variant_Mandatory,
+                im.Product_Group,
+                im.Product_Sub_Group
+            FROM Item_Master im
+            WHERE {where_sql}
+            ORDER BY im.SKU
+            OFFSET ? ROWS
+            FETCH NEXT ? ROWS ONLY
+        """
+        cur.execute(sql, *params, offset, limit)
+        rows = cur.fetchall()
+        
+        logger.info(f"📦 Retrieved {len(rows)} items")
+        
+        # โหลด mapping tables
+        cur.execute("SELECT Code, Name FROM Glass_Brand")
+        brand_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
+        
+        cur.execute("SELECT Code, Name FROM Glass_Color")
+        color_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
+        
+        cur.execute("SELECT Code, Name FROM Glass_Group")
+        type_map = {str(r[0]).zfill(2): r[1] for r in cur.fetchall()}
+        
+        cur.execute("SELECT Type, Code, Name FROM Glass_SubGroup")
+        subgroup_map = {(str(t).zfill(2), str(c).zfill(3)): n for t, c, n in cur.fetchall()}
+        
+        conn.close()
+        
+        # แปลงผลลัพธ์
+        items = []
+        for row in rows:
+            sku = row[0]
+            parsed = parse_glass_sku(sku)
+            if not parsed:
+                continue
+            
+            is_variant = int(row[3]) == 2 if row[3] else False
+            
+            items.append({
+                "sku": sku,
+                "sku2": row[1] or "",
+                "description": row[2] or "",
+                "isVariant": is_variant,
+                "inventory": 0,
+                "brand": parsed["brand"],
+                "brandName": brand_map.get(parsed["brand"], ""),
+                "type": parsed["type"],
+                "typeName": type_map.get(parsed["type"], ""),
+                "group": parsed["type"],
+                "groupName": type_map.get(parsed["type"], ""),
+                "subGroup": parsed["subGroup"],
+                "subGroupName": subgroup_map.get((parsed["type"], parsed["subGroup"]), ""),
+                "color": parsed["color"],
+                "colorName": color_map.get(parsed["color"], ""),
+                "thickness": parsed["thickness"],
+                "width": parsed["width"],
+                "height": parsed["height"],
+                "product_group": row[4],
+                "product_sub_group": row[5],
+            })
+        
+        return {
+            "items": items,
+            "limit": limit,
+            "offset": offset,
+            "count": len(items),
+            "total": total,
+        }
+    
+    # ⚡ ไม่มี search term ให้ใช้ cache (เร็วกว่า)
     all_items = load_glass_data()
     
-    # ⚡ กรองตาม filter + search (ทำใน memory - เร็วมาก)
+    # กรองตาม filter
     filtered = []
     for item in all_items:
         if brand and item["brand"] != brand:
@@ -948,21 +1095,12 @@ def get_glass_list(
             continue
         if thickness and item["thickness"] != thickness:
             continue
-        
-        # ⚡ isVariant filter
         if isVariant is not None and item["isVariant"] != isVariant:
             continue
         
-        # ⚡ search filter
-        if search and search.strip():
-            search_lower = search.strip().lower()
-            searchable = f"{item['sku']} {item['description']} {item['subGroupName']} {item['brandName']}".lower()
-            if search_lower not in searchable:
-                continue
-        
         filtered.append(item)
     
-    # ⚡ pagination
+    # pagination
     total = len(filtered)
     result = filtered[offset:offset + limit]
     
@@ -1082,6 +1220,14 @@ def get_glass_filter_options():
         "colors": [{"code": k, "name": v} for k, v in sorted(colors.items())],
         "thicknesses": [{"code": k, "name": f"{v} มม."} for k, v in sorted(thicknesses.items())],
     }
+
+
+@glass_router.post("/clear-cache")
+def clear_glass_cache():
+    """🔄 Clear glass data cache (for testing/debugging)"""
+    _glass_cache["data"] = None
+    _glass_cache["timestamp"] = 0
+    return {"message": "Glass cache cleared successfully"}
 
 
 # ==========================================================
