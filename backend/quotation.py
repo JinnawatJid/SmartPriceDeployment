@@ -12,8 +12,9 @@ import sqlite3
 from config.db_sqlite import get_conn
 
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from openpyxl import load_workbook
+from auth_dependency import get_branch_code
 
 router = APIRouter(prefix="/quotation", tags=["quotation"])
 
@@ -402,21 +403,33 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
 # LIST / HISTORY
 # -----------------------------------------------------
 @router.get("", summary="โหลดรายการใบเสนอราคาแบบทั้งหมด")
-def list_quotations(status: str = None):
+def list_quotations(
+    status: str = None,
+    branch_code: str = Depends(get_branch_code)
+):
+    """
+    โหลดรายการใบเสนอราคา กรองตามสาขาของพนักงาน
+    
+    Args:
+        status: กรองตาม status (draft, complete, cancelled)
+        branch_code: รหัสสาขาจาก JWT token
+    """
     conn = get_conn()
     cur = conn.cursor()
 
+    # ⭐ กรองตามสาขาของพนักงาน
     if status:
         cur.execute("""
             SELECT * FROM Quote_Header
-            WHERE Status = ?
+            WHERE Status = ? AND BranchCode = ?
             ORDER BY LastUpdate DESC
-        """, (status,))
+        """, (status, branch_code))
     else:
         cur.execute("""
             SELECT * FROM Quote_Header
+            WHERE BranchCode = ?
             ORDER BY LastUpdate DESC
-        """)
+        """, (branch_code,))
 
     headers = [normalize_keys(dict(r)) for r in cur.fetchall()]
     result = []

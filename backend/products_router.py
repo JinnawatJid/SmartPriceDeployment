@@ -6,11 +6,12 @@ from functools import lru_cache
 from typing import Optional, Dict, Any, List, Callable
 
 import pandas as pd
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from pydantic import BaseModel
 
 from config.db_mssql import get_mssql_conn
 from services.sku_enricher import enrich_by_category
+from auth_dependency import get_branch_code
 
 # ==========================================================
 # ROOT ROUTER (include only this in main.py)
@@ -184,10 +185,8 @@ def load_items_sqlite() -> pd.DataFrame:
     rename_map = {"No.": "sku", "Description": "name", "Package Size": "pkg_size"}
     df = df.rename(columns={old: new for old, new in rename_map.items() if old in df.columns})
 
-    # category
-    if "Inventory Posting Group" not in df.columns:
-        raise HTTPException(500, "❌ Missing Inventory Posting Group in Item_Master")
-    df["category"] = df["Inventory Posting Group"].astype(str).str.upper().str.strip()
+    # category - ดูจากอักษรตัวแรกของ SKU แทน Inventory Posting Group
+    df["category"] = df["sku"].astype(str).str[0].str.upper()
 
     # prices (keep keys priceR1..W2 same, just normalize numeric once)
     for col, out_col in [("R1", "priceR1"), ("R2", "priceR2"), ("W1", "priceW1"), ("W2", "priceW2")]:
@@ -281,7 +280,6 @@ def full_text_search_items(q: str = Query(..., min_length=3)):
 
     mask = contains(df["sku"]) | contains(df["name"])
     if "sku2" in df.columns: mask |= contains(df["sku2"])
-    if "Inventory Posting Group" in df.columns: mask |= contains(df["Inventory Posting Group"])
     if "Base Unit Measure" in df.columns: mask |= contains(df["Base Unit Measure"])
     if "alternate_names" in df.columns: mask |= contains(df["alternate_names"])
 
@@ -339,26 +337,74 @@ def aluminium_master(
 
 @aluminium_router.get("/items")
 def aluminium_items(
+    branch_code: str = Depends(get_branch_code),
     brand: Optional[str] = None,
     group: Optional[str] = None,
     subGroup: Optional[str] = None,
     color: Optional[str] = None,
     thickness: Optional[str] = None,
 ):
-    df = _load_parsed_items(ALU)
+    """Get aluminium items filtered by branch_code"""
+    conn = get_mssql_conn()
+    
+    # Build WHERE clause
+    where_clauses = ["im.SKU LIKE 'A%'"]
+    params = []
+    
+    # Add branch filter
+    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    params.append(branch_code)
+    
+    # Add SKU pattern filters
+    if brand:
+        where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
+        params.append(brand.zfill(2))
+    if group:
+        where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
+        params.append(group.zfill(2))
+    if subGroup:
+        where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
+        params.append(subGroup.zfill(3))
+    if color:
+        where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
+        params.append(color.zfill(2))
+    if thickness:
+        where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
+        params.append(thickness.zfill(2))
+    
+    where_sql = " AND ".join(where_clauses)
+    
+    sql = f"""
+        SELECT 
+            im.SKU,
+            im.Description,
+            im.Base_Unit_of_Measure,
+            im.Product_Group,
+            im.Product_Sub_Group,
+            SUBSTRING(im.SKU, 2, 2) AS brand,
+            SUBSTRING(im.SKU, 4, 2) AS [group],
+            SUBSTRING(im.SKU, 6, 3) AS subGroup,
+            SUBSTRING(im.SKU, 9, 2) AS color,
+            SUBSTRING(im.SKU, 11, 2) AS thickness
+        FROM Item_Master im
+        WHERE {where_sql}
+        ORDER BY im.SKU
+    """
+    
+    df = pd.read_sql(sql, conn, params=params)
+    conn.close()
+    
     if df.empty:
         return []
-
-    filters = {"brand": brand, "group": group, "subGroup": subGroup, "color": color, "thickness": thickness}
-    q = _apply_filters(df, filters, ALU.pad)
-
+    
+    # Load mappings
     brand_map = load_code_name_mapping("Aluminium_Brand")
     group_map = load_code_name_mapping("Aluminium_Group")
     sub_map = load_code_name_mapping("Aluminium_SubGroup")
     color_map = load_code_name_mapping("Aluminium_Color")
 
     items = []
-    for _, row in q.iterrows():
+    for _, row in df.iterrows():
         items.append({
             "sku": row["SKU"],
             "name": row.get("Description", ""),
@@ -371,10 +417,10 @@ def aluminium_items(
             "color": row.get("color"),
             "colorName": color_map.get(row.get("color"), ""),
             "thickness": row.get("thickness"),
-            "inventory": row.get("onhand_qty", 0),
-            "unit": row.get("Base Unit of Measure", ""),
-            "product_group": row.get("Product Group"),
-            "product_sub_group": row.get("Product Sub Group"),
+            "inventory": 0,
+            "unit": row.get("Base_Unit_of_Measure", ""),
+            "product_group": row.get("Product_Group"),
+            "product_sub_group": row.get("Product_Sub_Group"),
         })
     return items
 
@@ -397,18 +443,68 @@ CL = SkuCategorySpec(
 
 @cline_router.get("/items")
 def get_cline_items(
+    branch_code: str = Depends(get_branch_code),
     brand: str = None,
     group: str = None,
     subGroup: str = None,
     color: str = None,
     thickness: str = None
 ):
-    df = _load_parsed_items(CL)
+    """Get C-Line items filtered by branch_code"""
+    conn = get_mssql_conn()
+    
+    # Build WHERE clause
+    where_clauses = ["im.SKU LIKE 'C%'"]
+    params = []
+    
+    # Add branch filter
+    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    params.append(branch_code)
+    
+    # Add SKU pattern filters
+    if brand:
+        where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
+        params.append(brand.zfill(2))
+    if group:
+        where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
+        params.append(group.zfill(2))
+    if subGroup:
+        where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
+        params.append(subGroup.zfill(3))
+    if color:
+        where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
+        params.append(color.zfill(2))
+    if thickness:
+        where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
+        params.append(thickness.zfill(2))
+    
+    where_sql = " AND ".join(where_clauses)
+    
+    sql = f"""
+        SELECT 
+            im.SKU AS [No.],
+            im.Description,
+            im.Base_Unit_of_Measure AS [Base Unit of Measure],
+            im.Product_Group AS [Product Group],
+            im.Product_Sub_Group AS [Product Sub Group],
+            SUBSTRING(im.SKU, 2, 2) AS brand,
+            SUBSTRING(im.SKU, 4, 2) AS [group],
+            SUBSTRING(im.SKU, 6, 3) AS subGroup,
+            SUBSTRING(im.SKU, 9, 2) AS color,
+            SUBSTRING(im.SKU, 11, 2) AS thickness,
+            0 AS Inventory,
+            1 AS [Package Size],
+            0 AS [Product Weight]
+        FROM Item_Master im
+        WHERE {where_sql}
+        ORDER BY im.SKU
+    """
+    
+    df = pd.read_sql(sql, conn, params=params)
+    conn.close()
+    
     if df.empty:
         return []
-
-    filters = {"brand": brand, "group": group, "subGroup": subGroup, "color": color, "thickness": thickness}
-    q = _apply_filters(df, filters, CL.pad)
 
     brand_map = load_code_name_mapping("CLine_Brand")
     group_map = load_code_name_mapping("CLine_Group")
@@ -417,7 +513,7 @@ def get_cline_items(
     thick_map = load_code_name_mapping("CLine_Thickness")
 
     results = []
-    for _, row in q.iterrows():
+    for _, row in df.iterrows():
         results.append({
             "sku": str(row["No."]).strip(),
             "name": str(row.get("Description", "")).strip(),
@@ -498,19 +594,70 @@ ACC = SkuCategorySpec(
 
 @accessories_router.get("/items")
 def get_accessories_items(
+    branch_code: str = Depends(get_branch_code),
     brand: str = None,
     group: str = None,
     subGroup: str = None,
     color: str = None,
     character: str = None
 ):
-    df = _load_parsed_items(ACC)
+    """Get accessories items filtered by branch_code"""
+    conn = get_mssql_conn()
+    
+    # Build WHERE clause
+    where_clauses = ["im.SKU LIKE 'E%'", "LEN(im.SKU) >= 11"]
+    params = []
+    
+    # Add branch filter
+    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    params.append(branch_code)
+    
+    # Add SKU pattern filters (accessories don't use zfill)
+    if brand:
+        where_clauses.append("SUBSTRING(im.SKU, 2, 3) = ?")
+        params.append(brand)
+    if group:
+        where_clauses.append("SUBSTRING(im.SKU, 5, 2) = ?")
+        params.append(group)
+    if subGroup:
+        where_clauses.append("SUBSTRING(im.SKU, 7, 2) = ?")
+        params.append(subGroup)
+    if color:
+        where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
+        params.append(color)
+    if character:
+        where_clauses.append("SUBSTRING(im.SKU, 11, 1) = ?")
+        params.append(character)
+    
+    where_sql = " AND ".join(where_clauses)
+    
+    sql = f"""
+        SELECT 
+            im.SKU AS [No.],
+            im.Description,
+            im.Base_Unit_of_Measure AS [Base Unit of Measure],
+            im.Product_Group AS [Product Group],
+            im.Product_Sub_Group AS [Product Sub Group],
+            ip.AlternateName,
+            SUBSTRING(im.SKU, 2, 3) AS brand,
+            SUBSTRING(im.SKU, 5, 2) AS [group],
+            SUBSTRING(im.SKU, 7, 2) AS subGroup,
+            SUBSTRING(im.SKU, 9, 2) AS color,
+            SUBSTRING(im.SKU, 11, 1) AS [character],
+            0 AS inventory
+        FROM Item_Master im
+        LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+        WHERE {where_sql}
+        ORDER BY im.SKU
+    """
+    
+    # Add branch_code for the LEFT JOIN
+    all_params = [branch_code] + params
+    df = pd.read_sql(sql, conn, params=all_params)
+    conn.close()
+    
     if df.empty:
         return []
-
-    df["inventory"] = pd.to_numeric(df.get("Inventory", 0), errors="coerce").fillna(0).astype(int)
-    filters = {"brand": brand, "group": group, "subGroup": subGroup, "color": color, "character": character}
-    q = _apply_filters(df, filters, ACC.pad)
 
     brand_map = load_code_name_mapping("Accessories_Brand")
     group_map = load_code_name_mapping("Accessories_Group")
@@ -519,7 +666,7 @@ def get_accessories_items(
     char_map = load_code_name_mapping("Character")
 
     results = []
-    for _, row in q.iterrows():
+    for _, row in df.iterrows():
         results.append({
             "sku": row["No."],
             "name": row["Description"],
@@ -615,17 +762,61 @@ def sealant_options(
 
 @sealant_router.get("/items")
 def sealant_items(
+    branch_code: str = Depends(get_branch_code),
     brand: Optional[str] = None,
     group: Optional[str] = None,
     subGroup: Optional[str] = None,
     color: Optional[str] = None,
 ):
-    df = _load_parsed_items(SEA)
+    """Get sealant items filtered by branch_code"""
+    conn = get_mssql_conn()
+    
+    # Build WHERE clause
+    where_clauses = ["im.SKU LIKE 'S%'"]
+    params = []
+    
+    # Add branch filter
+    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    params.append(branch_code)
+    
+    # Add SKU pattern filters
+    if brand:
+        where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
+        params.append(brand.zfill(2))
+    if group:
+        where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
+        params.append(group.zfill(2))
+    if subGroup:
+        where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
+        params.append(subGroup.zfill(3))
+    if color:
+        where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
+        params.append(color.zfill(2))
+    
+    where_sql = " AND ".join(where_clauses)
+    
+    sql = f"""
+        SELECT 
+            im.SKU,
+            im.Description,
+            im.Base_Unit_of_Measure AS [Base Unit of Measure],
+            im.Product_Group AS [Product Group],
+            im.Product_Sub_Group AS [Product Sub Group],
+            SUBSTRING(im.SKU, 2, 2) AS brand,
+            SUBSTRING(im.SKU, 4, 2) AS [group],
+            SUBSTRING(im.SKU, 6, 3) AS subGroup,
+            SUBSTRING(im.SKU, 9, 2) AS color,
+            0 AS onhand_qty
+        FROM Item_Master im
+        WHERE {where_sql}
+        ORDER BY im.SKU
+    """
+    
+    df = pd.read_sql(sql, conn, params=params)
+    conn.close()
+    
     if df.empty:
         return []
-
-    filters = {"brand": brand, "group": group, "subGroup": subGroup, "color": color}
-    q = _apply_filters(df, filters, SEA.pad)
 
     brand_map = load_code_name_mapping("Sealant_Brand")
     group_map = load_code_name_mapping("Sealant_Group")
@@ -633,7 +824,7 @@ def sealant_items(
     color_map = load_code_name_mapping("Sealant_Color")
 
     items = []
-    for _, row in q.iterrows():
+    for _, row in df.iterrows():
         items.append({
             "sku": row["SKU"],
             "name": row.get("Description", ""),
@@ -707,18 +898,68 @@ def gypsum_options(
 
 @gypsum_router.get("/items")
 def gypsum_items(
+    branch_code: str = Depends(get_branch_code),
     brand: Optional[str] = None,
     group: Optional[str] = None,
     subGroup: Optional[str] = None,
     color: Optional[str] = None,
     thickness: Optional[str] = None,
 ):
-    df = _load_parsed_items(GYP)
+    """Get gypsum items filtered by branch_code"""
+    conn = get_mssql_conn()
+    
+    # Build WHERE clause
+    where_clauses = ["im.SKU LIKE 'Y%'", "LEN(im.SKU) >= 18"]
+    params = []
+    
+    # Add branch filter
+    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    params.append(branch_code)
+    
+    # Add SKU pattern filters
+    if brand:
+        where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
+        params.append(brand.zfill(2))
+    if group:
+        where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
+        params.append(group.zfill(2))
+    if subGroup:
+        where_clauses.append("SUBSTRING(im.SKU, 6, 2) = ?")
+        params.append(subGroup.zfill(2))
+    if color:
+        where_clauses.append("SUBSTRING(im.SKU, 8, 3) = ?")
+        params.append(color.zfill(3))
+    if thickness:
+        where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
+        params.append(thickness.zfill(2))
+    
+    where_sql = " AND ".join(where_clauses)
+    
+    sql = f"""
+        SELECT 
+            im.SKU,
+            im.Description,
+            im.Base_Unit_of_Measure AS [Base Unit of Measure],
+            im.Product_Group AS [Product Group],
+            im.Product_Sub_Group AS [Product Sub Group],
+            SUBSTRING(im.SKU, 2, 2) AS brand,
+            SUBSTRING(im.SKU, 4, 2) AS [group],
+            SUBSTRING(im.SKU, 6, 2) AS subGroup,
+            SUBSTRING(im.SKU, 8, 3) AS color,
+            SUBSTRING(im.SKU, 11, 2) AS thickness,
+            0 AS onhand_qty,
+            1 AS [Package Size],
+            0 AS [Product Weight]
+        FROM Item_Master im
+        WHERE {where_sql}
+        ORDER BY im.SKU
+    """
+    
+    df = pd.read_sql(sql, conn, params=params)
+    conn.close()
+    
     if df.empty:
         return []
-
-    filters = {"brand": brand, "group": group, "subGroup": subGroup, "color": color, "thickness": thickness}
-    q = _apply_filters(df, filters, GYP.pad)
 
     brand_map = load_code_name_mapping("Gypsum_Brand")
     group_map = load_code_name_mapping("Gypsum_Group")
@@ -727,7 +968,7 @@ def gypsum_items(
     thick_map = load_code_name_mapping("Gypsum_Thickness")
 
     items = []
-    for _, row in q.iterrows():
+    for _, row in df.iterrows():
         items.append({
             "sku": row["SKU"],
             "name": row.get("Description", ""),
@@ -922,6 +1163,7 @@ def load_glass_data():
 
 @glass_router.get("/list")
 def get_glass_list(
+    branch_code: str = Depends(get_branch_code),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     brand: Optional[str] = Query(None),
@@ -932,17 +1174,45 @@ def get_glass_list(
     search: Optional[str] = Query(None),
     isVariant: Optional[bool] = Query(None),
 ):
-    """⚡ ดึงรายการกระจก (รองรับ Full-Text Search + cache)"""
+    """⚡ ดึงรายการกระจก (รองรับ Full-Text Search + กรองตาม branch_code)"""
     
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"🔍 Glass search request: search='{search}', brand={brand}, type={type}, subGroup={subGroup}, color={color}, thickness={thickness}, isVariant={isVariant}")
+    logger.info(f"🔍 Glass search request: branch={branch_code}, search='{search}', brand={brand}, type={type}, subGroup={subGroup}, color={color}, thickness={thickness}, isVariant={isVariant}")
     
-    # ⚡ ถ้ามี search term ให้ใช้ database query แทน cache (เพื่อใช้ Full-Text Search)
+    # ⚡ Query จาก database พร้อมกรองตาม branch_code
+    conn = get_mssql_conn()
+    cur = conn.cursor()
+    
+    # สร้าง WHERE clause สำหรับ filter
+    where_clauses = ["im.SKU LIKE 'G%'"]
+    params = []
+    
+    # ⭐ กรองเฉพาะสินค้าที่มีราคาในสาขานี้
+    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    params.append(branch_code)
+    
+    if brand:
+        where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
+        params.append(brand)
+    if type:
+        where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
+        params.append(type)
+    if subGroup:
+        where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
+        params.append(subGroup)
+    if color:
+        where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
+        params.append(color)
+    if thickness:
+        where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
+        params.append(thickness)
+    if isVariant is not None:
+        where_clauses.append("im.Variant_Mandatory = ?")
+        params.append(2 if isVariant else 1)
+    
+    # เพิ่ม search condition
     if search and search.strip():
-        conn = get_mssql_conn()
-        cur = conn.cursor()
-        
         search_term = search.strip()
         
         # ตรวจสอบว่ามี Full-Text Index หรือไม่
@@ -953,30 +1223,6 @@ def get_glass_list(
         """)
         has_fulltext = cur.fetchone()[0] > 0
         
-        # สร้าง WHERE clause สำหรับ filter
-        where_clauses = ["im.SKU LIKE 'G%'"]
-        params = []
-        
-        if brand:
-            where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
-            params.append(brand)
-        if type:
-            where_clauses.append("SUBSTRING(im.SKU, 4, 2) = ?")
-            params.append(type)
-        if subGroup:
-            where_clauses.append("SUBSTRING(im.SKU, 6, 3) = ?")
-            params.append(subGroup)
-        if color:
-            where_clauses.append("SUBSTRING(im.SKU, 9, 2) = ?")
-            params.append(color)
-        if thickness:
-            where_clauses.append("SUBSTRING(im.SKU, 11, 2) = ?")
-            params.append(thickness)
-        if isVariant is not None:
-            where_clauses.append("im.Variant_Mandatory = ?")
-            params.append(2 if isVariant else 1)
-        
-        # เพิ่ม search condition
         if has_fulltext:
             # ใช้ Full-Text Search
             search_pattern = f'"{search_term}*"'
@@ -986,129 +1232,96 @@ def get_glass_list(
             # ใช้ LIKE
             where_clauses.append("(im.SKU LIKE ? OR im.No_2 LIKE ? OR im.Description LIKE ?)")
             params.extend([f"%{search_term}%", f"%{search_term}%", f"%{search_term}%"])
-        
-        where_sql = " AND ".join(where_clauses)
-        
-        logger.info(f"📊 SQL WHERE: {where_sql}")
-        logger.info(f"📊 SQL PARAMS: {params}")
-        
-        # นับจำนวนทั้งหมด
-        count_sql = f"""
-            SELECT COUNT(*) as total
-            FROM Item_Master im
-            WHERE {where_sql}
-        """
-        cur.execute(count_sql, *params)
-        total = cur.fetchone()[0]
-        
-        logger.info(f"✅ Found {total} items matching search")
-        
-        # ดึงข้อมูล
-        sql = f"""
-            SELECT
-                im.SKU,
-                im.No_2,
-                im.Description,
-                im.Variant_Mandatory,
-                im.Product_Group,
-                im.Product_Sub_Group
-            FROM Item_Master im
-            WHERE {where_sql}
-            ORDER BY im.SKU
-            OFFSET ? ROWS
-            FETCH NEXT ? ROWS ONLY
-        """
-        cur.execute(sql, *params, offset, limit)
-        rows = cur.fetchall()
-        
-        logger.info(f"📦 Retrieved {len(rows)} items")
-        
-        # โหลด mapping tables
-        cur.execute("SELECT Code, Name FROM Glass_Brand")
-        brand_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
-        
-        cur.execute("SELECT Code, Name FROM Glass_Color")
-        color_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
-        
-        cur.execute("SELECT Code, Name FROM Glass_Group")
-        type_map = {str(r[0]).zfill(2): r[1] for r in cur.fetchall()}
-        
-        cur.execute("SELECT Type, Code, Name FROM Glass_SubGroup")
-        subgroup_map = {(str(t).zfill(2), str(c).zfill(3)): n for t, c, n in cur.fetchall()}
-        
-        conn.close()
-        
-        # แปลงผลลัพธ์
-        items = []
-        for row in rows:
-            sku = row[0]
-            parsed = parse_glass_sku(sku)
-            if not parsed:
-                continue
-            
-            is_variant = int(row[3]) == 2 if row[3] else False
-            
-            items.append({
-                "sku": sku,
-                "sku2": row[1] or "",
-                "description": row[2] or "",
-                "isVariant": is_variant,
-                "inventory": 0,
-                "brand": parsed["brand"],
-                "brandName": brand_map.get(parsed["brand"], ""),
-                "type": parsed["type"],
-                "typeName": type_map.get(parsed["type"], ""),
-                "group": parsed["type"],
-                "groupName": type_map.get(parsed["type"], ""),
-                "subGroup": parsed["subGroup"],
-                "subGroupName": subgroup_map.get((parsed["type"], parsed["subGroup"]), ""),
-                "color": parsed["color"],
-                "colorName": color_map.get(parsed["color"], ""),
-                "thickness": parsed["thickness"],
-                "width": parsed["width"],
-                "height": parsed["height"],
-                "product_group": row[4],
-                "product_sub_group": row[5],
-            })
-        
-        return {
-            "items": items,
-            "limit": limit,
-            "offset": offset,
-            "count": len(items),
-            "total": total,
-        }
     
-    # ⚡ ไม่มี search term ให้ใช้ cache (เร็วกว่า)
-    all_items = load_glass_data()
+    where_sql = " AND ".join(where_clauses)
     
-    # กรองตาม filter
-    filtered = []
-    for item in all_items:
-        if brand and item["brand"] != brand:
-            continue
-        if type and item["type"] != type:
-            continue
-        if subGroup and item["subGroup"] != subGroup:
-            continue
-        if color and item["color"] != color:
-            continue
-        if thickness and item["thickness"] != thickness:
-            continue
-        if isVariant is not None and item["isVariant"] != isVariant:
+    logger.info(f"📊 SQL WHERE: {where_sql}")
+    logger.info(f"📊 SQL PARAMS: {params}")
+    
+    # นับจำนวนทั้งหมด
+    count_sql = f"""
+        SELECT COUNT(*) as total
+        FROM Item_Master im
+        WHERE {where_sql}
+    """
+    cur.execute(count_sql, *params)
+    total = cur.fetchone()[0]
+    
+    logger.info(f"✅ Found {total} items matching search")
+    
+    # ดึงข้อมูล
+    sql = f"""
+        SELECT
+            im.SKU,
+            im.No_2,
+            im.Description,
+            im.Variant_Mandatory,
+            im.Product_Group,
+            im.Product_Sub_Group
+        FROM Item_Master im
+        WHERE {where_sql}
+        ORDER BY im.SKU
+        OFFSET ? ROWS
+        FETCH NEXT ? ROWS ONLY
+    """
+    cur.execute(sql, *params, offset, limit)
+    rows = cur.fetchall()
+    
+    logger.info(f"📦 Retrieved {len(rows)} items")
+    
+    # โหลด mapping tables
+    cur.execute("SELECT Code, Name FROM Glass_Brand")
+    brand_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
+    
+    cur.execute("SELECT Code, Name FROM Glass_Color")
+    color_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
+    
+    cur.execute("SELECT Code, Name FROM Glass_Group")
+    type_map = {str(r[0]).zfill(2): r[1] for r in cur.fetchall()}
+    
+    cur.execute("SELECT Type, Code, Name FROM Glass_SubGroup")
+    subgroup_map = {(str(t).zfill(2), str(c).zfill(3)): n for t, c, n in cur.fetchall()}
+    
+    conn.close()
+    
+    # แปลงผลลัพธ์
+    items = []
+    for row in rows:
+        sku = row[0]
+        parsed = parse_glass_sku(sku)
+        if not parsed:
             continue
         
-        filtered.append(item)
-    
-    # pagination
-    total = len(filtered)
-    result = filtered[offset:offset + limit]
+        is_variant = int(row[3]) == 2 if row[3] else False
+        
+        items.append({
+            "sku": sku,
+            "sku2": row[1] or "",
+            "description": row[2] or "",
+            "isVariant": is_variant,
+            "inventory": 0,
+            "brand": parsed["brand"],
+            "brandName": brand_map.get(parsed["brand"], ""),
+            "type": parsed["type"],
+            "typeName": type_map.get(parsed["type"], ""),
+            "group": parsed["type"],
+            "groupName": type_map.get(parsed["type"], ""),
+            "subGroup": parsed["subGroup"],
+            "subGroupName": subgroup_map.get((parsed["type"], parsed["subGroup"]), ""),
+            "color": parsed["color"],
+            "colorName": color_map.get(parsed["color"], ""),
+            "thickness": parsed["thickness"],
+            "width": parsed["width"],
+            "height": parsed["height"],
+            "product_group": row[4],
+            "product_sub_group": row[5],
+        })
     
     return {
-        "items": result,
+        "items": items,
         "limit": limit,
         "offset": offset,
-        "count": len(result),
+        "count": len(items),
         "total": total,
     }
 
@@ -1125,7 +1338,7 @@ class GlassCalcRequest(BaseModel):
 
 
 @glass_router.post("/calc")
-def calc_glass(req: GlassCalcRequest):
+def calc_glass(req: GlassCalcRequest, branch_code: str = Depends(get_branch_code)):
     parsed = parse_glass_sku(req.sku)
 
     # ⚡ ใช้ MSSQL สำหรับ mapping tables
@@ -1153,13 +1366,12 @@ def calc_glass(req: GlassCalcRequest):
 
     typeName = type_map.get(parsed["type"], "")
 
-    # ⚡ ดึงราคา R2 จาก Item_Price (default branch 00TR)
-    # TODO: Add branch_code parameter if needed
+    # ⚡ ดึงราคา R2 จาก Item_Price ตาม branch_code
     cur.execute("""
         SELECT R2 
         FROM Item_Price 
-        WHERE SKU = ? AND BranchCode = '00TR'
-    """, (req.sku,))
+        WHERE SKU = ? AND BranchCode = ?
+    """, (req.sku, branch_code))
     row = cur.fetchone()
     price_r2 = float(row.R2) if row and row.R2 else 0.0
     
@@ -1193,25 +1405,57 @@ def calc_glass(req: GlassCalcRequest):
 
 
 @glass_router.get("/filter-options")
-def get_glass_filter_options():
-    """⚡ ดึง filter options ทั้งหมด (มี cache)"""
+def get_glass_filter_options(branch_code: str = Depends(get_branch_code)):
+    """⚡ ดึง filter options ทั้งหมด (กรองตาม branch_code)"""
     
-    # โหลดจาก cache
-    all_items = load_glass_data()
+    # Query จาก database พร้อมกรองตาม branch_code
+    conn = get_mssql_conn()
+    cur = conn.cursor()
     
-    # สร้าง unique sets
+    # ดึงเฉพาะกระจกที่มีราคาในสาขานี้
+    cur.execute("""
+        SELECT DISTINCT
+            im.SKU
+        FROM Item_Master im
+        INNER JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+        WHERE im.SKU LIKE 'G%'
+    """, (branch_code,))
+    
+    skus = [row[0] for row in cur.fetchall()]
+    
+    # โหลด mapping tables
+    cur.execute("SELECT Code, Name FROM Glass_Brand")
+    brand_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
+    
+    cur.execute("SELECT Code, Name FROM Glass_Color")
+    color_map = {str(c).zfill(2): n for c, n in cur.fetchall()}
+    
+    cur.execute("SELECT Code, Name FROM Glass_Group")
+    type_map = {str(r[0]).zfill(2): r[1] for r in cur.fetchall()}
+    
+    cur.execute("SELECT Type, Code, Name FROM Glass_SubGroup")
+    subgroup_rows = cur.fetchall()
+    subgroup_map = {(str(t).zfill(2), str(c).zfill(3)): n for t, c, n in subgroup_rows}
+    
+    conn.close()
+    
+    # สร้าง unique sets จาก SKU ที่มีราคา
     brands = {}
     types = {}
     subGroups = {}
     colors = {}
     thicknesses = {}
     
-    for item in all_items:
-        brands[item["brand"]] = item["brandName"]
-        types[item["type"]] = item["typeName"]
-        subGroups[item["subGroup"]] = item["subGroupName"]
-        colors[item["color"]] = item["colorName"]
-        thicknesses[item["thickness"]] = item["thickness"]
+    for sku in skus:
+        parsed = parse_glass_sku(sku)
+        if not parsed:
+            continue
+            
+        brands[parsed["brand"]] = brand_map.get(parsed["brand"], parsed["brand"])
+        types[parsed["type"]] = type_map.get(parsed["type"], parsed["type"])
+        subGroups[parsed["subGroup"]] = subgroup_map.get((parsed["type"], parsed["subGroup"]), parsed["subGroup"])
+        colors[parsed["color"]] = color_map.get(parsed["color"], parsed["color"])
+        thicknesses[parsed["thickness"]] = parsed["thickness"]
     
     return {
         "brands": [{"code": k, "name": v} for k, v in sorted(brands.items())],

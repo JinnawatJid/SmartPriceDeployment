@@ -11,6 +11,7 @@ from email.mime.application import MIMEApplication
 from pathlib import Path
 from typing import Optional, List
 from config.email_config import EMAIL_CONFIG
+from config.config_external_api import BASE_URL
 
 
 def send_email(
@@ -111,7 +112,7 @@ def send_email(
 
 def send_approval_request(request_data: dict, pdf_path: Path) -> dict:
     """
-    ส่ง Email ขออนุมัติราคาพิเศษพร้อมแนบ PDF
+    ส่ง Email ขออนุมัติราคาพิเศษพร้อมแนบ PDF (แบบเก่า - ตอบกลับอีเมล)
     
     Args:
         request_data: ข้อมูลคำขอ
@@ -192,6 +193,142 @@ def send_approval_request(request_data: dict, pdf_path: Path) -> dict:
             <p style="color: #6c757d; font-size: 12px;">
                 Email นี้ถูกส่งอัตโนมัติจากระบบใบเสนอราคา<br>
                 กรุณาอย่าตอบกลับ Email นี้โดยตรง ให้ใช้วิธีการด้านบนเท่านั้น
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return send_email(
+        to_email=request_data['approver_email'],
+        subject=subject,
+        body=body,
+        attachments=[pdf_path] if pdf_path.exists() else None
+    )
+
+
+def send_approval_request_with_links(request_data: dict, pdf_path: Path, token: str) -> dict:
+    """
+    ส่ง Email ขออนุมัติราคาพิเศษพร้อมลิงก์ Approve/Reject
+    
+    Args:
+        request_data: ข้อมูลคำขอ
+        pdf_path: Path ของไฟล์ PDF
+        token: Token สำหรับการอนุมัติ
+    
+    Returns:
+        dict: ผลการส่ง Email
+    """
+    # สร้าง URL สำหรับ approve และ reject
+    approve_url = f"{BASE_URL}/api/special-price-requests/approve/{token}"
+    reject_url = f"{BASE_URL}/api/special-price-requests/reject/{token}"
+    
+    subject = f"[Approval Required] Special Price Request {request_data['request_number']}"
+    
+    body = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Sarabun', Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+            .info-row {{ margin: 10px 0; }}
+            .label {{ font-weight: bold; color: #495057; }}
+            .value {{ color: #212529; }}
+            .price-highlight {{ font-size: 18px; font-weight: bold; color: #dc3545; }}
+            .button-container {{ text-align: center; margin: 30px 0; }}
+            .btn {{ 
+                display: inline-block;
+                padding: 15px 40px;
+                margin: 10px;
+                text-decoration: none;
+                border-radius: 5px;
+                font-size: 18px;
+                font-weight: bold;
+                color: white;
+            }}
+            .btn-approve {{ background-color: #28a745; }}
+            .btn-approve:hover {{ background-color: #218838; }}
+            .btn-reject {{ background-color: #dc3545; }}
+            .btn-reject:hover {{ background-color: #c82333; }}
+            .note {{ background-color: #e7f3ff; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 4px solid #007bff; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2 style="margin: 0; color: #007bff;">🔔 คำขอราคาพิเศษรอการพิจารณา</h2>
+            </div>
+            
+            <div class="info-row">
+                <span class="label">เลขที่คำขอ:</span>
+                <span class="value">{request_data['request_number']}</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="label">ผู้ขอ:</span>
+                <span class="value">{request_data['requester_name']}</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="label">ลูกค้า:</span>
+                <span class="value">{request_data.get('customer_name', 'N/A')}</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="label">เลขที่ใบเสนอราคา:</span>
+                <span class="value">{request_data['quote_no']}</span>
+            </div>
+            
+            <hr style="margin: 20px 0;">
+            
+            <div class="info-row">
+                <span class="label">ราคาเดิม:</span>
+                <span class="value">{request_data['original_total']:,.2f} บาท</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="label">ราคาที่ขอ:</span>
+                <span class="price-highlight">{request_data['requested_total']:,.2f} บาท</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="label">ส่วนลด:</span>
+                <span class="price-highlight">{request_data['discount_percentage']:.2f}%</span>
+            </div>
+            
+            <hr style="margin: 20px 0;">
+            
+            <div class="info-row">
+                <span class="label">เหตุผลที่ขอ:</span>
+                <div style="margin-top: 10px; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+                    {request_data['request_reason']}
+                </div>
+            </div>
+            
+            <div class="button-container">
+                <a href="{approve_url}" class="btn btn-approve">✅ อนุมัติ</a>
+                <a href="{reject_url}" class="btn btn-reject">❌ ปฏิเสธ</a>
+            </div>
+            
+            <div class="note">
+                <p style="margin: 0;"><strong>📌 หมายเหตุ:</strong></p>
+                <ul style="margin: 10px 0;">
+                    <li>คลิกปุ่ม "อนุมัติ" เพื่ออนุมัติคำขอทันที</li>
+                    <li>คลิกปุ่ม "ปฏิเสธ" เพื่อกรอกเหตุผลและปฏิเสธคำขอ</li>
+                    <li>ลิงก์นี้จะหมดอายุใน 72 ชั่วโมง</li>
+                    <li>รายละเอียดเพิ่มเติมในไฟล์แนบ</li>
+                </ul>
+            </div>
+            
+            <hr style="margin: 20px 0;">
+            
+            <p style="color: #6c757d; font-size: 12px; text-align: center;">
+                Email นี้ถูกส่งอัตโนมัติจากระบบใบเสนอราคา<br>
+                หากมีปัญหาในการคลิกปุ่ม กรุณาคัดลอกลิงก์ด้านล่างไปวางในเบราว์เซอร์<br>
+                <br>
+                อนุมัติ: <a href="{approve_url}">{approve_url}</a><br>
+                ปฏิเสธ: <a href="{reject_url}">{reject_url}</a>
             </p>
         </div>
     </body>

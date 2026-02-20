@@ -19,13 +19,16 @@ def row_to_item(row, branch_code: str, inventory_service=None) -> dict:
     logger = logging.getLogger(__name__)
     logger.info(f"row_to_item: SKU={row.SKU}, branch_code={branch_code}, R1={row.R1}, R2={row.R2}")
     
+    # ⭐ ดึง category จากอักษรตัวแรกของ SKU แทน Inventory_Posting_Group
+    category = row.SKU[0].upper() if row.SKU and len(row.SKU) > 0 else ""
+    
     return {
         "sku": row.SKU,
         "sku2": row.No_2 or "",
         "name": row.Description or "",
         "inventory": inventory,
         "unit": row.Base_Unit_of_Measure or "",
-        "category": row.Inventory_Posting_Group or "",
+        "category": category,
         "isVariant": bool(row.Variant_Mandatory == 2),  # 2 = มี variant, 1 = ไม่มี variant
         "prices": {
             "R1": row.R1 or 0,
@@ -50,15 +53,15 @@ def get_item_categories():
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
-    # ⭐ Filter to show only allowed categories: G, A, C, Y, S, E
+    # ⭐ แบ่งประเภทตามอักษรตัวแรกของ SKU แทน Inventory_Posting_Group
     cursor.execute("""
         SELECT
-            Inventory_Posting_Group AS name,
+            LEFT(SKU, 1) AS name,
             COUNT(*) AS count
         FROM Item_Master
-        WHERE Inventory_Posting_Group IN ('G', 'A', 'C', 'Y', 'S', 'E')
-        GROUP BY Inventory_Posting_Group
-        ORDER BY Inventory_Posting_Group
+        WHERE LEFT(SKU, 1) IN ('G', 'A', 'C', 'Y', 'S', 'E')
+        GROUP BY LEFT(SKU, 1)
+        ORDER BY LEFT(SKU, 1)
     """)
 
     rows = cursor.fetchall()
@@ -89,8 +92,8 @@ def get_items_list_light(
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
-    # ⭐ สร้าง WHERE clause สำหรับ filter
-    where_clauses = ["im.Inventory_Posting_Group = ?"]
+    # ⭐ สร้าง WHERE clause สำหรับ filter - ใช้อักษรตัวแรกของ SKU แทน Inventory_Posting_Group
+    where_clauses = ["LEFT(im.SKU, 1) = ?"]
     params = [category_name.upper()]  # category first
 
     # ⭐ Filter by SKU pattern (Aluminium: ABBGGSSSCCTT)
@@ -512,8 +515,8 @@ def get_filter_options(
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
-    # ⭐ สร้าง WHERE clause สำหรับ filter (เหมือนกับ list endpoint)
-    where_clauses = ["im.Inventory_Posting_Group = ?"]
+    # ⭐ สร้าง WHERE clause สำหรับ filter (เหมือนกับ list endpoint) - ใช้อักษรตัวแรกของ SKU
+    where_clauses = ["LEFT(im.SKU, 1) = ?"]
     params = [category_name.upper()]
 
     # Helper function สำหรับเพิ่ม filter

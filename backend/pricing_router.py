@@ -79,7 +79,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         return {"items": [], "subtotal": 0, "customer_tier": "N/A"}
     
     # ⭐ ไม่ต้องดึง product_group จาก SKU ตัวแรกแล้ว
-    # จะใช้ category (Inventory_Posting_Group) ของแต่ละสินค้าแทน
+    # จะใช้ category (อักษรตัวแรกของ SKU) ของแต่ละสินค้าแทน
     
     print(f"🔍 DEBUG: Branch Code from JWT: '{branch_code}'")
     print(f"🔍 DEBUG: All SKUs in cart: {[item.sku for item in req.cart]}")
@@ -98,7 +98,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             SELECT
                 im.SKU AS sku,
                 im.No_2 AS sku2,
-                im.Inventory_Posting_Group AS category,
+                LEFT(im.SKU, 1) AS category,
                 im.Base_Unit_of_Measure,
                 ip.PackageSize AS pkg_size,
                 0 AS Product_Weight,
@@ -254,7 +254,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     # -----------------------------
     # MAP relevantSales FROM CUSTOMER DATA (ตาม category ของแต่ละสินค้า)
     # -----------------------------
-    # ⭐ คำนวณ relevantSales ตาม category (Inventory_Posting_Group) ของแต่ละสินค้า
+    # ⭐ คำนวณ relevantSales ตาม category (อักษรตัวแรกของ SKU) ของแต่ละสินค้า
     print(f"🔍 DEBUG: Calculating relevantSales per item based on category")
     
     def get_relevant_sales_for_category(row):

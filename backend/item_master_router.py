@@ -51,7 +51,7 @@ class ItemDetail(BaseModel):
     sku2: str  # no_2
     name: str  # description
     unit: str  # base_unit_of_measure
-    category: str  # inventory_posting_group
+    category: str  # อักษรตัวแรกของ SKU
     product_group: str
     product_sub_group: str
     re: float  # unit cost
@@ -133,7 +133,7 @@ def get_item_detail(
                 im.No_2,
                 im.Description,
                 im.Base_Unit_of_Measure,
-                im.Inventory_Posting_Group,
+                LEFT(im.SKU, 1) AS category,
                 im.Product_Group,
                 im.Product_Sub_Group,
                 im.RE,
@@ -219,7 +219,7 @@ def get_item_detail(
 @router.get("", response_model=ItemListResponse)
 def list_items(
     branch_code: str = QueryParam(..., description="Branch code to filter prices"),
-    category: Optional[str] = QueryParam(None, description="Filter by Inventory_Posting_Group"),
+    category: Optional[str] = QueryParam(None, description="Filter by first character of SKU"),
     product_group: Optional[str] = QueryParam(None, description="Filter by Product_Group"),
     search: Optional[str] = QueryParam(None, description="Search in SKU, No_2, Description"),
     limit: int = QueryParam(50, ge=1, le=1000, description="Number of items to return"),
@@ -229,14 +229,14 @@ def list_items(
     List items with filtering and pagination.
     
     Supports filtering by:
-    - category (Inventory_Posting_Group)
+    - category (อักษรตัวแรกของ SKU)
     - product_group (Product_Group)
     - search (SKU, No_2, Description using LIKE)
     
     Results are ordered by SKU ascending.
     
     Args:
-        category: Filter by Inventory_Posting_Group
+        category: Filter by first character of SKU
         product_group: Filter by Product_Group
         search: Search term for SKU, No_2, Description
         limit: Number of items to return (default: 50, max: 1000)
@@ -259,7 +259,7 @@ def list_items(
         params = []
         
         if category:
-            where_clauses.append("im.Inventory_Posting_Group = ?")
+            where_clauses.append("LEFT(im.SKU, 1) = ?")
             params.append(category)
         
         if product_group:
@@ -294,7 +294,7 @@ def list_items(
                 im.SKU,
                 im.No_2,
                 im.Description,
-                im.Inventory_Posting_Group,
+                LEFT(im.SKU, 1) AS category,
                 im.Product_Group,
                 im.Product_Sub_Group,
                 ip.SDM,
