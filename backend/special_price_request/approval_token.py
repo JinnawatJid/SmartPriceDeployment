@@ -7,7 +7,7 @@ import secrets
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
-from config.db_sqlite import get_conn
+from config.db_mssql import get_mssql_conn
 
 
 def generate_approval_token(request_number: str, expires_hours: int = 72) -> str:
@@ -27,11 +27,11 @@ def generate_approval_token(request_number: str, expires_hours: int = 72) -> str
     # คำนวณเวลาหมดอายุ
     expires_at = (datetime.now() + timedelta(hours=expires_hours)).isoformat(timespec="seconds")
     
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
     # บันทึก token
-    cur.execute("""
+    cursor.execute("""
         INSERT INTO approval_tokens (
             request_number, token, expires_at, created_at
         ) VALUES (?, ?, ?, ?)
@@ -58,32 +58,40 @@ def validate_token(token: str) -> Optional[str]:
     Returns:
         str: request_number ถ้า token valid, None ถ้า invalid หรือหมดอายุ
     """
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
     # ค้นหา token
-    cur.execute("""
+    cursor.execute("""
         SELECT request_number, expires_at, used_at
         FROM approval_tokens
         WHERE token = ?
     """, (token,))
     
-    result = cur.fetchone()
+    result = cursor.fetchone()
     conn.close()
     
     if not result:
         return None
     
+    # ⭐ MSSQL: ใช้ index แทน dict key
+    request_number, expires_at, used_at = result
+    
     # ตรวจสอบว่าถูกใช้ไปแล้วหรือยัง
-    if result["used_at"]:
+    if used_at:
         return None
     
     # ตรวจสอบว่าหมดอายุหรือยัง
-    expires_at = datetime.fromisoformat(result["expires_at"])
-    if datetime.now() > expires_at:
+    # ⭐ MSSQL: expires_at เป็น datetime object แล้ว ไม่ต้อง parse
+    if isinstance(expires_at, str):
+        expires_at_dt = datetime.fromisoformat(expires_at)
+    else:
+        expires_at_dt = expires_at
+    
+    if datetime.now() > expires_at_dt:
         return None
     
-    return result["request_number"]
+    return request_number
 
 
 def mark_token_used(token: str) -> bool:
@@ -96,10 +104,10 @@ def mark_token_used(token: str) -> bool:
     Returns:
         bool: สำเร็จหรือไม่
     """
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
-    cur.execute("""
+    cursor.execute("""
         UPDATE approval_tokens
         SET used_at = ?
         WHERE token = ? AND used_at IS NULL
@@ -108,7 +116,7 @@ def mark_token_used(token: str) -> bool:
         token
     ))
     
-    success = cur.rowcount > 0
+    success = cursor.rowcount > 0
     conn.commit()
     conn.close()
     

@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import json
-import sqlite3
-from config.db_sqlite import get_conn
+from config.db_mssql import get_mssql_conn
 
 
 from fastapi import APIRouter, HTTPException, Body, Depends
@@ -42,15 +41,15 @@ def _generate_quote_no(branch_code: str) -> str:
 
     prefix = f"{branch_code[-2:].upper()}QT-{yy}{mm}"
 
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
-    cur.execute("""
+    cursor.execute("""
         SELECT QuoteNo FROM Quote_Header
         WHERE QuoteNo LIKE ?
     """, (f"{prefix}%",))
 
-    count = len(cur.fetchall()) + 1
+    count = len(cursor.fetchall()) + 1
     seq = f"{count:04d}"
 
     return f"{prefix}/{seq}"
@@ -117,6 +116,14 @@ def _append_lines_to_excel(quote_no: str, lines: list):
 # -----------------------------------------------------
 # Normalize keys
 # -----------------------------------------------------
+def row_to_dict(cursor, row):
+    """แปลง MSSQL row เป็น dict"""
+    if row is None:
+        return None
+    columns = [column[0] for column in cursor.description]
+    return dict(zip(columns, row))
+
+
 def normalize_keys(row: dict):
     return {k.strip(): v for k, v in row.items()}
 
@@ -170,8 +177,8 @@ def _build_line_from_payload(item: dict) -> dict:
 # -----------------------------------------------------
 @router.post("", summary="สร้างใบเสนอราคาใหม่")
 def create_quotation(payload: dict = Body(...)):
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
     employee = payload.get("employee") or {}
     customer = payload.get("customer") or {}
@@ -217,7 +224,7 @@ def create_quotation(payload: dict = Body(...)):
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
     }
 
-    cur.execute("""
+    cursor.execute("""
         INSERT INTO Quote_Header (
             QuoteNo, Status, CustomerCode, SalesID, SalesName,
             CreateDate, ExpireDate, ApproveDate, BranchCode,
@@ -237,7 +244,7 @@ def create_quotation(payload: dict = Body(...)):
     for item in cart:
         line = _build_line_from_payload(item)
 
-        cur.execute("""
+        cursor.execute("""
             INSERT INTO Quote_Line (
                 QuoteID, ItemCode, ItemName, Category,
                 Unit, Quantity,Price_System, UnitPrice, TotalPrice,
@@ -274,11 +281,11 @@ def create_quotation(payload: dict = Body(...)):
 # -----------------------------------------------------
 @router.put("/{quote_no:path}", summary="อัปเดตใบเสนอราคา")
 def update_quotation(quote_no: str, payload: dict = Body(...)):
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
-    cur.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
-    original = cur.fetchone()
+    cursor.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
+    original = cursor.fetchone()
     if not original:
         raise HTTPException(404, f"ไม่พบใบเสนอราคา {quote_no}")
 
@@ -319,7 +326,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
     }
 
-    cur.execute("""
+    cursor.execute("""
         UPDATE Quote_Header SET
             Status=?, CustomerCode=?, SalesID=?, SalesName=?,
             ExpireDate=?, ApproveDate=?, BranchCode=?,
@@ -352,7 +359,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         quote_no
     ))
 
-    cur.execute("DELETE FROM Quote_Line WHERE QuoteID=?", (quote_no,))
+    cursor.execute("DELETE FROM Quote_Line WHERE QuoteID=?", (quote_no,))
 
     cart = payload.get("cart", [])
     if not cart:
@@ -362,7 +369,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
     for item in cart:
         line = _build_line_from_payload(item)
 
-        cur.execute("""
+        cursor.execute("""
             INSERT INTO Quote_Line (
                 QuoteID, ItemCode, ItemName, Category,
                 Unit, Quantity,Price_System, UnitPrice, TotalPrice,
@@ -414,43 +421,43 @@ def list_quotations(
         status: กรองตาม status (draft, complete, cancelled)
         branch_code: รหัสสาขาจาก JWT token
     """
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
     # ⭐ กรองตามสาขาของพนักงาน
     if status:
-        cur.execute("""
+        cursor.execute("""
             SELECT * FROM Quote_Header
             WHERE Status = ? AND BranchCode = ?
             ORDER BY LastUpdate DESC
         """, (status, branch_code))
     else:
-        cur.execute("""
+        cursor.execute("""
             SELECT * FROM Quote_Header
             WHERE BranchCode = ?
             ORDER BY LastUpdate DESC
         """, (branch_code,))
 
-    headers = [normalize_keys(dict(r)) for r in cur.fetchall()]
+    headers = [normalize_keys(row_to_dict(cursor, r)) for r in cursor.fetchall()]
     result = []
 
     for h in headers:
         quote_no = h["QuoteNo"]
 
-        cur.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
-        lines = [normalize_keys(dict(r)) for r in cur.fetchall()]
+        cursor.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
+        lines = [normalize_keys(row_to_dict(cursor, r)) for r in cursor.fetchall()]
         
         # ⭐ ดึง request_number ถ้ามี special_price_request_id
         request_number = None
         if h.get("special_price_request_id"):
-            cur.execute("""
+            cursor.execute("""
                 SELECT request_number 
                 FROM special_price_requests 
                 WHERE id = ?
             """, (h["special_price_request_id"],))
-            req_row = cur.fetchone()
+            req_row = cursor.fetchone()
             if req_row:
-                request_number = req_row["request_number"]
+                request_number = req_row[0]  # ⭐ MSSQL: ใช้ index
 
         cart_items = [
             {
@@ -505,30 +512,30 @@ def list_quotations(
 # -----------------------------------------------------
 @router.get("/{quote_no:path}", summary="โหลดใบเสนอราคาแบบเต็ม")
 def get_quotation(quote_no: str):
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
-    cur.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
-    header = cur.fetchone()
+    cursor.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
+    header = cursor.fetchone()
     if not header:
         raise HTTPException(404, f"ไม่พบใบเสนอราคา {quote_no}")
 
-    header = normalize_keys(dict(header))
+    header = normalize_keys(row_to_dict(cursor, header))  # ⭐ MSSQL: แปลง row เป็น dict
 
-    cur.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
-    lines = [normalize_keys(dict(r)) for r in cur.fetchall()]
+    cursor.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
+    lines = [normalize_keys(row_to_dict(cursor, r)) for r in cursor.fetchall()]
     
     # ดึงข้อมูล special price request ถ้ามี
     special_price_request = None
     if header.get("special_price_request_id"):
-        cur.execute("""
+        cursor.execute("""
             SELECT request_number, status, approved_by, approved_at, rejection_reason
             FROM special_price_requests
             WHERE id = ?
         """, (header["special_price_request_id"],))
-        spr = cur.fetchone()
+        spr = cursor.fetchone()
         if spr:
-            special_price_request = normalize_keys(dict(spr))
+            special_price_request = normalize_keys(row_to_dict(cursor, spr))  # ⭐ MSSQL: แปลง row เป็น dict
 
     conn.close()
 
@@ -552,14 +559,14 @@ def get_quotation(quote_no: str):
 # -----------------------------------------------------
 @router.delete("/{quote_no:path}", summary="ยกเลิกใบเสนอราคา")
 def cancel_quotation(quote_no: str):
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
-    cur.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
-    if not cur.fetchone():
+    cursor.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
+    if not cursor.fetchone():
         raise HTTPException(404, "ไม่พบใบเสนอราคา")
 
-    cur.execute("""
+    cursor.execute("""
         UPDATE Quote_Header
         SET Status = 'cancelled', LastUpdate = ?
         WHERE QuoteNo = ?

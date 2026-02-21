@@ -38,32 +38,6 @@ router = APIRouter(prefix="/special-price-requests", tags=["special-price-reques
 def create_special_price_request(payload: dict = Body(...)):
     """
     สร้างคำขอราคาพิเศษใหม่
-    
-    Request Body:
-    {
-        "quote_no": "BSQT-2501/0001",
-        "customer_code": "C001",
-        "customer_name": "บริษัท ABC",
-        "customer_type": "R",
-        "requester_name": "สมชาย ใจดี",
-        "request_reason": "ลูกค้าเป็น VIP",
-        "original_total": 15000.00,
-        "requested_total": 12000.00,
-        "approver_email": "manager@company.com",
-        "branch": "สาขากรุงเทพ",
-        "valid_from": "2025-02-01",
-        "valid_to": "2025-03-31",
-        "items": [
-            {
-                "item_code": "A010010100101",
-                "item_name": "อลูมิเนียม",
-                "quantity": 100,
-                "unit": "เมตร",
-                "w1_price": 150.00,
-                "requested_price": 120.00
-            }
-        ]
-    }
     """
     try:
         # Validate required fields
@@ -93,17 +67,13 @@ def create_special_price_request(payload: dict = Body(...)):
         # สร้าง approval token
         try:
             token = generate_approval_token(result["request_number"])
-            print(f"✅ Token generated: {token[:10]}...")
         except Exception as e:
-            print(f"❌ Error generating token: {e}")
             raise HTTPException(500, f"Error generating token: {str(e)}")
         
         # ส่ง Email พร้อมลิงก์
         try:
             email_result = send_approval_request_with_links(request_data, pdf_path, token)
-            print(f"📧 Email result: {email_result}")
         except Exception as e:
-            print(f"❌ Error sending email: {e}")
             import traceback
             traceback.print_exc()
             raise HTTPException(500, f"Error sending email: {str(e)}")

@@ -1,9 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import pandas as pd
 from datetime import datetime
-import sqlite3
 import math
-from config.db_sqlite import get_conn
+from config.db_mssql import get_mssql_conn
 
 router = APIRouter(prefix="/item-update", tags=["item-update"])
 
@@ -100,14 +99,13 @@ def upload_price_excel(file: UploadFile = File(...)):
 
     has_no2 = _has_col(df, "No. 2")
 
-    conn = get_conn()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
     version_name = f"UPLOAD_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     now = datetime.now().isoformat(timespec="seconds")
 
-    cur.execute(
+    cursor.execute(
         """
         INSERT INTO Item_Update_Version
         (version_name, update_type, uploaded_by, job_title, uploaded_at, status)
@@ -122,12 +120,15 @@ def upload_price_excel(file: UploadFile = File(...)):
             "DRAFT",
         ),
     )
-    version_id = cur.lastrowid
+    
+    # ⭐ MSSQL: ใช้ SCOPE_IDENTITY() แทน lastrowid
+    cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+    version_id = int(cursor.fetchone()[0])
 
     # โหลด SKU ที่มีอยู่
     existing = set(
         str(r["No."]).strip()
-        for r in cur.execute('SELECT "No." as "No." FROM Items_Test').fetchall()
+        for r in cursor.execute('SELECT "No." as "No." FROM Items_Test').fetchall()
         if r["No."] is not None
     )
 
@@ -203,7 +204,7 @@ def upload_price_excel(file: UploadFile = File(...)):
             product_group = _to_str(_get(row, "Product Group", None), default=None)
             product_sub_group = _to_str(_get(row, "Product Sub Group", None), default=None)
 
-            cur.execute(
+            cursor.execute(
                 """
                 INSERT INTO Items_Test (
                     "No.", "No. 2", "Description",
@@ -246,7 +247,7 @@ def upload_price_excel(file: UploadFile = File(...)):
         # ถ้า Excel ไม่ได้ส่ง No.2 มา → new_no2 = old_no2 (ไม่ทับค่าเดิม)
         # ============================================================
         else:
-            old = cur.execute(
+            old = cursor.execute(
                 """
                 SELECT R1, R2, W1, W2, AlternateName, "No. 2" as no2
                 FROM Items_Test
@@ -274,7 +275,7 @@ def upload_price_excel(file: UploadFile = File(...)):
 
         change_altname_flag = 1 if (is_new_item or not _eq(new_alt, old_alt)) else 0
 
-        cur.execute(
+        cursor.execute(
             """
             INSERT INTO Item_Update_Version_Detail (
                 version_id, sku,
@@ -319,7 +320,7 @@ def upload_price_excel(file: UploadFile = File(...)):
 # ==============================
 @router.get("/preview/{version_id}")
 def preview_version(version_id: int):
-    conn = get_conn()
+    conn = get_mssql_conn()
     df = pd.read_sql_query(
         "SELECT * FROM Item_Update_Version_Detail WHERE version_id = ?",
         conn,
@@ -339,11 +340,10 @@ def preview_version(version_id: int):
 # ==============================
 @router.post("/activate/{version_id}")
 def activate_version(version_id: int):
-    conn = get_conn()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
 
-    rows = cur.execute(
+    rows = cursor.execute(
         """
         SELECT * FROM Item_Update_Version_Detail
         WHERE version_id = ?
@@ -351,8 +351,13 @@ def activate_version(version_id: int):
         (version_id,),
     ).fetchall()
 
-    for r in rows:
-        cur.execute(
+    # ⭐ MSSQL: แปลง rows เป็น dict
+    columns = [column[0] for column in cursor.description]
+    
+    for row in rows:
+        r = dict(zip(columns, row))
+        
+        cursor.execute(
             """
             UPDATE Items_Test
             SET
@@ -369,7 +374,7 @@ def activate_version(version_id: int):
             ),
         )
 
-    cur.execute(
+    cursor.execute(
         """
         UPDATE Item_Update_Version
         SET status = 'ACTIVE'

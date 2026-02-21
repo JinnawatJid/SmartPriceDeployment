@@ -5,7 +5,7 @@
 
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from config.db_sqlite import get_conn
+from config.db_mssql import get_mssql_conn
 
 
 def generate_request_number() -> str:
@@ -20,18 +20,18 @@ def generate_request_number() -> str:
     
     prefix = f"SP-{yy}{mm}{dd}"
     
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
     # นับจำนวนคำขอในวันนี้
-    cur.execute("""
+    cursor.execute("""
         SELECT COUNT(*) as count
         FROM special_price_requests
         WHERE request_number LIKE ?
     """, (f"{prefix}%",))
     
-    result = cur.fetchone()
-    count = result["count"] if result else 0
+    result = cursor.fetchone()
+    count = result[0] if result else 0
     conn.close()
     
     seq = f"{count + 1:04d}"
@@ -52,42 +52,9 @@ def calculate_discount_percentage(original_total: float, requested_total: float)
 def create_request(data: dict) -> dict:
     """
     สร้างคำขอราคาพิเศษใหม่
-    
-    Args:
-        data: {
-            "quote_no": str,
-            "customer_code": str,
-            "customer_name": str,
-            "customer_type": str,
-            "requester_name": str,
-            "request_reason": str,
-            "original_total": float,
-            "requested_total": float,
-            "approver_email": str,
-            "branch": str,
-            "valid_from": str,
-            "valid_to": str,
-            "items": [
-                {
-                    "item_code": str,
-                    "item_name": str,
-                    "quantity": float,
-                    "unit": str,
-                    "w1_price": float,
-                    "requested_price": float
-                }
-            ]
-        }
-    
-    Returns:
-        dict: {
-            "request_number": str,
-            "status": str,
-            "created_at": str
-        }
     """
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
     # สร้างเลขที่คำขอ
     request_number = generate_request_number()
@@ -100,41 +67,60 @@ def create_request(data: dict) -> dict:
     
     now = datetime.now().isoformat(timespec="seconds")
     
-    # Debug logging
-    print(f"🔍 Creating request with customer_type: '{data.get('customer_type', '')}'")
-    print(f"🔍 Customer data: code={data.get('customer_code')}, name={data.get('customer_name')}, type={data.get('customer_type')}")
-    
     # Insert header
-    cur.execute("""
-        INSERT INTO special_price_requests (
-            request_number, quote_no, customer_code, customer_name, customer_type,
-            requester_name, request_reason,
-            original_total, requested_total, discount_percentage,
-            status, approver_email, branch, valid_from, valid_to,
-            email_sent_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        request_number,
-        data["quote_no"],
-        data.get("customer_code", ""),
-        data.get("customer_name", ""),
-        data.get("customer_type", ""),
-        data["requester_name"],
-        data["request_reason"],
-        data["original_total"],
-        data["requested_total"],
-        discount_pct,
-        "pending",
-        data["approver_email"],
-        data.get("branch", ""),
-        data.get("valid_from", ""),
-        data.get("valid_to", ""),
-        now,
-        now,
-        now
-    ))
+    try:
+        cursor.execute("""
+            INSERT INTO special_price_requests (
+                request_number, quote_no, customer_code, customer_name, customer_type,
+                requester_name, request_reason,
+                original_total, requested_total, discount_percentage,
+                status, approver_email, branch, valid_from, valid_to,
+                email_sent_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            request_number,
+            data["quote_no"],
+            data.get("customer_code", ""),
+            data.get("customer_name", ""),
+            data.get("customer_type", ""),
+            data["requester_name"],
+            data["request_reason"],
+            data["original_total"],
+            data["requested_total"],
+            discount_pct,
+            "pending",
+            data["approver_email"],
+            data.get("branch", ""),
+            data.get("valid_from", ""),
+            data.get("valid_to", ""),
+            now,
+            now,
+            now
+        ))
+    except Exception as e:
+        conn.close()
+        raise
     
-    request_id = cur.lastrowid
+    # Get request_id
+    try:
+        cursor.execute("SELECT CAST(SCOPE_IDENTITY() AS INT) AS id")
+        result = cursor.fetchone()
+        
+        if result is None or result[0] is None:
+            # Fallback: query by request_number
+            cursor.execute("""
+                SELECT id FROM special_price_requests 
+                WHERE request_number = ?
+            """, (request_number,))
+            result = cursor.fetchone()
+        
+        if result is None or result[0] is None:
+            raise Exception("Failed to get request_id after INSERT")
+        
+        request_id = int(result[0])
+    except Exception as e:
+        conn.close()
+        raise
     
     # Insert items
     for item in data.get("items", []):
@@ -142,7 +128,7 @@ def create_request(data: dict) -> dict:
         requested_amount = item["requested_price"] * item["quantity"]
         is_below_w1 = item["requested_price"] < item["w1_price"]
         
-        cur.execute("""
+        cursor.execute("""
             INSERT INTO special_price_request_items (
                 request_id, item_code, item_name, quantity, unit,
                 w1_price, requested_price, original_amount, requested_amount,
@@ -163,7 +149,7 @@ def create_request(data: dict) -> dict:
         ))
     
     # อัปเดต Quote_Header
-    cur.execute("""
+    cursor.execute("""
         UPDATE Quote_Header
         SET Status = 'pending_approval',
             special_price_request_id = ?,
@@ -200,8 +186,8 @@ def get_requests(status: Optional[str] = None, limit: int = 20, offset: int = 0)
             "offset": int
         }
     """
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
     # Build WHERE clause
     where_clause = ""
@@ -213,10 +199,10 @@ def get_requests(status: Optional[str] = None, limit: int = 20, offset: int = 0)
     
     # Count total
     count_sql = f"SELECT COUNT(*) as total FROM special_price_requests {where_clause}"
-    cur.execute(count_sql, params)
-    total = cur.fetchone()["total"]
+    cursor.execute(count_sql, tuple(params))
+    total = cursor.fetchone()[0]
     
-    # Get items
+    # Get items (⭐ MSSQL: ใช้ OFFSET/FETCH แทน LIMIT)
     sql = f"""
         SELECT 
             request_number, quote_no, customer_code, customer_name,
@@ -226,13 +212,18 @@ def get_requests(status: Optional[str] = None, limit: int = 20, offset: int = 0)
         FROM special_price_requests
         {where_clause}
         ORDER BY created_at DESC
-        LIMIT ? OFFSET ?
+        OFFSET ? ROWS
+        FETCH NEXT ? ROWS ONLY
     """
     
-    cur.execute(sql, params + [limit, offset])
-    rows = cur.fetchall()
+    cursor.execute(sql, tuple(params + [offset, limit]))
     
-    items = [dict(row) for row in rows]
+    # ⭐ MSSQL: แปลง rows เป็น dict
+    columns = [column[0] for column in cursor.description]
+    items = []
+    for row in cursor.fetchall():
+        items.append(dict(zip(columns, row)))
+    
     conn.close()
     
     return {
@@ -253,32 +244,39 @@ def get_request_detail(request_number: str) -> Optional[dict]:
     Returns:
         dict หรือ None ถ้าไม่พบ
     """
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
     # Get header
-    cur.execute("""
+    cursor.execute("""
         SELECT *
         FROM special_price_requests
         WHERE request_number = ?
     """, (request_number,))
     
-    header = cur.fetchone()
-    if not header:
+    header_row = cursor.fetchone()
+    if not header_row:
         conn.close()
         return None
     
-    header_dict = dict(header)
+    # ⭐ MSSQL: แปลง row เป็น dict
+    columns = [column[0] for column in cursor.description]
+    header_dict = dict(zip(columns, header_row))
     
     # Get items
-    cur.execute("""
+    cursor.execute("""
         SELECT *
         FROM special_price_request_items
         WHERE request_id = ?
         ORDER BY id
     """, (header_dict["id"],))
     
-    items = [dict(row) for row in cur.fetchall()]
+    # ⭐ MSSQL: แปลง rows เป็น list of dict
+    item_columns = [column[0] for column in cursor.description]
+    items = []
+    for row in cursor.fetchall():
+        items.append(dict(zip(item_columns, row)))
+    
     conn.close()
     
     header_dict["items"] = items
@@ -297,8 +295,8 @@ def approve_request(request_number: str, approved_by: str, pdf_files: list = Non
     Returns:
         bool: สำเร็จหรือไม่
     """
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
     now = datetime.now().isoformat(timespec="seconds")
     
@@ -307,7 +305,7 @@ def approve_request(request_number: str, approved_by: str, pdf_files: list = Non
     pdf_files_json = json.dumps(pdf_files) if pdf_files else None
     
     # อัปเดตสถานะคำขอ
-    cur.execute("""
+    cursor.execute("""
         UPDATE special_price_requests
         SET status = 'approved',
             approved_by = ?,
@@ -317,26 +315,26 @@ def approve_request(request_number: str, approved_by: str, pdf_files: list = Non
         WHERE request_number = ? AND status = 'pending'
     """, (approved_by, now, pdf_files_json, now, request_number))
     
-    if cur.rowcount == 0:
+    if cursor.rowcount == 0:
         conn.close()
         return False
     
     # ดึง quote_no
-    cur.execute("""
+    cursor.execute("""
         SELECT quote_no
         FROM special_price_requests
         WHERE request_number = ?
     """, (request_number,))
     
-    result = cur.fetchone()
+    result = cursor.fetchone()
     if not result:
         conn.close()
         return False
     
-    quote_no = result["quote_no"]
+    quote_no = result[0]  # ⭐ MSSQL: ใช้ index แทน dict key
     
     # อัปเดต Quote_Header
-    cur.execute("""
+    cursor.execute("""
         UPDATE Quote_Header
         SET Status = 'open',
             special_price_status = 'approved',
@@ -344,7 +342,7 @@ def approve_request(request_number: str, approved_by: str, pdf_files: list = Non
         WHERE QuoteNo = ?
     """, (now, quote_no))
     
-    print(f"✅ Updated Quote_Header: {quote_no}, rows affected: {cur.rowcount}")
+    print(f"✅ Updated Quote_Header: {quote_no}, rows affected: {cursor.rowcount}")
     
     conn.commit()
     conn.close()
@@ -363,13 +361,13 @@ def reject_request(request_number: str, rejection_reason: str) -> bool:
     Returns:
         bool: สำเร็จหรือไม่
     """
-    conn = get_conn()
-    cur = conn.cursor()
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
     
     now = datetime.now().isoformat(timespec="seconds")
     
     # อัปเดตสถานะคำขอ
-    cur.execute("""
+    cursor.execute("""
         UPDATE special_price_requests
         SET status = 'rejected',
             rejection_reason = ?,
@@ -377,26 +375,26 @@ def reject_request(request_number: str, rejection_reason: str) -> bool:
         WHERE request_number = ? AND status = 'pending'
     """, (rejection_reason, now, request_number))
     
-    if cur.rowcount == 0:
+    if cursor.rowcount == 0:
         conn.close()
         return False
     
     # ดึง quote_no
-    cur.execute("""
+    cursor.execute("""
         SELECT quote_no
         FROM special_price_requests
         WHERE request_number = ?
     """, (request_number,))
     
-    result = cur.fetchone()
+    result = cursor.fetchone()
     if not result:
         conn.close()
         return False
     
-    quote_no = result["quote_no"]
+    quote_no = result[0]  # ⭐ MSSQL: ใช้ index แทน dict key
     
     # อัปเดต Quote_Header
-    cur.execute("""
+    cursor.execute("""
         UPDATE Quote_Header
         SET Status = 'draft',
             special_price_status = 'rejected',
