@@ -1,8 +1,10 @@
 ﻿# customer.py — MSSQL Database Version
 from fastapi import APIRouter, Query, HTTPException
 from config.db_mssql import get_mssql_conn
+import logging
 
 router = APIRouter(prefix="/api/customer")
+logger = logging.getLogger(__name__)
 
 # =====================================================
 # Helpers
@@ -216,14 +218,12 @@ def search_customer_list_from_db(query: str) -> list:
         """)
         has_fulltext = cursor.fetchone().has_fulltext > 0
         
-        if has_fulltext:
-            #ใช้ Full-Text Search 
-            # CONTAINS: ค้นหาคำที่ขึ้นต้นด้วย (prefix search)
-            # FREETEXT: ค้นหาแบบ fuzzy (ค้นหาคำที่คล้ายกัน)
-            
-            # ถ้าเป็นตัวเลข/รหัส → ใช้ CONTAINS กับ prefix
-            # ถ้าเป็นข้อความ → ใช้ FREETEXT
-            if q_clean.replace('-', '').replace('.', '').isalnum() and not any(ord(c) > 127 for c in q_clean):
+        # ตรวจสอบว่าเป็นภาษาไทยหรือไม่
+        has_thai = any(ord(c) > 127 for c in q_clean)
+        
+        if has_fulltext and not has_thai:
+            # ใช้ Full-Text Search สำหรับภาษาอังกฤษ/ตัวเลข
+            if q_clean.replace('-', '').replace('.', '').isalnum():
                 # Code/Phone search (prefix)
                 search_term = f'"{q_clean}*"'
                 sql = """
@@ -261,7 +261,7 @@ def search_customer_list_from_db(query: str) -> list:
                     q_contains      # phone contains
                 ))
             else:
-                # Name search (fuzzy + exact)
+                # Name search (fuzzy + exact) - English
                 sql = """
                     SELECT TOP 15
                         customer_code, 
@@ -295,7 +295,8 @@ def search_customer_list_from_db(query: str) -> list:
                     q_contains      # like contains code
                 ))
         else:
-            # ❌ ไม่มี Full-Text Index → ใช้ LIKE (ช้ากว่า)
+            # ❌ ไม่มี Full-Text Index หรือเป็นภาษาไทย → ใช้ LIKE
+            # ⭐ ปรับปรุง: ค้นหาทั้งชื่อ, รหัส, เบอร์โทร
             sql = """
                 SELECT TOP 15
                     customer_code, 
@@ -310,7 +311,9 @@ def search_customer_list_from_db(query: str) -> list:
                         WHEN LOWER(customer_code) LIKE ? THEN 2
                         WHEN LOWER(customer_name) LIKE ? THEN 2
                         -- Contains (lowest priority)
-                        ELSE 3
+                        WHEN LOWER(customer_name) LIKE ? THEN 3
+                        WHEN LOWER(customer_code) LIKE ? THEN 3
+                        ELSE 4
                     END AS rank
                 FROM Customer
                 WHERE 
@@ -330,9 +333,11 @@ def search_customer_list_from_db(query: str) -> list:
                 q_lower,                    # exact match name
                 q_start,                    # starts with code
                 q_start,                    # starts with name
-                q_contains,                 # contains code
                 q_contains,                 # contains name
-                f"%{q_phone}%"              # contains phone
+                q_contains,                 # contains code
+                q_contains,                 # WHERE: contains code
+                q_contains,                 # WHERE: contains name
+                f"%{q_phone}%"              # WHERE: contains phone
             ))
         
         rows = cursor.fetchall()
@@ -350,12 +355,12 @@ def search_customer_list_from_db(query: str) -> list:
         cursor.close()
         conn.close()
         
+        logger.info(f"Search '{query}' returned {len(result)} results")
+        
         return result
         
     except Exception as e:
-        print(f"❌ Error searching customer list from database: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error searching customer list from database: {e}", exc_info=True)
         return []
 
 
@@ -417,3 +422,88 @@ def get_customer_by_id(customer_id: str):
         Customer data with analytics
     """
     return search_customer_from_db(code=customer_id)
+
+
+# =====================================================
+# GET /customer/all → ดึงรายการลูกค้าทั้งหมดแบบ pagination
+# =====================================================
+@router.get("/all/customers")
+def get_all_customers(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """
+    ดึงรายการลูกค้าทั้งหมดแบบ pagination
+    
+    Parameters:
+        - page: หน้าที่ต้องการ (เริ่มจาก 1)
+        - limit: จำนวนรายการต่อหน้า (default 50, max 100)
+    
+    Returns:
+        {
+            "customers": [...],
+            "total": total_count,
+            "page": current_page,
+            "limit": items_per_page,
+            "total_pages": total_pages
+        }
+    """
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        offset = (page - 1) * limit
+        
+        # Get total count
+        cursor.execute("SELECT COUNT(*) as total FROM Customer")
+        total = cursor.fetchone().total
+        
+        # Get paginated data
+        data_sql = """
+            SELECT 
+                customer_code,
+                customer_name,
+                phone,
+                tax_no,
+                payment_terms,
+                gen_bus
+            FROM Customer
+            ORDER BY customer_code
+            OFFSET ? ROWS
+            FETCH NEXT ? ROWS ONLY
+        """
+        
+        cursor.execute(data_sql, [offset, limit])
+        rows = cursor.fetchall()
+        
+        customers = []
+        for row in rows:
+            customers.append({
+                "id": row.customer_code,
+                "code": row.customer_code,
+                "name": row.customer_name,
+                "phone": row.phone,
+                "tax_no": row.tax_no,
+                "payment_terms": row.payment_terms,
+                "gen_bus": row.gen_bus,
+            })
+        
+        cursor.close()
+        conn.close()
+        
+        total_pages = (total + limit - 1) // limit
+        
+        return {
+            "customers": customers,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch customers: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch customers: {str(e)}"
+        )

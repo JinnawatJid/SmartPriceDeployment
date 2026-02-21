@@ -222,7 +222,10 @@ function Dashboard() {
           </div>
 
           {/* Action 2: ค้นหาข้อมูลลูกค้า (สีน้ำเงิน) */}
-          <div className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#c1c1c1] p-8 text-white shadow-lg transition-all hover:shadow-xl">
+          <div 
+            className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#0084FF] p-8 text-white shadow-lg transition-all hover:shadow-xl"
+            onClick={() => navigate("/customer-search")}
+          >
             <img src="/assets/magnifier.png" alt="Arrow" className="w-16 h-16 mb-4 ml-1" />
             <h2 className="text-4xl font-bold">ค้นหาข้อมูลลูกค้า</h2>
             <p className="mt-2 text-lg text-white/70">ตรวจสอบข้อมูลลูกค้าและประวัติการซื้อ</p>
