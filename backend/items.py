@@ -22,6 +22,30 @@ def row_to_item(row, branch_code: str, inventory_service=None) -> dict:
     # ⭐ ดึง category จากอักษรตัวแรกของ SKU แทน Inventory_Posting_Group
     category = row.SKU[0].upper() if row.SKU and len(row.SKU) > 0 else ""
     
+    # ⭐ ดึง Product_Weight จาก database ถ้ามี
+    product_weight = getattr(row, 'Product_Weight', 0) or 0
+    
+    # ⭐ คำนวณ sqft_sheet สำหรับกระจก (category G)
+    sqft_sheet = 0  # ⭐ default เป็น 0 สำหรับ non-glass หรือ parse ไม่ได้
+    if category == "G":
+        # Parse glass SKU to get dimensions
+        # ขนาดอยู่ใน 6 หลักท้ายของ SKU
+        # Width: 3 หลักแรกของ 6 หลักท้าย
+        # Length: 3 หลักหลังของ 6 หลักท้าย
+        # ตัวอย่าง: G01010010102014040 → width=014 (14"), length=040 (40")
+        try:
+            sku = row.SKU
+            if len(sku) >= 6:
+                # ดึง 6 หลักท้าย
+                last_6 = sku[-6:]
+                width = int(last_6[0:3])  # 3 หลักแรก = width (นิ้ว)
+                length = int(last_6[3:6])  # 3 หลักหลัง = length (นิ้ว)
+                sqft_sheet = (width * length) / 144.0  # แปลงเป็นตารางฟุต
+                logger.info(f"Glass SKU {sku}: last_6={last_6}, width={width}, length={length}, sqft_sheet={sqft_sheet}")
+        except (ValueError, IndexError) as e:
+            logger.error(f"Failed to parse glass SKU {row.SKU}: {e}")
+            sqft_sheet = 0
+    
     return {
         "sku": row.SKU,
         "sku2": row.No_2 or "",
@@ -37,8 +61,8 @@ def row_to_item(row, branch_code: str, inventory_service=None) -> dict:
             "W2": row.W2 or 0,
         },
         "pkg_size": row.PackageSize or 1,
-        "product_weight": 0,  # Not in new schema
-        "sqft_sheet": None,  # Not in new schema
+        "product_weight": product_weight,
+        "sqft_sheet": sqft_sheet,
         "product_group": row.Product_Group or "",
         "product_sub_group": row.Product_Sub_Group or "",
         "alternate_names": row.AlternateName or "",
@@ -278,7 +302,8 @@ def full_text_search_items(
                     im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
                     im.Inventory_Posting_Group, im.Variant_Mandatory,
                     ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
-                    im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+                    im.Product_Group, im.Product_Sub_Group, ip.AlternateName,
+                    im.Product_Weight
                 FROM Item_Master im
                 LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
                 WHERE CONTAINS((im.SKU, im.No_2, im.Description), ?)
@@ -301,7 +326,8 @@ def full_text_search_items(
                     im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
                     im.Inventory_Posting_Group, im.Variant_Mandatory,
                     ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
-                    im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+                    im.Product_Group, im.Product_Sub_Group, ip.AlternateName,
+                    im.Product_Weight
                 FROM Item_Master im
                 LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
                 WHERE FREETEXT((im.Description), ?)
@@ -319,7 +345,8 @@ def full_text_search_items(
                 im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
                 im.Inventory_Posting_Group, im.Variant_Mandatory,
                 ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
-                im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+                im.Product_Group, im.Product_Sub_Group, ip.AlternateName,
+                im.Product_Weight
             FROM Item_Master im
             LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
             WHERE
@@ -359,6 +386,7 @@ def full_text_search_items(
             self.Product_Group = data[11]
             self.Product_Sub_Group = data[12]
             self.AlternateName = data[13]
+            self.Product_Weight = data[14] if len(data) > 14 else 0
 
     return [row_to_item(Row(r), branch_code, None) for r in rows]
 
@@ -379,7 +407,8 @@ def get_item_detail(sku: str, branch_code: str = Depends(get_branch_code)):
             im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
             im.Inventory_Posting_Group, im.Variant_Mandatory,
             ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
-            im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+            im.Product_Group, im.Product_Sub_Group, ip.AlternateName,
+            im.Product_Weight
         FROM Item_Master im
         LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
         WHERE im.SKU = ?
@@ -395,7 +424,8 @@ def get_item_detail(sku: str, branch_code: str = Depends(get_branch_code)):
                 im.SKU, im.No_2, im.Description, im.Base_Unit_of_Measure,
                 im.Inventory_Posting_Group, im.Variant_Mandatory,
                 ip.R1, ip.R2, ip.W1, ip.W2, ip.PackageSize,
-                im.Product_Group, im.Product_Sub_Group, ip.AlternateName
+                im.Product_Group, im.Product_Sub_Group, ip.AlternateName,
+                im.Product_Weight
             FROM Item_Master im
             LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
             WHERE im.No_2 = ?
@@ -425,6 +455,7 @@ def get_item_detail(sku: str, branch_code: str = Depends(get_branch_code)):
             self.Product_Group = data[11]
             self.Product_Sub_Group = data[12]
             self.AlternateName = data[13]
+            self.Product_Weight = data[14] if len(data) > 14 else 0
 
     item = row_to_item(Row(row), branch_code, None)
 

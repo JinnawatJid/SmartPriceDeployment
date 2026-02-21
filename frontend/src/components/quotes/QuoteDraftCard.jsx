@@ -34,15 +34,6 @@ export default function QuoteDraftCard({
             <p className="text-xl font-extrabold text-[#0084FF]">{quoteNo}</p>
           </div>
 
-          {/* ปุ่มส่ง LINE */}
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-lg bg-[#06b64c] font-medium  text-white px-3 py-1 text-xs shadow-md  hover:text-white hover:bg-[#05a445] "
-            title="ส่งใบเสนอราคาทาง LINE"
-          >
-            <img src="/assets/Line_logo.png" alt="LINE" className="h-6 w-6  rounded-md shadow-md" />
-            <span>ส่งใบเสนอราคา</span>
-          </button>
         </div>
         
         {/* ⭐ แสดงสถานะการขอราคาพิเศษ - ย้ายมาด้านล่างปุ่ม LINE */}

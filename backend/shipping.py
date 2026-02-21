@@ -81,7 +81,8 @@ def load_items_by_skus(skus: list[str]) -> pd.DataFrame:
     sql = f"""
         SELECT
             SKU AS sku,
-            RE
+            RE,
+            Product_Weight
         FROM Item_Master
         WHERE SKU IN ({placeholders})
     """
@@ -111,12 +112,19 @@ def compute_profit_from_cart(cart: List[CartLine]):
         df_cart.get("sqft_sheet", 0), errors="coerce"
     ).fillna(0)
 
-    # ✅ FIX: โหลด cost เฉพาะ SKU ใน cart
+    # ✅ FIX: โหลด cost และ product_weight เฉพาะ SKU ใน cart
     cart_skus = df_cart["sku"].dropna().astype(str).unique().tolist()
     df_items = load_items_by_skus(cart_skus)
 
     df = df_cart.merge(df_items, on="sku", how="left")
     df["cost"] = pd.to_numeric(df.get("RE"), errors="coerce").fillna(0)
+    
+    # ⭐ ใช้ Product_Weight จาก Item_Master ถ้ามี (ถ้าไม่มีใช้จาก cart)
+    df["product_weight"] = pd.to_numeric(
+        df.get("Product_Weight"), errors="coerce"
+    ).fillna(
+        pd.to_numeric(df_cart.get("product_weight", 0), errors="coerce").fillna(0)
+    )
 
     has_missing_cost = False
 

@@ -536,22 +536,38 @@ function Step6_Summary({ state, dispatch }) {
 
 
   const handleQuickAdd = (item) => {
+    // ⭐ สำหรับกระจก (category G) ไม่ต้องส่ง price
+    // ให้ pricing engine คำนวณจาก sqft_sheet แทน
+    const isGlass = item.category === "G";
+    
+    console.log("🔍 handleQuickAdd - item:", item);
+    console.log("🔍 isGlass:", isGlass);
+    console.log("🔍 sqft_sheet:", item.sqft_sheet);
+    
+    const payload = {
+      sku: item.sku,
+      name: item.name,
+      qty: 1,
+      category: item.category || "",
+      unit: item.unit || item.saleUnit || item.uom || "",
+      product_weight: Number(item.product_weight || 0),
+      sqft_sheet: Number(item.sqft_sheet || 0),
+      pkg_size: Number(item.pkg_size || 1),
+      product_group: item.product_group ?? null,
+      product_sub_group: item.product_sub_group ?? null,
+    };
+    
+    // ⭐ เฉพาะสินค้าที่ไม่ใช่กระจก ถึงจะส่ง price และ cost
+    if (!isGlass) {
+      payload.price = item.prices?.R2 ?? item.priceR2 ?? 0;
+      payload.cost = Number(item.cost || 0);
+    }
+    
+    console.log("🔍 payload to dispatch:", payload);
+    
     dispatch({
       type: "ADD_ITEM",
-      payload: {
-        sku: item.sku,
-        name: item.name,
-        qty: 1,
-        price: item.priceR2 ?? item.prices?.R2 ?? 0,
-        cost: Number(item.cost || 0),
-        category: item.category || "",
-        unit: item.unit || item.saleUnit || item.uom || "",
-        product_weight: Number(item.product_weight || 0),
-        sqft_sheet: Number(item.sqft_sheet || 0),
-        pkg_size: Number(item.pkg_size || 1),
-        product_group: item.product_group ?? null,
-        product_sub_group: item.product_sub_group ?? null,
-      },
+      payload,
     });
 
     setProductSearch("");
@@ -1330,7 +1346,7 @@ function Step6_Summary({ state, dispatch }) {
                     >
                       <div className="text-sm font-semibold">{it.name}</div>
                       <div className="text-xs text-gray-500">
-                        {it.sku} · ฿{(it.priceR2 ?? it.prices?.R2 ?? 0).toLocaleString()}
+                        {it.sku} · ฿{(it.prices?.R2 ?? it.priceR2 ?? 0).toLocaleString()}
                       </div>
                     </div>
                   ))}

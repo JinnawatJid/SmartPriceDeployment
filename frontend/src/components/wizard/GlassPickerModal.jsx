@@ -479,7 +479,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 ">
-      <div className="bg-white w-[900px] max-h-[90vh] rounded-xl shadow-lg p-8 overflow-y-auto">
+      <div className="bg-white w-full max-w-6xl  h-[84vh] rounded-xl shadow-lg p-8 overflow-y-auto">
         {/* HEADER */}
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold">เลือกสินค้ากระจก</h2>
@@ -503,7 +503,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
             value={brandFilter || null}
             options={brandDropdownOptions}
             onChange={(v) => setBrandFilter(v || "")}
-            width={160}
+            width={200}
           />
 
           <CustomDropdown
@@ -519,7 +519,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
             value={subGroupFilter || null}
             options={subGroupDropdownOptions}
             onChange={(v) => setSubGroupFilter(v || "")}
-            width={240}
+            width={340}
           />
 
           <CustomDropdown
@@ -527,7 +527,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
             value={colorFilter || null}
             options={colorDropdownOptions}
             onChange={(v) => setColorFilter(v || "")}
-            width={120}
+            width={160}
           />
 
           <CustomDropdown
@@ -535,7 +535,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
             value={thickFilter || null}
             options={thicknessDropdownOptions}
             onChange={(v) => setThickFilter(v || "")}
-            width={120}
+            width={160}
           />
         </div>
 
@@ -553,7 +553,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
         {/* SKU TABLE */}
         <div 
-          className="border rounded-lg p-2 max-h-[260px] overflow-y-auto mb-4"
+          className="border rounded-lg max-h-[360px] overflow-y-auto mb-4"
           onScroll={(e) => {
             const el = e.currentTarget;
             const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
@@ -575,7 +575,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
           ) : (
             <>
               <table className="w-full text-sm">
-                <thead className="bg-gray-100 sticky top-0 z-10">
+                <thead className="bg-gray-100 sticky top-0 z-10 border-b shadow-sm">
                   <tr className="grid grid-cols-12 gap-2 text-gray-700 font-semibold">
                     <th className="col-span-2 p-2 text-left">SKU</th>
                     <th className="col-span-4 p-2 text-left">ชื่อสินค้า</th>

@@ -1249,7 +1249,7 @@ def get_glass_list(
     
     logger.info(f"✅ Found {total} items matching search")
     
-    # ดึงข้อมูล
+    # ดึงข้อมูล พร้อมราคา
     sql = f"""
         SELECT
             im.SKU,
@@ -1257,14 +1257,20 @@ def get_glass_list(
             im.Description,
             im.Variant_Mandatory,
             im.Product_Group,
-            im.Product_Sub_Group
+            im.Product_Sub_Group,
+            ip.R1,
+            ip.R2,
+            ip.W1,
+            ip.W2
         FROM Item_Master im
+        LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
         WHERE {where_sql}
         ORDER BY im.SKU
         OFFSET ? ROWS
         FETCH NEXT ? ROWS ONLY
     """
-    cur.execute(sql, *params, offset, limit)
+    # เพิ่ม branch_code เป็น parameter แรก
+    cur.execute(sql, branch_code, *params, offset, limit)
     rows = cur.fetchall()
     
     logger.info(f"📦 Retrieved {len(rows)} items")
@@ -1315,6 +1321,12 @@ def get_glass_list(
             "height": parsed["height"],
             "product_group": row[4],
             "product_sub_group": row[5],
+            "prices": {
+                "R1": float(row[6]) if row[6] is not None else 0,
+                "R2": float(row[7]) if row[7] is not None else 0,
+                "W1": float(row[8]) if row[8] is not None else 0,
+                "W2": float(row[9]) if row[9] is not None else 0,
+            }
         })
     
     return {

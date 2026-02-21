@@ -101,7 +101,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                 LEFT(im.SKU, 1) AS category,
                 im.Base_Unit_of_Measure,
                 ip.PackageSize AS pkg_size,
-                0 AS Product_Weight,
+                im.Product_Weight,
                 0 AS Sqft_Sheet,
                 ip.R1, ip.R2, ip.W1, ip.W2,
                 im.Product_Group,
