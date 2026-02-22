@@ -12,6 +12,7 @@ scipy
 openpyxl
 annotated-types
 requests
+httpx
 schedule
 cachetools
 apscheduler

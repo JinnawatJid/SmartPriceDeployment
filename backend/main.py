@@ -23,6 +23,7 @@ from cache_refresh_router import router as cache_refresh_router
 from item_master_router import router as item_master_router
 from admin_router import router as admin_router
 from branch import router as branch_router
+from credit_router import router as credit_router
 
 from config.config_external_api import CUSTOMER_API_KEY
 # from logging_config import setup_logging
@@ -91,6 +92,7 @@ app.include_router(cache_refresh_router)
 app.include_router(item_master_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(branch_router)
+app.include_router(credit_router)
 
 
 

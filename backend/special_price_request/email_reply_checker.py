@@ -64,17 +64,22 @@ def check_approval_decision(body: str) -> Optional[Tuple[str, str]]:
             continue
         
         # ข้ามบรรทัดที่เป็นคำแนะนำ (ขึ้นต้นด้วย *, -, •, หรือ ***)
-        if line_stripped.startswith(('*', '-', '•', '***')):
+        if line_stripped.startswith(('*', '-', '•', '***', 'Token:', 'TOKEN:')):
             continue
         
-        # ข้ามบรรทัดที่เป็นส่วนของคำแนะนำ (มีคำว่า "วิธี", "กรุณา")
-        if any(keyword in line for keyword in ['วิธี', 'กรุณา', 'How to', 'Please']):
+        # ข้ามบรรทัดที่เป็นส่วนของคำแนะนำ (ขึ้นต้นด้วยคำว่า "วิธี", "กรุณา", "สำคัญ", "หมายเหตุ")
+        if any(line_stripped.startswith(keyword) for keyword in ['วิธี', 'กรุณา', 'สำคัญ', 'หมายเหตุ', 'How to', 'Please', 'Note:', 'Important:']):
             continue
         
         # ตรวจสอบ REJECT ก่อน
         if 'REJECT' in line_upper:
             # ดึงเหตุผลจากบรรทัดเดียวกัน (หลัง REJECT) หรือบรรทัดถัดไป
-            reason = line_stripped.replace('REJECT', '').strip()
+            # ⭐ รองรับทั้งตัวพิมพ์เล็ก/ใหญ่
+            reason = line_stripped
+            for pattern in ['REJECT:', 'Reject:', 'reject:', 'REJECT', 'Reject', 'reject']:
+                if pattern in line_stripped:
+                    reason = line_stripped.split(pattern, 1)[1].strip()
+                    break
             
             # ถ้าไม่มีเหตุผลในบรรทัดเดียวกัน ให้ดูบรรทัดถัดไป
             if not reason and i + 1 < len(lines):
@@ -144,11 +149,9 @@ def extract_pdf_attachments(msg, request_number: str) -> list:
                 attachment_count += 1
                 filename = part.get_filename()
                 
-                print(f"   📎 Found attachment #{attachment_count}: {filename}")
-                
-                if filename and filename.lower().endswith('.pdf'):
+                # Decode filename if needed
+                if filename:
                     try:
-                        # Decode filename if needed
                         decoded_parts = decode_header(filename)
                         decoded_filename = ""
                         for part_data, encoding in decoded_parts:
@@ -156,7 +159,14 @@ def extract_pdf_attachments(msg, request_number: str) -> list:
                                 decoded_filename += part_data.decode(encoding or 'utf-8', errors='ignore')
                             else:
                                 decoded_filename += part_data
-                        
+                        filename = decoded_filename
+                    except Exception as e:
+                        print(f"   ⚠️  Failed to decode filename: {e}")
+                
+                print(f"   📎 Found attachment #{attachment_count}: {filename}")
+                
+                if filename and filename.lower().endswith('.pdf'):
+                    try:
                         # Create unique filename with request number
                         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                         safe_filename = f"{request_number}_approved_{timestamp}.pdf"
@@ -201,23 +211,32 @@ def check_email_replies():
         # Select inbox
         mail.select('INBOX')
         
-        # Search for unread emails with special price request subject
-        # ค้นหาเฉพาะ email ที่มี "Special Price Request" ใน subject
-        status, messages = mail.search(None, 'UNSEEN SUBJECT "Special Price Request"')
+        # Search for unread emails with APPROVE or REJECT in subject
+        # ค้นหา email ที่มี "APPROVE:" หรือ "REJECT:" ใน subject
+        # ⭐ ลองค้นหาทั้ง UNSEEN และ SEEN (เพื่อ debug)
+        print("🔍 Searching for emails with APPROVE: or REJECT: in subject...")
         
-        if status != 'OK':
-            print("❌ Failed to search emails")
-            return
+        status1, messages1 = mail.search(None, 'SUBJECT "APPROVE:"')
+        status2, messages2 = mail.search(None, 'SUBJECT "REJECT:"')
         
-        email_ids = messages[0].split()
+        print(f"   APPROVE: status={status1}, messages={messages1}")
+        print(f"   REJECT: status={status2}, messages={messages2}")
+        
+        email_ids = []
+        if status1 == 'OK' and messages1[0]:
+            email_ids.extend(messages1[0].split())
+        if status2 == 'OK' and messages2[0]:
+            email_ids.extend(messages2[0].split())
+        
+        print(f"   Found {len(email_ids)} total email(s) with APPROVE/REJECT in subject")
         
         if not email_ids:
-            print("📭 No unread emails found")
+            print("📭 No emails found")
             mail.close()
             mail.logout()
             return
         
-        print(f"📬 Found {len(email_ids)} unread email(s)\n")
+        print(f"📬 Processing {len(email_ids)} email(s)\n")
         
         processed_count = 0
         
@@ -251,6 +270,9 @@ def check_email_replies():
                 
                 # Get email body
                 body = get_email_body(msg)
+                
+                print(f"   📄 Email body preview (first 200 chars):")
+                print(f"   {repr(body[:200])}")
                 
                 # Extract PDF attachments
                 pdf_files = extract_pdf_attachments(msg, request_number)

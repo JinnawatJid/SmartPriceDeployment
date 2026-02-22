@@ -42,8 +42,24 @@ INVOICE_API_HEADERS = {
 }
 
 
+# =========================
+# Credit API
+# =========================
+CREDIT_API_URL = os.getenv(
+    "CREDIT_API_URL",
+    "http://192.192.0.37:3000",
+)
+CREDIT_API_KEY = os.getenv("CREDIT_API_KEY", "").strip()
+
+CREDIT_API_HEADERS = {
+    "X-API-KEY": CREDIT_API_KEY,
+    "Content-Type": "application/json",
+}
+
+
 print("BASE_URL =", BASE_URL)
 print("CUSTOMER_API_KEY LOADED =", bool(CUSTOMER_API_KEY))
 print("INVOICE_API_KEY LOADED =", bool(INVOICE_API_KEY))
+print("CREDIT_API_KEY LOADED =", bool(CREDIT_API_KEY))
 print("CUSTOMER API HEADERS =", CUSTOMER_API_HEADERS)
 

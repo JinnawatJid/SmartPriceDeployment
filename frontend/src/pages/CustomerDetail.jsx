@@ -15,8 +15,10 @@ function CustomerDetail() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [creditData, setCreditData] = useState(null);
+  const [creditLoading, setCreditLoading] = useState(false);
 
-  // Mock credit data (ใส่ข้อมูลจริงภายหลัง)
+  // Mock credit data (ใช้เป็น fallback ถ้า API ไม่ตอบ)
   const mockCreditData = {
     creditLimit: 100000,
     creditUsed: 75000,
@@ -28,7 +30,29 @@ function CustomerDetail() {
 
   useEffect(() => {
     loadCustomerData();
+    loadCreditData();
   }, [customerId]);
+
+  const loadCreditData = async () => {
+    setCreditLoading(true);
+    try {
+      // เรียก backend proxy endpoint
+      const res = await api.get(`/api/credit-status/${customerId}`, {
+        params: { mock: true } // ใช้ mock data ก่อน เพื่อทดสอบ
+      });
+      
+      console.log("Credit API response:", res.data);
+      console.log("Credit terms:", res.data?.credit_terms);
+      setCreditData(res.data);
+    } catch (err) {
+      console.error("Load credit data error:", err);
+      console.error("Error details:", err.response?.data);
+      // ถ้า API ไม่ตอบ ใช้ mock data
+      setCreditData(null);
+    } finally {
+      setCreditLoading(false);
+    }
+  };
 
   const loadCustomerData = async () => {
     setLoading(true);
@@ -303,7 +327,21 @@ function CustomerDetail() {
     );
   }
 
-  const creditPercentage = (mockCreditData.creditUsed / mockCreditData.creditLimit) * 100;
+  const creditPercentage = creditData 
+    ? ((creditData.credit_limit - (creditData.credit_available || 0)) / creditData.credit_limit) * 100
+    : (mockCreditData.creditUsed / mockCreditData.creditLimit) * 100;
+
+  // ใช้ข้อมูลจาก API ถ้ามี ไม่งั้นใช้ mock
+  const displayCredit = creditData ? {
+    creditLimit: creditData.credit_limit || 0,
+    creditUsed: (creditData.credit_limit || 0) - (creditData.credit_available || 0),
+    creditAvailable: creditData.credit_available || 0,
+    paymentTerm: creditData.status || "-",
+    creditDaysGA: creditData.credit_terms?.gs || 0,  // gs = กระจก/กาว
+    creditDaysYC: creditData.credit_terms?.yc || 0,  // yc = ยิปซัม/โครงคร่าว
+    creditDaysAL: creditData.credit_terms?.ae || 0,  // ae = อลูมิเนียม/อุปกรณ์
+    lastUpdate: creditData.updated_at || null,
+  } : mockCreditData;
 
   return (
     <div className="min-h-screen w-full bg-[#F5F5F5] p-6">
@@ -464,6 +502,9 @@ function CustomerDetail() {
                   <img src="/assets/creditcard.png" alt="Credit" className="w-6 h-6" />
                 </div>
                 ข้อมูลเครดิตและวงเงิน
+                {creditLoading && (
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin ml-2"></div>
+                )}
               </h3>
 
               <div className="grid grid-cols-2 gap-4 mb-4">
@@ -471,10 +512,10 @@ function CustomerDetail() {
                 <div className="bg-blue-50 rounded-xl p-4">
                   <p className="text-sm text-gray-600 mb-1">วงเงินเครดิตทั้งหมด</p>
                   <p className="text-2xl font-bold text-blue-600">
-                    ฿ {formatCurrency(mockCreditData.creditLimit)}
+                    ฿ {formatCurrency(displayCredit.creditLimit)}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    เหลือวงเงิน: ฿ {formatCurrency(mockCreditData.creditAvailable)}
+                    เหลือวงเงิน: ฿ {formatCurrency(displayCredit.creditAvailable)}
                   </p>
                 </div>
 
@@ -482,11 +523,13 @@ function CustomerDetail() {
                 <div className="bg-red-50 rounded-xl p-4">
                   <p className="text-sm text-gray-600 mb-1">ยอดที่ใช้ไป:</p>
                   <p className="text-2xl font-bold text-red-600">
-                    ฿ {formatCurrency(mockCreditData.creditUsed)}
+                    ฿ {formatCurrency(displayCredit.creditUsed)}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    ครบกำหนด: {mockCreditData.lastPaymentDate}
-                  </p>
+                  {displayCredit.lastUpdate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      อัปเดต: {formatDate(displayCredit.lastUpdate)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -509,11 +552,19 @@ function CustomerDetail() {
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">สถานะเครดิต:</span>
-                  <span className="font-semibold text-green-600">{mockCreditData.paymentTerm}</span>
+                  <span className="font-semibold text-green-600">{displayCredit.paymentTerm}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">ระยะเวลาเครดิต:</span>
-                  <span className="font-semibold">{mockCreditData.creditDays} วัน</span>
+                  <span className="text-gray-600">ระยะเวลาเครดิต กระจก/กาว:</span>
+                  <span className="font-semibold">{displayCredit.creditDaysGA || displayCredit.creditDays || 0} วัน</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">ระยะเวลาเครดิต อลูมิเนียม/อุปกรณ์:</span>
+                  <span className="font-semibold">{displayCredit.creditDaysAL || displayCredit.creditDays || 0} วัน</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">ระยะเวลาเครดิต ยิปซัม/โครงคร่าว:</span>
+                  <span className="font-semibold">{displayCredit.creditDaysYC || displayCredit.creditDays || 0} วัน</span>
                 </div>
               </div>
             </div>

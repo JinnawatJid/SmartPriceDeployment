@@ -304,6 +304,13 @@ def approve_request(request_number: str, approved_by: str, pdf_files: list = Non
     import json
     pdf_files_json = json.dumps(pdf_files) if pdf_files else None
     
+    # 🔍 DEBUG: แสดงข้อมูลที่จะบันทึก
+    print(f"\n🔍 DEBUG approve_request:")
+    print(f"   request_number: {request_number}")
+    print(f"   approved_by: {approved_by}")
+    print(f"   pdf_files: {pdf_files}")
+    print(f"   pdf_files_json: {pdf_files_json}")
+    
     # อัปเดตสถานะคำขอ
     cursor.execute("""
         UPDATE special_price_requests
@@ -315,7 +322,11 @@ def approve_request(request_number: str, approved_by: str, pdf_files: list = Non
         WHERE request_number = ? AND status = 'pending'
     """, (approved_by, now, pdf_files_json, now, request_number))
     
-    if cursor.rowcount == 0:
+    rows_affected = cursor.rowcount
+    print(f"   📝 UPDATE rows affected: {rows_affected}")
+    
+    if rows_affected == 0:
+        print(f"   ❌ No rows updated (request not found or not pending)")
         conn.close()
         return False
     
@@ -342,9 +353,10 @@ def approve_request(request_number: str, approved_by: str, pdf_files: list = Non
         WHERE QuoteNo = ?
     """, (now, quote_no))
     
-    print(f"✅ Updated Quote_Header: {quote_no}, rows affected: {cursor.rowcount}")
+    print(f"   ✅ Updated Quote_Header: {quote_no}, rows affected: {cursor.rowcount}")
     
     conn.commit()
+    print(f"   ✅ Transaction committed successfully\n")
     conn.close()
     
     return True

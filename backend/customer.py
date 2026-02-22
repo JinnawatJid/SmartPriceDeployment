@@ -19,7 +19,7 @@ def clean(x):
 # Database Search Functions
 # =====================================================
 
-def search_customer_from_db(
+async def search_customer_from_db(
     code: str | None = None,
     phone: str | None = None,
     name: str | None = None,
@@ -135,6 +135,27 @@ def search_customer_from_db(
         base["sales_e"] = base["sales_e_cust"]
         
         base["relevantSales"] = relevant_sales
+        
+        # ดึงข้อมูล credit_terms จาก Credit API
+        try:
+            import httpx
+            from config.config_external_api import CREDIT_API_URL, CREDIT_API_HEADERS
+            
+            credit_url = f"{CREDIT_API_URL}/api/external/credit-status/{row.customer_code}"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                credit_response = await client.get(
+                    credit_url,
+                    headers=CREDIT_API_HEADERS,
+                    params={"mock": "false"}
+                )
+                if credit_response.status_code == 200:
+                    credit_data = credit_response.json()
+                    base["credit_terms"] = credit_data.get("credit_terms", {})
+                else:
+                    base["credit_terms"] = {}
+        except Exception as e:
+            print(f"Warning: Could not fetch credit terms for {row.customer_code}: {e}")
+            base["credit_terms"] = {}
         
         cursor.close()
         conn.close()
@@ -411,7 +432,7 @@ def search_customer_list(
 # GET /customer/{customer_id} → ดึงข้อมูลลูกค้าตาม ID
 # =====================================================
 @router.get("/{customer_id}")
-def get_customer_by_id(customer_id: str):
+async def get_customer_by_id(customer_id: str):
     """
     ดึงข้อมูลลูกค้าตาม customer_id (รหัสลูกค้า)
     
@@ -421,7 +442,7 @@ def get_customer_by_id(customer_id: str):
     Returns:
         Customer data with analytics
     """
-    return search_customer_from_db(code=customer_id)
+    return await search_customer_from_db(code=customer_id)
 
 
 # =====================================================

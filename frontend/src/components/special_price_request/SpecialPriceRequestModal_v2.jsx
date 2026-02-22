@@ -140,7 +140,10 @@ const SpecialPriceRequestModal = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    console.log("🔍 Form data before validation:", formData);
+
     if (!validateForm()) {
+      console.log("❌ Validation failed:", errors);
       return;
     }
 
@@ -184,8 +187,13 @@ const SpecialPriceRequestModal = ({
       };
 
       console.log("📤 Sending payload:", payload);
-      console.log("🔍 Customer type being sent:", customerData.gen_bus);
-      console.log("🔍 Full customer data:", customerData);
+      console.log("🔍 Validation check:");
+      console.log("   - approverEmail:", formData.approverEmail);
+      console.log("   - requestReason:", formData.requestReason);
+      console.log("   - branch:", formData.branch);
+      console.log("   - validFrom:", formData.validFrom);
+      console.log("   - validTo:", formData.validTo);
+      console.log("   - items count:", items.length);
 
       const response = await api.post("/api/special-price-requests", payload);
       const result = response.data;
@@ -200,7 +208,20 @@ const SpecialPriceRequestModal = ({
       onClose();
     } catch (error) {
       console.error("❌ Error submitting request:", error);
-      alert("❌ เกิดข้อผิดพลาดในการส่งคำขอ กรุณาลองใหม่อีกครั้ง");
+      console.error("❌ Error response:", error.response?.data);
+      console.error("❌ Error status:", error.response?.status);
+      
+      let errorMessage = "เกิดข้อผิดพลาดในการส่งคำขอ";
+      
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(`❌ ${errorMessage}\n\nกรุณาตรวจสอบข้อมูลและลองใหม่อีกครั้ง`);
     } finally {
       setIsSubmitting(false);
     }

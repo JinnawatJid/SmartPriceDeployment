@@ -219,7 +219,7 @@ def get_items_list_light(
     count_sql = f"""
         SELECT COUNT(*) AS total
         FROM Item_Master im
-        INNER JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+        LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
         WHERE {where_sql}
     """
     cursor.execute(count_sql, branch_code, *params)
@@ -236,7 +236,7 @@ def get_items_list_light(
             im.Product_Sub_Group,
             ip.AlternateName
         FROM Item_Master im
-        INNER JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+        LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
         WHERE {where_sql}
         ORDER BY im.SKU
         OFFSET ? ROWS

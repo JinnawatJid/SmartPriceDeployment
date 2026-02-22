@@ -209,7 +209,7 @@ def send_approval_request(request_data: dict, pdf_path: Path) -> dict:
 
 def send_approval_request_with_links(request_data: dict, pdf_path: Path, token: str) -> dict:
     """
-    ส่ง Email ขออนุมัติราคาพิเศษพร้อมลิงก์ Approve/Reject
+    ส่ง Email ขออนุมัติราคาพิเศษพร้อม mailto: link
     
     Args:
         request_data: ข้อมูลคำขอ
@@ -219,9 +219,20 @@ def send_approval_request_with_links(request_data: dict, pdf_path: Path, token: 
     Returns:
         dict: ผลการส่ง Email
     """
-    # สร้าง URL สำหรับ approve และ reject
-    approve_url = f"{BASE_URL}/api/special-price-requests/approve/{token}"
-    reject_url = f"{BASE_URL}/api/special-price-requests/reject/{token}"
+    import urllib.parse
+    
+    # สร้าง mailto: link สำหรับ approve และ reject
+    reply_to_email = EMAIL_CONFIG['from_email']
+    
+    # Approve mailto link
+    approve_subject = f"APPROVE: {request_data['request_number']}"
+    approve_body = "APPROVE"
+    approve_mailto = f"mailto:{reply_to_email}?subject={urllib.parse.quote(approve_subject)}&body={urllib.parse.quote(approve_body)}"
+    
+    # Reject mailto link
+    reject_subject = f"REJECT: {request_data['request_number']}"
+    reject_body = "REJECT: [ระบุเหตุผล]"
+    reject_mailto = f"mailto:{reply_to_email}?subject={urllib.parse.quote(reject_subject)}&body={urllib.parse.quote(reject_body)}"
     
     subject = f"[Approval Required] Special Price Request {request_data['request_number']}"
     
@@ -331,29 +342,28 @@ def send_approval_request_with_links(request_data: dict, pdf_path: Path, token: 
             </div>
             
             <div class="note">
-                <p style="margin: 0 0 10px 0;"><strong>📌 วิธีการพิจารณา:</strong></p>
-                <ul style="margin: 5px 0;">
-                    <li>คลิกปุ่ม "อนุมัติ" ด้านล่างเพื่ออนุมัติคำขอ (สามารถแนบไฟล์เพิ่มเติมได้)</li>
-                    <li>คลิกปุ่ม "ปฏิเสธ" ด้านล่างเพื่อกรอกเหตุผลและปฏิเสธคำขอ</li>
-                    <li>ลิงก์นี้จะหมดอายุใน 72 ชั่วโมง</li>
-                    <li>รายละเอียดเพิ่มเติมในไฟล์แนบ</li>
-                </ul>
+                <p style="margin: 0 0 10px 0;"><strong>⚠️ สำคัญ - วิธีการพิจารณา:</strong></p>
+                <ol style="margin: 5px 0; padding-left: 20px;">
+                    <li><strong>คลิกปุ่มด้านล่าง</strong> เพื่อเปิด email reply</li>
+                    <li><strong>ส่ง email ทันที</strong> เพื่อยืนยันการอนุมัติ/ปฏิเสธ</li>
+                    <li><strong>แนบไฟล์ PDF</strong> ที่ลงนามแล้วได้ (ถ้ามี - ไม่บังคับ)</li>
+                    <li>ระบบจะตรวจสอบ email ทุก 5 นาที</li>
+                </ol>
             </div>
             
             <div class="button-container">
                 <p style="margin: 0 0 15px 0; font-size: 16px; color: #495057;">
                     <strong>กรุณาเลือกการดำเนินการ:</strong>
                 </p>
-                <a href="{approve_url}" class="btn btn-approve">✅ อนุมัติคำขอ</a>
-                <a href="{reject_url}" class="btn btn-reject">❌ ปฏิเสธคำขอ</a>
+                <a href="{approve_mailto}" class="btn btn-approve">✅ อนุมัติคำขอ</a>
+                <a href="{reject_mailto}" class="btn btn-reject">❌ ปฏิเสธคำขอ</a>
             </div>
             
             <div class="footer">
                 <p style="margin: 5px 0;">Email นี้ถูกส่งอัตโนมัติจากระบบใบเสนอราคา</p>
-                <p style="margin: 5px 0;">หากปุ่มไม่ทำงาน กรุณาคัดลอกลิงก์ด้านล่างไปวางในเบราว์เซอร์</p>
-                <p style="margin: 10px 0; font-size: 11px; word-break: break-all;">
-                    อนุมัติ: {approve_url}<br>
-                    ปฏิเสธ: {reject_url}
+                <p style="margin: 5px 0; color: #28a745;"><strong>💡 สามารถแนบไฟล์ PDF เมื่อตอบกลับได้</strong></p>
+                <p style="margin: 10px 0; font-size: 11px;">
+                    Token: {token}
                 </p>
             </div>
         </div>

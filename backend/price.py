@@ -140,6 +140,9 @@ def Price(df: pd.DataFrame) -> pd.DataFrame:
     
     def _apply_payment_term_markup(row):
         term = str(row.get("payment_terms") or "").strip().lower()
+        category = str(row.get("category") or "").strip().upper()
+        credit_terms = row.get("credit_terms") or {}
+        
         # FIX: Handle NoneType for NewPrice if row.get returns None explicitly
         val = row.get("NewPrice")
         if val is None:
@@ -156,22 +159,43 @@ def Price(df: pd.DataFrame) -> pd.DataFrame:
             90:  0.015,  # 1.50%
         }
 
-        # 1) ดึงตัวเลขทั้งหมดในสตริง เช่น "NET 30 DAYS", "30.0", "CREDIT60" → [30], [30,0], [60]
-        nums = re.findall(r"\d+", term)
+        # ถ้ามี credit_terms จาก API ให้ใช้ตาม category
         days = None
-        if nums:
-            # ใช้ค่ามากสุดเผื่อเคส "30.0" จะได้ 30 แทน 0
-            days = max(int(n) for n in nums)
-        else:
-            # เผื่อเคสที่เขียนว่า "cash", "cod" ให้ถือเป็น 0 วัน
-            if any(k in term for k in ["cash", "cod"]):
-                days = 0
+        if isinstance(credit_terms, dict) and credit_terms:
+            # Map category to credit term key
+            category_map = {
+                "G": "gs",  # กระจก/กาว
+                "A": "ae",  # อลูมิเนียม/อุปกรณ์
+                "S": "ae",  # ซิลิโคน → ใช้เหมือน A
+                "Y": "yc",  # ยิปซัม/โครงคร่าว
+                "C": "yc",  # C-Line → ใช้เหมือน Y
+                "E": "ae",  # อื่นๆ → ใช้เหมือน A
+            }
+            
+            credit_key = category_map.get(category, "ae")
+            days = credit_terms.get(credit_key, None)
+            
+            if days is not None:
+                print(f"[CREDIT API] Using credit_terms for category {category}: {days} days from {credit_key}")
+        
+        # ถ้าไม่มี credit_terms หรือไม่เจอ ให้ใช้วิธีเดิม (parse จาก payment_terms string)
+        if days is None:
+            # 1) ดึงตัวเลขทั้งหมดในสตริง เช่น "NET 30 DAYS", "30.0", "CREDIT60" → [30], [30,0], [60]
+            nums = re.findall(r"\d+", term)
+            if nums:
+                # ใช้ค่ามากสุดเผื่อเคส "30.0" จะได้ 30 แทน 0
+                days = max(int(n) for n in nums)
+            else:
+                # เผื่อเคสที่เขียนว่า "cash", "cod" ให้ถือเป็น 0 วัน
+                if any(k in term for k in ["cash", "cod"]):
+                    days = 0
 
         pct = term_markup.get(days, 0.0)
 
         print(
             "[PAYMENT TERM DEBUG]",
             "sku =", row.get("sku"),
+            "category =", category,
             "term =", term,
             "days =", days,
             "base =", base_price,

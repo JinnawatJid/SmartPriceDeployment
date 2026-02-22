@@ -221,6 +221,7 @@ def create_quotation(payload: dict = Body(...)):
         "LastUpdate": now,
         "CustomerName": cust_name,
         "Tel": customer.get("phone", ""),
+        "tax_no": customer.get("tax_no", ""),
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
     }
 
@@ -231,8 +232,8 @@ def create_quotation(payload: dict = Body(...)):
             PaymentTerm, CreditTerm, ShippingMethod, ShippingCost,
             DiscountAmount, SubtotalAmount, TotalAmount,
             NeedsTax, Remark, LastUpdate,
-            CustomerName, Tel, ShippingCustomerPay
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            CustomerName, Tel, tax_no, ShippingCustomerPay
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, tuple(header.values()))
 
     cart = payload.get("cart", [])
@@ -327,6 +328,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         "LastUpdate": now,
         "CustomerName": cust_name,
         "Tel": customer.get("phone", ""),
+        "tax_no": customer.get("tax_no", ""),
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
     }
 
@@ -337,7 +339,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
             PaymentTerm=?, CreditTerm=?, ShippingMethod=?, ShippingCost=?,
             DiscountAmount=?, SubtotalAmount=?, TotalAmount=?,
             NeedsTax=?, Remark=?, LastUpdate=?,
-            CustomerName=?, Tel=?, ShippingCustomerPay=?
+            CustomerName=?, Tel=?, tax_no=?, ShippingCustomerPay=?
         WHERE QuoteNo=?
     """, (
         header["Status"],
@@ -359,6 +361,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         header["LastUpdate"],
         header["CustomerName"],
         header["Tel"],
+        header["tax_no"],
         header["ShippingCustomerPay"],
         quote_no
     ))

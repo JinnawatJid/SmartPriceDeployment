@@ -22,6 +22,7 @@ router = APIRouter(
 def get_customer_analytics_from_db(customer_code: str) -> dict:
     """
     ดึงข้อมูล analytics ของลูกค้าจาก database
+    รวมข้อมูลตาม tax_no (ถ้ามี) แทนที่จะเป็น customer_code
     
     Returns:
         dict with customer analytics data
@@ -30,17 +31,56 @@ def get_customer_analytics_from_db(customer_code: str) -> dict:
         conn = get_mssql_conn()
         cursor = conn.cursor()
         
-        query = """
-            SELECT 
-                customer_code, customer_name, accum_6m, frequency,
-                sales_g_cust, sales_a_cust, sales_s_cust, 
-                sales_y_cust, sales_c_cust, sales_e_cust,
-                calculation_date
+        # ขั้นตอนที่ 1: หา tax_no ของลูกค้า
+        query_tax = """
+            SELECT tax_no
             FROM Customer
             WHERE customer_code = ?
         """
         
-        cursor.execute(query, (customer_code,))
+        cursor.execute(query_tax, (customer_code,))
+        tax_row = cursor.fetchone()
+        
+        if not tax_row:
+            cursor.close()
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"ไม่พบข้อมูลลูกค้า: {customer_code}")
+        
+        tax_no = tax_row.tax_no
+        
+        # ขั้นตอนที่ 2: รวมข้อมูลตาม tax_no (ถ้ามี) หรือ customer_code (ถ้าไม่มี tax_no)
+        if tax_no and tax_no.strip():
+            # รวมข้อมูลทุก customer_code ที่มี tax_no เดียวกัน
+            query = """
+                SELECT 
+                    ? as customer_code,
+                    MAX(customer_name) as customer_name,
+                    SUM(ISNULL(accum_6m, 0)) as accum_6m,
+                    SUM(ISNULL(frequency, 0)) as frequency,
+                    SUM(ISNULL(sales_g_cust, 0)) as sales_g_cust,
+                    SUM(ISNULL(sales_a_cust, 0)) as sales_a_cust,
+                    SUM(ISNULL(sales_s_cust, 0)) as sales_s_cust,
+                    SUM(ISNULL(sales_y_cust, 0)) as sales_y_cust,
+                    SUM(ISNULL(sales_c_cust, 0)) as sales_c_cust,
+                    SUM(ISNULL(sales_e_cust, 0)) as sales_e_cust,
+                    MAX(calculation_date) as calculation_date
+                FROM Customer
+                WHERE tax_no = ? AND tax_no IS NOT NULL AND tax_no != ''
+            """
+            cursor.execute(query, (customer_code, tax_no))
+        else:
+            # ไม่มี tax_no ให้ใช้ customer_code เดิม
+            query = """
+                SELECT 
+                    customer_code, customer_name, accum_6m, frequency,
+                    sales_g_cust, sales_a_cust, sales_s_cust, 
+                    sales_y_cust, sales_c_cust, sales_e_cust,
+                    calculation_date
+                FROM Customer
+                WHERE customer_code = ?
+            """
+            cursor.execute(query, (customer_code,))
+        
         row = cursor.fetchone()
         
         cursor.close()

@@ -457,9 +457,9 @@ def get_cline_items(
     where_clauses = ["im.SKU LIKE 'C%'"]
     params = []
     
-    # Add branch filter
-    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
-    params.append(branch_code)
+    # ⭐ ลบการกรองตามราคา - แสดงสินค้าทั้งหมดแม้ไม่มีราคา
+    # where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    # params.append(branch_code)
     
     # Add SKU pattern filters
     if brand:
@@ -608,9 +608,9 @@ def get_accessories_items(
     where_clauses = ["im.SKU LIKE 'E%'", "LEN(im.SKU) >= 11"]
     params = []
     
-    # Add branch filter
-    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
-    params.append(branch_code)
+    # ⭐ ลบการกรองตามราคา - แสดงสินค้าทั้งหมดแม้ไม่มีราคา
+    # where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    # params.append(branch_code)
     
     # Add SKU pattern filters (accessories don't use zfill)
     if brand:
@@ -775,9 +775,9 @@ def sealant_items(
     where_clauses = ["im.SKU LIKE 'S%'"]
     params = []
     
-    # Add branch filter
-    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
-    params.append(branch_code)
+    # ⭐ ลบการกรองตามราคา - แสดงสินค้าทั้งหมดแม้ไม่มีราคา
+    # where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    # params.append(branch_code)
     
     # Add SKU pattern filters
     if brand:
@@ -912,9 +912,9 @@ def gypsum_items(
     where_clauses = ["im.SKU LIKE 'Y%'", "LEN(im.SKU) >= 18"]
     params = []
     
-    # Add branch filter
-    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
-    params.append(branch_code)
+    # ⭐ ลบการกรองตามราคา - แสดงสินค้าทั้งหมดแม้ไม่มีราคา
+    # where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    # params.append(branch_code)
     
     # Add SKU pattern filters
     if brand:
@@ -1188,9 +1188,9 @@ def get_glass_list(
     where_clauses = ["im.SKU LIKE 'G%'"]
     params = []
     
-    # ⭐ กรองเฉพาะสินค้าที่มีราคาในสาขานี้
-    where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
-    params.append(branch_code)
+    # ⭐ ลบการกรองตามราคา - แสดงสินค้าทั้งหมดแม้ไม่มีราคา
+    # where_clauses.append("EXISTS (SELECT 1 FROM Item_Price ip WHERE ip.SKU = im.SKU AND ip.BranchCode = ?)")
+    # params.append(branch_code)
     
     if brand:
         where_clauses.append("SUBSTRING(im.SKU, 2, 2) = ?")
@@ -1429,7 +1429,7 @@ def get_glass_filter_options(branch_code: str = Depends(get_branch_code)):
         SELECT DISTINCT
             im.SKU
         FROM Item_Master im
-        INNER JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+        LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
         WHERE im.SKU LIKE 'G%'
     """, (branch_code,))
     

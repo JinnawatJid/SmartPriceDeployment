@@ -3,6 +3,7 @@ import React, { useState } from "react";
 export default function NewCustomerModal({ open, onClose, onConfirm }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [taxNo, setTaxNo] = useState("");
 
   if (!open) return null;
 
@@ -27,6 +28,14 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
             onChange={(e) => setPhone(e.target.value)}
             className="w-full rounded-lg border border-gray-300 p-3 text-sm"
           />
+
+          <input
+            type="text"
+            placeholder="เลขประจำตัวผู้เสียภาษี (Tax No.) "
+            value={taxNo}
+            onChange={(e) => setTaxNo(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 p-3 text-sm"
+          />
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
@@ -43,10 +52,12 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
                 id: "",
                 name,
                 phone,
+                tax_no: taxNo,
                 isTempCustomer: true,
               });
               setName("");
               setPhone("");
+              setTaxNo("");
               onClose();
             }}
             className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"

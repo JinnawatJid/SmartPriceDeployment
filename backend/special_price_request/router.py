@@ -222,7 +222,7 @@ def approve_special_price_request(
 @router.get("/approve/{token}", summary="อนุมัติคำขอผ่าน URL")
 def approve_via_link(token: str):
     """
-    อนุมัติคำขอราคาพิเศษผ่าน URL link - แสดงฟอร์ม
+    อนุมัติคำขอราคาพิเศษผ่าน URL link - อนุมัติทันที
     """
     try:
         # ตรวจสอบ token
@@ -270,14 +270,51 @@ def approve_via_link(token: str):
                 </html>
             """)
         
-        # แสดงฟอร์มอนุมัติพร้อมปุ่มแนบไฟล์
-        from special_price_request.approve_with_attachment import get_approve_form_html
-        return HTMLResponse(content=get_approve_form_html(request_number, request_data))
+        # ⭐ อนุมัติทันที
+        success = approve_request(request_number, "Approved via link")
+        
+        # Mark token as used
+        mark_token_used(token)
+        
+        if success:
+            return HTMLResponse(content=f"""
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body {{ font-family: 'Sarabun', Arial, sans-serif; text-align: center; padding: 50px; }}
+                        .success {{ color: #28a745; font-size: 32px; margin-bottom: 20px; }}
+                        .info {{ color: #495057; font-size: 18px; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="success">✅ อนุมัติสำเร็จ</div>
+                    <p class="info">เลขที่คำขอ: {request_number}</p>
+                    <p class="info">คำขอราคาพิเศษได้รับการอนุมัติแล้ว</p>
+                </body>
+                </html>
+            """)
+        else:
+            return HTMLResponse(content="""
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { font-family: 'Sarabun', Arial, sans-serif; text-align: center; padding: 50px; }
+                        .error { color: #dc3545; font-size: 24px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="error">❌ เกิดข้อผิดพลาดในการอนุมัติ</div>
+                    <p>กรุณาลองใหม่อีกครั้ง</p>
+                </body>
+                </html>
+            """, status_code=500)
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Error showing approve form: {str(e)}")
+        raise HTTPException(500, f"Error approving request: {str(e)}")
 
 
 @router.post("/upload-approval-files/{request_number}", summary="อัปโหลดไฟล์สำหรับการอนุมัติ")

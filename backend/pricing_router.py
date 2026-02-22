@@ -173,6 +173,9 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         or req.customerData.get("CreditTerm")
         or ""
     )
+    
+    # ส่ง credit_terms ไปด้วย (ถ้ามี)
+    df_calc["credit_terms"] = req.customerData.get("credit_terms", {})
 
     # ✅ FIX: โหลด items เฉพาะ SKU ใน cart
     cart_skus = df_calc["sku"].dropna().astype(str).unique().tolist()
@@ -414,6 +417,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     df_lp = LevelPrice(df_calc)
     
     df_lp["payment_terms"] = df_calc.get("payment_terms", "")
+    df_lp["credit_terms"] = df_calc.get("credit_terms", {})
 
     # 🔥 FIX: ส่ง column ที่ Price ต้องใช้ "ตั้งแต่ตรงนี้"
     price_input_cols = [

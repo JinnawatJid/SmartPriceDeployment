@@ -1341,7 +1341,10 @@ function Step6_Summary({ state, dispatch }) {
                   {searchResults.map((it) => (
                     <div
                       key={it.sku}
-                      onClick={() => handleQuickAdd(it)}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleQuickAdd(it);
+                      }}
                       className="cursor-pointer px-4 py-2 hover:bg-green-50 transition-colors"
                     >
                       <div className="text-sm font-semibold">{it.name}</div>
