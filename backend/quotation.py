@@ -285,9 +285,13 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
     cursor = conn.cursor()
 
     cursor.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
-    original = cursor.fetchone()
-    if not original:
+    original_row = cursor.fetchone()
+    if not original_row:
         raise HTTPException(404, f"ไม่พบใบเสนอราคา {quote_no}")
+    
+    # แปลง row เป็น dict
+    columns = [column[0] for column in cursor.description]
+    original = dict(zip(columns, original_row))
 
     employee = payload.get("employee") or {}
     customer = payload.get("customer") or {}

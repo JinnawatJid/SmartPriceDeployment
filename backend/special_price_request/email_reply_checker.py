@@ -289,9 +289,9 @@ def check_email_replies():
                         print(f"   ❌ Failed to approve")
                 
                 elif decision_type == 'reject':
-                    success = reject_request(request_number, reason or "ไม่ระบุเหตุผล")
+                    success = reject_request(request_number, from_email, reason or "ไม่ระบุเหตุผล")
                     if success:
-                        print(f"   ❌ REJECTED: {reason}")
+                        print(f"   ❌ REJECTED by {from_email}: {reason}")
                         processed_count += 1
                     else:
                         print(f"   ❌ Failed to reject")

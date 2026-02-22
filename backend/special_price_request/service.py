@@ -350,12 +350,13 @@ def approve_request(request_number: str, approved_by: str, pdf_files: list = Non
     return True
 
 
-def reject_request(request_number: str, rejection_reason: str) -> bool:
+def reject_request(request_number: str, rejected_by: str, rejection_reason: str) -> bool:
     """
     ปฏิเสธคำขอราคาพิเศษ
     
     Args:
         request_number: เลขที่คำขอ
+        rejected_by: ชื่อผู้ปฏิเสธ
         rejection_reason: เหตุผลที่ปฏิเสธ
     
     Returns:
@@ -366,14 +367,16 @@ def reject_request(request_number: str, rejection_reason: str) -> bool:
     
     now = datetime.now().isoformat(timespec="seconds")
     
-    # อัปเดตสถานะคำขอ
+    # อัปเดตสถานะคำขอ (ใช้ approved_by และ approved_at เหมือนกับ approve)
     cursor.execute("""
         UPDATE special_price_requests
         SET status = 'rejected',
+            approved_by = ?,
+            approved_at = ?,
             rejection_reason = ?,
             updated_at = ?
         WHERE request_number = ? AND status = 'pending'
-    """, (rejection_reason, now, request_number))
+    """, (rejected_by, now, rejection_reason, now, request_number))
     
     if cursor.rowcount == 0:
         conn.close()

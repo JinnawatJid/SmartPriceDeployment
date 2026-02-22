@@ -3,11 +3,11 @@
 # API Router สำหรับคำขอราคาพิเศษ
 # ============================================
 
-from fastapi import APIRouter, HTTPException, Body, Query, Form
+from fastapi import APIRouter, HTTPException, Body, Query, Form, File, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 import json
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from special_price_request.service import (
@@ -35,10 +35,12 @@ router = APIRouter(prefix="/special-price-requests", tags=["special-price-reques
 
 
 @router.post("", summary="สร้างคำขอราคาพิเศษใหม่")
-def create_special_price_request(payload: dict = Body(...)):
+async def create_special_price_request(payload: dict = Body(...)):
     """
     สร้างคำขอราคาพิเศษใหม่
     """
+    from fastapi import BackgroundTasks
+    
     try:
         # Validate required fields
         required_fields = [
@@ -55,44 +57,50 @@ def create_special_price_request(payload: dict = Body(...)):
         if not isinstance(payload["items"], list) or len(payload["items"]) == 0:
             raise HTTPException(400, "Items must be a non-empty array")
         
-        # สร้างคำขอ
+        # สร้างคำขอ (เร็ว)
         result = create_request(payload)
+        request_number = result["request_number"]
         
-        # ดึงข้อมูลคำขอที่สร้างเสร็จ
-        request_data = get_request_detail(result["request_number"])
+        # ส่งคำขอกลับทันที แล้วทำ PDF และ Email ใน background
+        import threading
         
-        # สร้าง PDF
-        pdf_path = generate_special_price_request_pdf(request_data)
+        def send_approval_email_background():
+            """ทำงานใน background thread"""
+            try:
+                # ดึงข้อมูลคำขอ
+                request_data = get_request_detail(request_number)
+                
+                # สร้าง PDF
+                pdf_path = generate_special_price_request_pdf(request_data)
+                print(f"✅ PDF generated: {pdf_path}")
+                
+                # สร้าง approval token
+                token = generate_approval_token(request_number)
+                print(f"✅ Token generated: {token[:20]}...")
+                
+                # ส่ง Email
+                email_result = send_approval_request_with_links(request_data, pdf_path, token)
+                
+                if email_result["success"]:
+                    print(f"✅ Email sent successfully for {request_number}")
+                else:
+                    print(f"❌ Email failed for {request_number}: {email_result.get('error')}")
+                    
+            except Exception as e:
+                print(f"❌ Background task error for {request_number}: {e}")
+                import traceback
+                traceback.print_exc()
         
-        # สร้าง approval token
-        try:
-            token = generate_approval_token(result["request_number"])
-        except Exception as e:
-            raise HTTPException(500, f"Error generating token: {str(e)}")
+        # เริ่ม background thread
+        thread = threading.Thread(target=send_approval_email_background, daemon=True)
+        thread.start()
         
-        # ส่ง Email พร้อมลิงก์
-        try:
-            email_result = send_approval_request_with_links(request_data, pdf_path, token)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(500, f"Error sending email: {str(e)}")
-        
-        if not email_result["success"]:
-            # ถ้าส่ง Email ไม่สำเร็จ แต่ยังคงสร้างคำขอไว้
-            return {
-                "request_number": result["request_number"],
-                "status": result["status"],
-                "email_sent": False,
-                "email_error": email_result.get("error"),
-                "message": "สร้างคำขอสำเร็จ แต่ส่ง Email ไม่สำเร็จ"
-            }
-        
+        # ส่งผลลัพธ์กลับทันที
         return {
-            "request_number": result["request_number"],
+            "request_number": request_number,
             "status": result["status"],
-            "email_sent": True,
-            "message": "ส่งคำขอราคาพิเศษสำเร็จ"
+            "email_sent": "processing",
+            "message": "สร้างคำขอสำเร็จ กำลังส่ง Email..."
         }
         
     except HTTPException:
@@ -214,7 +222,7 @@ def approve_special_price_request(
 @router.get("/approve/{token}", summary="อนุมัติคำขอผ่าน URL")
 def approve_via_link(token: str):
     """
-    อนุมัติคำขอราคาพิเศษผ่าน URL link
+    อนุมัติคำขอราคาพิเศษผ่าน URL link - แสดงฟอร์ม
     """
     try:
         # ตรวจสอบ token
@@ -262,9 +270,117 @@ def approve_via_link(token: str):
                 </html>
             """)
         
+        # แสดงฟอร์มอนุมัติพร้อมปุ่มแนบไฟล์
+        from special_price_request.approve_with_attachment import get_approve_form_html
+        return HTMLResponse(content=get_approve_form_html(request_number, request_data))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Error showing approve form: {str(e)}")
+
+
+@router.post("/upload-approval-files/{request_number}", summary="อัปโหลดไฟล์สำหรับการอนุมัติ")
+async def upload_approval_files(request_number: str, files: List[UploadFile] = File(...)):
+    """
+    อัปโหลดไฟล์ PDF สำหรับการอนุมัติ (ก่อนกดอนุมัติ)
+    """
+    from pathlib import Path
+    from config.email_config import PDF_STORAGE_PATH
+    
+    try:
+        # ตรวจสอบว่าคำขอมีอยู่จริง
+        request_data = get_request_detail(request_number)
+        
+        if not request_data:
+            raise HTTPException(404, "Request not found")
+        
+        if request_data["status"] != "pending":
+            raise HTTPException(400, "Request is not pending")
+        
+        # สร้างโฟลเดอร์ถ้ายังไม่มี
+        PDF_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
+        
+        uploaded_files = []
+        
+        # บันทึกไฟล์ที่อัปโหลด
+        for file in files:
+            if file.filename and file.filename.lower().endswith('.pdf'):
+                # สร้างชื่อไฟล์ที่ไม่ซ้ำ
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                safe_filename = f"{request_number}_approved_{timestamp}_{file.filename}"
+                file_path = PDF_STORAGE_PATH / safe_filename
+                
+                # บันทึกไฟล์
+                content = await file.read()
+                with open(file_path, 'wb') as f:
+                    f.write(content)
+                
+                uploaded_files.append(str(file_path))
+                print(f"📎 Saved uploaded file: {safe_filename}")
+        
+        return {
+            "success": True,
+            "files_uploaded": len(uploaded_files),
+            "files": [Path(f).name for f in uploaded_files]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Error uploading files: {str(e)}")
+
+
+@router.post("/approve/{token}", summary="ประมวลผลการอนุมัติพร้อมไฟล์แนบ")
+async def process_approval(token: str):
+    """
+    ประมวลผลการอนุมัติพร้อมรับไฟล์แนบ
+    """
+    from pathlib import Path
+    from config.email_config import PDF_STORAGE_PATH
+    
+    try:
+        # ตรวจสอบ token
+        request_number = validate_token(token)
+        
+        if not request_number:
+            return HTMLResponse(content="""
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { font-family: 'Sarabun', Arial, sans-serif; text-align: center; padding: 50px; }
+                        .error { color: #dc3545; font-size: 24px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="error">❌ ลิงก์ไม่ถูกต้องหรือหมดอายุแล้ว</div>
+                </body>
+                </html>
+            """, status_code=400)
+        
+        # ดึงข้อมูลคำขอ
+        request_data = get_request_detail(request_number)
+        
+        if not request_data:
+            raise HTTPException(404, "Request not found")
+        
+        # บันทึกไฟล์ที่อัปโหลด
+        pdf_files = []
+        
+        # ค้นหาไฟล์ที่แนบมาจาก email (ถ้ามี)
+        if PDF_STORAGE_PATH.exists():
+            pattern = f"{request_number}_approved_*.pdf"
+            email_pdfs = [str(f) for f in PDF_STORAGE_PATH.glob(pattern)]
+            pdf_files.extend(email_pdfs)
+            if email_pdfs:
+                print(f"📧 Found {len(email_pdfs)} email-attached PDFs")
+        
         # อนุมัติคำขอ
         approver_email = request_data.get("approver_email", "Unknown")
-        success = approve_request(request_number, approver_email)
+        success = approve_request(request_number, approver_email, pdf_files if pdf_files else None)
         
         if not success:
             raise HTTPException(500, "Failed to approve request")
@@ -275,6 +391,18 @@ def approve_via_link(token: str):
         # ส่ง Email แจ้งผล
         send_approval_notification(request_data)
         
+        # แสดงรายการไฟล์ที่แนบ
+        attachment_html = ""
+        if pdf_files:
+            attachment_html = f"""
+                <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+                    <p style="margin: 0 0 10px 0; font-weight: bold;">📎 ไฟล์ที่แนบ ({len(pdf_files)} ไฟล์):</p>
+                    <ul style="margin: 0; padding-left: 20px; text-align: left;">
+                        {''.join([f'<li>{Path(f).name}</li>' for f in pdf_files])}
+                    </ul>
+                </div>
+            """
+        
         return HTMLResponse(content=f"""
             <html>
             <head>
@@ -282,7 +410,7 @@ def approve_via_link(token: str):
                 <style>
                     body {{ font-family: 'Sarabun', Arial, sans-serif; text-align: center; padding: 50px; }}
                     .success {{ color: #28a745; font-size: 32px; margin-bottom: 20px; }}
-                    .info {{ font-size: 18px; color: #495057; }}
+                    .info {{ font-size: 18px; color: #495057; max-width: 600px; margin: 0 auto; }}
                 </style>
             </head>
             <body>
@@ -291,6 +419,7 @@ def approve_via_link(token: str):
                     <p>เลขที่คำขอ: <strong>{request_number}</strong></p>
                     <p>ผู้อนุมัติ: <strong>{approver_email}</strong></p>
                     <p>วันที่อนุมัติ: <strong>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</strong></p>
+                    {attachment_html}
                 </div>
                 <p style="margin-top: 30px; color: #6c757d;">คุณสามารถปิดหน้าต่างนี้ได้</p>
             </body>
@@ -300,7 +429,9 @@ def approve_via_link(token: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Error approving request: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Error processing approval: {str(e)}")
 
 
 @router.get("/reject/{token}", summary="หน้าฟอร์มปฏิเสธคำขอ")
@@ -527,7 +658,8 @@ def reject_via_link(token: str, reason: str = Form(...)):
             raise HTTPException(404, "Request not found")
         
         # ปฏิเสธคำขอ
-        success = reject_request(request_number, reason)
+        rejected_by = request_data.get("approver_email", "Unknown")
+        success = reject_request(request_number, rejected_by, reason)
         
         if not success:
             raise HTTPException(500, "Failed to reject request")
@@ -576,16 +708,21 @@ def reject_special_price_request(
     
     Request Body:
     {
+        "rejected_by": "ผู้จัดการสมหญิง",
         "rejection_reason": "ราคาต่ำเกินไป"
     }
     """
     try:
+        rejected_by = payload.get("rejected_by", "")
         rejection_reason = payload.get("rejection_reason", "")
+        
+        if not rejected_by:
+            raise HTTPException(400, "rejected_by is required")
         
         if not rejection_reason:
             raise HTTPException(400, "rejection_reason is required")
         
-        success = reject_request(request_number, rejection_reason)
+        success = reject_request(request_number, rejected_by, rejection_reason)
         
         if not success:
             raise HTTPException(404, f"Request {request_number} not found or already processed")

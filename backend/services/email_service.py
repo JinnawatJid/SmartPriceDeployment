@@ -229,29 +229,53 @@ def send_approval_request_with_links(request_data: dict, pdf_path: Path, token: 
     <html>
     <head>
         <style>
-            body {{ font-family: 'Sarabun', Arial, sans-serif; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            body {{ font-family: 'Sarabun', Arial, sans-serif; line-height: 1.6; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff; }}
             .header {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
             .info-row {{ margin: 10px 0; }}
             .label {{ font-weight: bold; color: #495057; }}
             .value {{ color: #212529; }}
             .price-highlight {{ font-size: 18px; font-weight: bold; color: #dc3545; }}
-            .button-container {{ text-align: center; margin: 30px 0; }}
+            .button-container {{ 
+                text-align: center; 
+                margin: 30px 0;
+                padding: 20px;
+                background-color: #f8f9fa;
+                border-radius: 8px;
+            }}
             .btn {{ 
                 display: inline-block;
-                padding: 15px 40px;
-                margin: 10px;
+                padding: 15px 50px;
+                margin: 10px 15px;
                 text-decoration: none;
-                border-radius: 5px;
+                border-radius: 8px;
                 font-size: 18px;
                 font-weight: bold;
-                color: white;
+                color: white !important;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                transition: all 0.3s ease;
             }}
-            .btn-approve {{ background-color: #28a745; }}
-            .btn-approve:hover {{ background-color: #218838; }}
-            .btn-reject {{ background-color: #dc3545; }}
-            .btn-reject:hover {{ background-color: #c82333; }}
-            .note {{ background-color: #e7f3ff; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 4px solid #007bff; }}
+            .btn-approve {{ 
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            }}
+            .btn-reject {{ 
+                background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+            }}
+            .note {{ 
+                background-color: #e7f3ff; 
+                padding: 15px; 
+                border-radius: 5px; 
+                margin-top: 20px; 
+                border-left: 4px solid #007bff; 
+            }}
+            .footer {{ 
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #dee2e6;
+                color: #6c757d; 
+                font-size: 12px; 
+                text-align: center;
+            }}
         </style>
     </head>
     <body>
@@ -306,30 +330,32 @@ def send_approval_request_with_links(request_data: dict, pdf_path: Path, token: 
                 </div>
             </div>
             
-            <div class="button-container">
-                <a href="{approve_url}" class="btn btn-approve">✅ อนุมัติ</a>
-                <a href="{reject_url}" class="btn btn-reject">❌ ปฏิเสธ</a>
-            </div>
-            
             <div class="note">
-                <p style="margin: 0;"><strong>📌 หมายเหตุ:</strong></p>
-                <ul style="margin: 10px 0;">
-                    <li>คลิกปุ่ม "อนุมัติ" เพื่ออนุมัติคำขอทันที</li>
-                    <li>คลิกปุ่ม "ปฏิเสธ" เพื่อกรอกเหตุผลและปฏิเสธคำขอ</li>
+                <p style="margin: 0 0 10px 0;"><strong>📌 วิธีการพิจารณา:</strong></p>
+                <ul style="margin: 5px 0;">
+                    <li>คลิกปุ่ม "อนุมัติ" ด้านล่างเพื่ออนุมัติคำขอ (สามารถแนบไฟล์เพิ่มเติมได้)</li>
+                    <li>คลิกปุ่ม "ปฏิเสธ" ด้านล่างเพื่อกรอกเหตุผลและปฏิเสธคำขอ</li>
                     <li>ลิงก์นี้จะหมดอายุใน 72 ชั่วโมง</li>
                     <li>รายละเอียดเพิ่มเติมในไฟล์แนบ</li>
                 </ul>
             </div>
             
-            <hr style="margin: 20px 0;">
+            <div class="button-container">
+                <p style="margin: 0 0 15px 0; font-size: 16px; color: #495057;">
+                    <strong>กรุณาเลือกการดำเนินการ:</strong>
+                </p>
+                <a href="{approve_url}" class="btn btn-approve">✅ อนุมัติคำขอ</a>
+                <a href="{reject_url}" class="btn btn-reject">❌ ปฏิเสธคำขอ</a>
+            </div>
             
-            <p style="color: #6c757d; font-size: 12px; text-align: center;">
-                Email นี้ถูกส่งอัตโนมัติจากระบบใบเสนอราคา<br>
-                หากมีปัญหาในการคลิกปุ่ม กรุณาคัดลอกลิงก์ด้านล่างไปวางในเบราว์เซอร์<br>
-                <br>
-                อนุมัติ: <a href="{approve_url}">{approve_url}</a><br>
-                ปฏิเสธ: <a href="{reject_url}">{reject_url}</a>
-            </p>
+            <div class="footer">
+                <p style="margin: 5px 0;">Email นี้ถูกส่งอัตโนมัติจากระบบใบเสนอราคา</p>
+                <p style="margin: 5px 0;">หากปุ่มไม่ทำงาน กรุณาคัดลอกลิงก์ด้านล่างไปวางในเบราว์เซอร์</p>
+                <p style="margin: 10px 0; font-size: 11px; word-break: break-all;">
+                    อนุมัติ: {approve_url}<br>
+                    ปฏิเสธ: {reject_url}
+                </p>
+            </div>
         </div>
     </body>
     </html>

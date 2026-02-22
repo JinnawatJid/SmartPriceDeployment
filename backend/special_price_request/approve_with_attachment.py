@@ -1,0 +1,240 @@
+"""
+HTML template สำหรับหน้า approve พร้อมปุ่มแนบไฟล์
+"""
+
+def get_approve_form_html(request_number: str, request_data: dict) -> str:
+    """
+    สร้าง HTML form สำหรับอนุมัติพร้อมแนบไฟล์
+    """
+    return f"""
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {{
+                font-family: 'Sarabun', Arial, sans-serif;
+                max-width: 700px;
+                margin: 50px auto;
+                padding: 20px;
+                background-color: #f8f9fa;
+            }}
+            .container {{
+                background-color: white;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }}
+            h2 {{
+                color: #28a745;
+                text-align: center;
+                margin-bottom: 30px;
+            }}
+            .info {{
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 5px;
+                margin-bottom: 25px;
+            }}
+            .info p {{
+                margin: 8px 0;
+            }}
+            .file-upload {{
+                margin: 25px 0;
+                padding: 20px;
+                border: 2px dashed #dee2e6;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #f8f9fa;
+            }}
+            .file-upload input[type="file"] {{
+                display: none;
+            }}
+            .file-upload label {{
+                display: inline-block;
+                padding: 12px 24px;
+                background-color: #6c757d;
+                color: white;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+            }}
+            .file-upload label:hover {{
+                background-color: #5a6268;
+            }}
+            .file-list {{
+                margin-top: 15px;
+                text-align: left;
+            }}
+            .file-item {{
+                padding: 8px 12px;
+                background-color: white;
+                border: 1px solid #dee2e6;
+                border-radius: 3px;
+                margin: 5px 0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }}
+            .file-item button {{
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                padding: 4px 12px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 12px;
+            }}
+            .file-item button:hover {{
+                background-color: #c82333;
+            }}
+            .buttons {{
+                display: flex;
+                gap: 15px;
+                margin-top: 30px;
+            }}
+            button {{
+                flex: 1;
+                padding: 15px;
+                border: none;
+                border-radius: 5px;
+                font-size: 18px;
+                font-weight: bold;
+                cursor: pointer;
+            }}
+            .btn-approve {{
+                background-color: #28a745;
+                color: white;
+            }}
+            .btn-approve:hover {{
+                background-color: #218838;
+            }}
+            .btn-approve:disabled {{
+                background-color: #6c757d;
+                cursor: not-allowed;
+            }}
+            .note {{
+                margin-top: 15px;
+                padding: 12px;
+                background-color: #fff3cd;
+                border: 1px solid #ffc107;
+                border-radius: 5px;
+                font-size: 14px;
+                color: #856404;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>✅ อนุมัติคำขอราคาพิเศษ</h2>
+            
+            <div class="info">
+                <p><strong>เลขที่คำขอ:</strong> {request_number}</p>
+                <p><strong>ลูกค้า:</strong> {request_data.get('customer_name', 'N/A')}</p>
+                <p><strong>ผู้ขอ:</strong> {request_data['requester_name']}</p>
+                <p><strong>ยอดเงิน:</strong> ฿{request_data['requested_total']:,.2f}</p>
+            </div>
+            
+            <div class="file-upload">
+                <p style="margin: 0 0 15px 0; font-weight: bold;">📎 แนบไฟล์ (ถ้ามี)</p>
+                <label for="fileInput">เลือกไฟล์ PDF</label>
+                <input type="file" id="fileInput" accept=".pdf" multiple>
+                <div class="file-list" id="fileList"></div>
+            </div>
+            
+            <div class="note">
+                💡 <strong>หมายเหตุ:</strong> คุณสามารถแนบไฟล์ PDF (เช่น เอกสารที่ลงนามแล้ว) หรือกดอนุมัติเลยโดยไม่แนบไฟล์
+            </div>
+            
+            <div class="buttons">
+                <button type="button" class="btn-approve" id="approveBtn" onclick="handleApprove()">
+                    ยืนยันอนุมัติ
+                </button>
+            </div>
+        </div>
+        
+        <script>
+            let selectedFiles = [];
+            
+            // Handle file selection
+            document.getElementById('fileInput').addEventListener('change', function(e) {{
+                const files = Array.from(e.target.files);
+                selectedFiles = [...selectedFiles, ...files];
+                updateFileList();
+                e.target.value = ''; // Reset input
+            }});
+            
+            // Update file list display
+            function updateFileList() {{
+                const fileList = document.getElementById('fileList');
+                if (selectedFiles.length === 0) {{
+                    fileList.innerHTML = '';
+                    return;
+                }}
+                
+                fileList.innerHTML = selectedFiles.map((file, index) => `
+                    <div class="file-item">
+                        <span>📄 ${{file.name}} (${{(file.size / 1024).toFixed(1)}} KB)</span>
+                        <button onclick="removeFile(${{index}})">ลบ</button>
+                    </div>
+                `).join('');
+            }}
+            
+            // Remove file from list
+            function removeFile(index) {{
+                selectedFiles.splice(index, 1);
+                updateFileList();
+            }}
+            
+            // Handle approve with file upload
+            async function handleApprove() {{
+                const btn = document.getElementById('approveBtn');
+                btn.disabled = true;
+                btn.textContent = 'กำลังดำเนินการ...';
+                
+                try {{
+                    // If there are files, upload them first
+                    if (selectedFiles.length > 0) {{
+                        const formData = new FormData();
+                        
+                        // Add files to form data
+                        selectedFiles.forEach((file) => {{
+                            formData.append('files', file);
+                        }});
+                        
+                        // Upload files to a separate endpoint
+                        const uploadResponse = await fetch('/api/special-price-requests/upload-approval-files/{request_number}', {{
+                            method: 'POST',
+                            body: formData
+                        }});
+                        
+                        if (!uploadResponse.ok) {{
+                            throw new Error('Failed to upload files');
+                        }}
+                        
+                        console.log('Files uploaded successfully');
+                    }}
+                    
+                    // Now approve the request
+                    const response = await fetch(window.location.href, {{
+                        method: 'POST'
+                    }});
+                    
+                    if (response.ok) {{
+                        const html = await response.text();
+                        document.body.innerHTML = html;
+                    }} else {{
+                        alert('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+                        btn.disabled = false;
+                        btn.textContent = 'ยืนยันอนุมัติ';
+                    }}
+                }} catch (error) {{
+                    alert('เกิดข้อผิดพลาด: ' + error.message);
+                    btn.disabled = false;
+                    btn.textContent = 'ยืนยันอนุมัติ';
+                }}
+            }}
+        </script>
+    </body>
+    </html>
+    """
