@@ -211,13 +211,12 @@ def check_email_replies():
         # Select inbox
         mail.select('INBOX')
         
-        # Search for unread emails with APPROVE or REJECT in subject
-        # ค้นหา email ที่มี "APPROVE:" หรือ "REJECT:" ใน subject
-        # ⭐ ลองค้นหาทั้ง UNSEEN และ SEEN (เพื่อ debug)
-        print("🔍 Searching for emails with APPROVE: or REJECT: in subject...")
+        # Search for UNREAD emails with APPROVE or REJECT in subject
+        # ค้นหาเฉพาะ email ที่ยังไม่ได้อ่าน (UNSEEN)
+        print("🔍 Searching for UNREAD emails with APPROVE: or REJECT: in subject...")
         
-        status1, messages1 = mail.search(None, 'SUBJECT "APPROVE:"')
-        status2, messages2 = mail.search(None, 'SUBJECT "REJECT:"')
+        status1, messages1 = mail.search(None, '(UNSEEN SUBJECT "APPROVE:")')
+        status2, messages2 = mail.search(None, '(UNSEEN SUBJECT "REJECT:")')
         
         print(f"   APPROVE: status={status1}, messages={messages1}")
         print(f"   REJECT: status={status2}, messages={messages2}")
@@ -228,7 +227,7 @@ def check_email_replies():
         if status2 == 'OK' and messages2[0]:
             email_ids.extend(messages2[0].split())
         
-        print(f"   Found {len(email_ids)} total email(s) with APPROVE/REJECT in subject")
+        print(f"   Found {len(email_ids)} unread email(s) with APPROVE/REJECT in subject")
         
         if not email_ids:
             print("📭 No emails found")
