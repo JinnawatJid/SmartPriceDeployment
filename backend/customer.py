@@ -177,7 +177,7 @@ async def search_customer_from_db(
 # =====================================================
 @router.get("/search")
 @router.post("/search")
-def search_customer(
+async def search_customer(
     code: str | None = Query(None),
     phone: str | None = Query(None),
     name: str | None = Query(None),
@@ -207,7 +207,7 @@ def search_customer(
         )
     
     # ใช้ MSSQL Database เท่านั้น
-    return search_customer_from_db(code=code, phone=phone, name=name, product_group=product_group)
+    return await search_customer_from_db(code=code, phone=phone, name=name, product_group=product_group)
 
 def search_customer_list_from_db(query: str) -> list:
     """
