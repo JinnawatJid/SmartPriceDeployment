@@ -2,13 +2,9 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 import pandas as pd
-import requests
 from datetime import datetime, timedelta
 
-from config.config_external_api import (
-    INVOICE_API_URL,
-    INVOICE_API_HEADERS,
-)
+from config.db_mssql import get_mssql_conn
 
 
 # ✅ ประกาศ prefix ที่ router เลย (เหมือน pricing / shipping)
@@ -19,73 +15,84 @@ router = APIRouter(
 
 
 # -------------------------------------------------------
-# Load invoice from API
+# Load invoice from Database
 # -------------------------------------------------------
-def load_invoice_from_api(
+def load_invoice_from_db(
     document_no: Optional[str] = None,
     customer_no: Optional[str] = None,
     posting_date: Optional[str] = None,
     limit: int = 200,
 ):
     """
-    ดึงข้อมูล Invoice จาก D365 API
+    ดึงข้อมูล Invoice จาก MSSQL Database
     """
-    rows = []
-    page = 1
-    size = 200
-    max_page = 5  # จำกัดไว้ 5 หน้า
-
-    while True:
-        payload = {
-            "page": page,
-            "size": size,
-        }
-
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+    
+    try:
+        # สร้าง SQL query
+        sql = "SELECT TOP (?) Document_No, Order_No, customer_code, Sell_to_Customer_Name, "
+        sql += "Posting_Date, sku, Description, Variant_Code, Quantity, Unit_of_Measure, "
+        sql += "Unit_Price, Line_Amount, Line_Amount_Include_VAT "
+        sql += "FROM dbo.Invoice WHERE 1=1"
+        
+        params = [limit]
+        
         # เพิ่ม filter ถ้ามี
         if customer_no:
-            payload["customer_code"] = {"$eq": customer_no}
+            sql += " AND customer_code = ?"
+            params.append(customer_no)
         
         if document_no:
-            payload["Document No."] = {"$eq": document_no}
+            sql += " AND Document_No = ?"
+            params.append(document_no)
         
         if posting_date:
-            payload["Posting Date"] = {"$eq": posting_date}
-
-        try:
-            resp = requests.post(
-                INVOICE_API_URL,
-                json=payload,
-                headers=INVOICE_API_HEADERS,
-                timeout=30,
-            )
-
-            resp.raise_for_status()
-
-            data = resp.json()
-            items = data.get("data") or []
-
-            if not items:
-                break
-
-            rows.extend(items)
-
-            # ถ้าได้ครบตาม limit ที่ต้องการแล้ว หยุด
-            if len(rows) >= limit:
-                rows = rows[:limit]
-                break
-
-            if len(items) < size:
-                break
-
-            page += 1
-            if page > max_page:
-                break
-
-        except Exception as e:
-            print(f"❌ Error loading invoice from API: {e}")
-            break
-
-    return rows
+            sql += " AND Posting_Date = ?"
+            params.append(posting_date)
+        
+        sql += " ORDER BY Posting_Date DESC"
+        
+        cursor.execute(sql, params)
+        columns = [column[0] for column in cursor.description]
+        rows = []
+        
+        for row in cursor.fetchall():
+            row_dict = {}
+            for i, value in enumerate(row):
+                col_name = columns[i]
+                # แปลง column name ให้ตรงกับ format เดิมที่ API ส่งมา
+                if col_name == "Document_No":
+                    row_dict["Document No."] = value
+                elif col_name == "Order_No":
+                    row_dict["Order No."] = value
+                elif col_name == "Sell_to_Customer_Name":
+                    row_dict["Sell-to Customer Name"] = value
+                elif col_name == "Posting_Date":
+                    row_dict["Posting Date"] = value.isoformat() if value else None
+                elif col_name == "Variant_Code":
+                    row_dict["Variant Code"] = value
+                elif col_name == "Unit_of_Measure":
+                    row_dict["Unit of Measure"] = value
+                elif col_name == "Unit_Price":
+                    row_dict["Unit Price"] = float(value) if value else 0
+                elif col_name == "Line_Amount":
+                    row_dict["Amount"] = float(value) if value else 0
+                elif col_name == "Line_Amount_Include_VAT":
+                    row_dict["Amount Including VAT"] = float(value) if value else 0
+                else:
+                    row_dict[col_name] = value
+            
+            rows.append(row_dict)
+        
+        return rows
+        
+    except Exception as e:
+        print(f"❌ Error loading invoice from database: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # -------------------------------------------------------
@@ -99,9 +106,9 @@ def list_invoice(
     limit: int = 200,
 ):
     """
-    ดึงรายการ Invoice จาก D365 API
+    ดึงรายการ Invoice จาก MSSQL Database
     """
-    rows = load_invoice_from_api(
+    rows = load_invoice_from_db(
         document_no=document_no,
         customer_no=customer_no,
         posting_date=posting_date,
@@ -121,80 +128,50 @@ def item_price_history(
     limit: int = Query(10),
 ):
     """
-    ดึงประวัติราคาสินค้าจาก D365 API
+    ดึงประวัติราคาสินค้าจาก MSSQL Database
     """
-    rows = []
-    page = 1
-    size = 200
-    max_page = 3
-
-    # ดึงข้อมูล 6 เดือนย้อนหลัง
-    today = datetime.today()
-    date_from = (today - timedelta(days=180)).date().isoformat()
-
-    while True:
-        payload = {
-            "page": page,
-            "size": size,
-            "customer_code": {"$eq": customerCode},
-            "sku": {"$eq": sku},
-            "Posting Date": {
-                "$gte": date_from,
-            },
-        }
-
-        try:
-            resp = requests.post(
-                INVOICE_API_URL,
-                json=payload,
-                headers=INVOICE_API_HEADERS,
-                timeout=30,
-            )
-
-            resp.raise_for_status()
-
-            data = resp.json()
-            items = data.get("data") or []
-
-            if not items:
-                break
-
-            rows.extend(items)
-
-            if len(items) < size:
-                break
-
-            page += 1
-            if page > max_page:
-                break
-
-        except Exception as e:
-            print(f"❌ Error loading price history from API: {e}")
-            break
-
-    # แปลงเป็น DataFrame เพื่อ sort และ limit
-    if not rows:
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+    
+    try:
+        # ดึงข้อมูล 6 เดือนย้อนหลัง
+        today = datetime.today()
+        date_from = (today - timedelta(days=180)).date()
+        
+        sql = """
+        SELECT TOP (?)
+            Document_No,
+            Posting_Date,
+            Unit_Price,
+            Quantity,
+            Unit_of_Measure
+        FROM dbo.Invoice
+        WHERE sku = ? 
+            AND customer_code = ?
+            AND Posting_Date >= ?
+        ORDER BY Posting_Date DESC
+        """
+        
+        cursor.execute(sql, [limit, sku, customerCode, date_from])
+        
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                "invoiceNo": row[0],
+                "date": row[1].isoformat() if row[1] else None,
+                "price": float(row[2]) if row[2] else 0,
+                "qty": int(row[3]) if row[3] else 0,
+                "unit": row[4],
+            })
+        
+        return results
+        
+    except Exception as e:
+        print(f"❌ Error loading price history from database: {e}")
         return []
-
-    df = pd.DataFrame(rows)
-    
-    # Sort by Posting Date (ใหม่สุดก่อน)
-    df["Posting Date"] = pd.to_datetime(df["Posting Date"], errors="coerce")
-    df = df.sort_values("Posting Date", ascending=False)
-    
-    # จำกัดจำนวน
-    df = df.head(limit)
-
-    return [
-        {
-            "invoiceNo": row.get("Document No."),
-            "date": row.get("Posting Date"),
-            "price": float(row.get("Unit Price") or 0),
-            "qty": int(row.get("Quantity") or 0),
-            "unit": row.get("Unit of Measure"),
-        }
-        for _, row in df.iterrows()
-    ]
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # -------------------------------------------------------
@@ -203,9 +180,9 @@ def item_price_history(
 @router.get("/{document_no}")
 def get_invoice(document_no: str):
     """
-    ดึงรายละเอียด Invoice จาก D365 API
+    ดึงรายละเอียด Invoice จาก MSSQL Database
     """
-    rows = load_invoice_from_api(document_no=document_no, limit=1000)
+    rows = load_invoice_from_db(document_no=document_no, limit=1000)
 
     if not rows:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -217,8 +194,8 @@ def get_invoice(document_no: str):
     header = {
         "document_no": document_no,
         "order_no": first_row.get("Order No."),
-        "customer_no": first_row.get("customer_code") or first_row.get("Sell-to Customer No."),
-        "customer_name": first_row.get("customer_name") or first_row.get("Sell-to Customer Name"),
+        "customer_no": first_row.get("customer_code"),
+        "customer_name": first_row.get("Sell-to Customer Name"),
         "posting_date": first_row.get("Posting Date"),
         "amount_including_vat": float(df["Amount Including VAT"].fillna(0).sum()),
     }
@@ -227,7 +204,7 @@ def get_invoice(document_no: str):
     lines = []
     for _, r in df.iterrows():
         lines.append({
-            "sku": r.get("sku") or r.get("No."),
+            "sku": r.get("sku"),
             "description": r.get("Description"),
             "unit": r.get("Unit of Measure"),
             "qty": int(r.get("Quantity") or 0),

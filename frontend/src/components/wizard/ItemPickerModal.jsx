@@ -443,13 +443,13 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
       {/* ================= ADDED ITEMS LIST ================= */}
       {selectedItems.length > 0 && (
         <div className="border rounded-xl bg-gray-50 mt-4 h-[180px]">
-          <div className="px-4 py-2 border-b bg-white rounded-t-xl flex items-center justify-between">
-            <div className="text-sm font-semibold text-gray-700">
+          <div className="px-4 py-2 border-b bg-blue-600 rounded-t-xl flex items-center justify-between">
+            <div className="text-sm font-semibold text-white">
               รายการที่เพิ่มแล้ว ({selectedItems.length})
             </div>
             <button
               onClick={handleClearAll}
-              className="text-xs px-3 py-1 border rounded-lg hover:bg-gray-50"
+              className="text-xs px-3 py-1 border rounded-lg hover:bg-blue-700 text-white"
             >
               ล้างทั้งหมด
             </button>

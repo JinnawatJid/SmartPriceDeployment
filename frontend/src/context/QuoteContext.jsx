@@ -106,11 +106,11 @@ function quoteReducer(state, action) {
 
         unit: newItem.unit ?? null,
 
-        // ✅ ตัวตน
-        source: "ui",
+        // ✅ ตัวตน - ใช้ค่าที่ส่งมา หรือ default เป็น "ui"
+        source: newItem.source ?? "ui",
 
-        // ✅ pricing state (แยกจาก identity)
-        needsPricing: true,
+        // ✅ pricing state - ใช้ค่าที่ส่งมา หรือ default เป็น true
+        needsPricing: newItem.needsPricing !== undefined ? newItem.needsPricing : true,
 
         pkg_size: newItem.pkg_size ?? 1,
 
@@ -124,6 +124,9 @@ function quoteReducer(state, action) {
         product_group: newItem.product_group ?? newItem["Product Group"] ?? null,
 
         product_sub_group: newItem.product_sub_group ?? newItem["Product Sub Group"] ?? null,
+        
+        // ✅ เก็บ priceSource ถ้ามี (สำหรับราคาพิเศษ)
+        priceSource: newItem.priceSource ?? (newItem.source === "db" ? "manual" : undefined),
       };
 
       // 2) หา item ซ้ำ “ต้อง match ด้วย sku + variantCode + sqft”

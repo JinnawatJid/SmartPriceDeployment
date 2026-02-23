@@ -874,3 +874,6 @@ def download_approval_pdf_file(request_number: str, file_index: int):
         raise
     except Exception as e:
         raise HTTPException(500, f"Error downloading approval PDF: {str(e)}")
+
+
+
