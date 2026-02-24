@@ -19,6 +19,7 @@ def get_mssql_conn():
         f"UID={MSSQL_CONFIG['username']};"
         f"PWD={MSSQL_CONFIG['password']};"
         "TrustServerCertificate=yes;"
+        "Connection Timeout=30;"  # เพิ่ม timeout เป็น 30 วินาที (default คือ 15)
     )
     return pyodbc.connect(conn_str)
 

@@ -353,13 +353,14 @@ async def upload_approval_files(request_number: str, files: List[UploadFile] = F
                 with open(file_path, 'wb') as f:
                     f.write(content)
                 
-                uploaded_files.append(str(file_path))
+                # ⭐ เก็บแค่ชื่อไฟล์ (relative path) แทน absolute path
+                uploaded_files.append(safe_filename)
                 print(f"📎 Saved uploaded file: {safe_filename}")
         
         return {
             "success": True,
             "files_uploaded": len(uploaded_files),
-            "files": [Path(f).name for f in uploaded_files]
+            "files": uploaded_files  # ⭐ ส่งชื่อไฟล์กลับไปแทน Path object
         }
         
     except HTTPException:
@@ -410,7 +411,8 @@ async def process_approval(token: str):
         # ค้นหาไฟล์ที่แนบมาจาก email (ถ้ามี)
         if PDF_STORAGE_PATH.exists():
             pattern = f"{request_number}_approved_*.pdf"
-            email_pdfs = [str(f) for f in PDF_STORAGE_PATH.glob(pattern)]
+            # ⭐ เก็บแค่ชื่อไฟล์ (relative path) แทน absolute path
+            email_pdfs = [f.name for f in PDF_STORAGE_PATH.glob(pattern)]
             pdf_files.extend(email_pdfs)
             if email_pdfs:
                 print(f"📧 Found {len(email_pdfs)} email-attached PDFs")
@@ -435,7 +437,7 @@ async def process_approval(token: str):
                 <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
                     <p style="margin: 0 0 10px 0; font-weight: bold;">📎 ไฟล์ที่แนบ ({len(pdf_files)} ไฟล์):</p>
                     <ul style="margin: 0; padding-left: 20px; text-align: left;">
-                        {''.join([f'<li>{Path(f).name}</li>' for f in pdf_files])}
+                        {''.join([f'<li>{f}</li>' for f in pdf_files])}
                     </ul>
                 </div>
             """
@@ -818,11 +820,12 @@ def download_approval_pdfs(request_number: str):
         
         # สร้าง response
         result = []
-        for idx, file_path in enumerate(pdf_files):
-            file_path_obj = Path(file_path)
-            if file_path_obj.exists():
+        for idx, filename in enumerate(pdf_files):
+            # ⭐ สร้าง full path จากชื่อไฟล์
+            file_path = PDF_STORAGE_PATH / filename
+            if file_path.exists():
                 result.append({
-                    "filename": file_path_obj.name,
+                    "filename": filename,
                     "download_url": f"/api/special-price-requests/{request_number}/approval-pdfs/{idx}"
                 })
         
@@ -859,7 +862,9 @@ def download_approval_pdf_file(request_number: str, file_index: int):
         if file_index < 0 or file_index >= len(pdf_files):
             raise HTTPException(404, "Invalid file index")
         
-        file_path = Path(pdf_files[file_index])
+        # ⭐ สร้าง full path จากชื่อไฟล์
+        filename = pdf_files[file_index]
+        file_path = PDF_STORAGE_PATH / filename
         
         if not file_path.exists():
             raise HTTPException(404, "PDF file not found")
