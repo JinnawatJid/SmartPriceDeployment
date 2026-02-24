@@ -4,6 +4,7 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [taxNo, setTaxNo] = useState("");
+  const [error, setError] = useState("");
 
   if (!open) return null;
 
@@ -21,13 +22,22 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
             className="w-full rounded-lg border border-gray-300 p-3 text-sm"
           />
 
-          <input
-            type="text"
-            placeholder="เบอร์โทรศัพท์"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 p-3 text-sm"
-          />
+          <div>
+            <input
+              type="text"
+              placeholder="เบอร์โทรศัพท์ *"
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (error) setError("");
+              }}
+              className={`w-full rounded-lg border p-3 text-sm ${
+                error ? "border-red-500" : "border-gray-300"
+              }`}
+              required
+            />
+            {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+          </div>
 
           <input
             type="text"
@@ -48,6 +58,11 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
 
           <button
             onClick={() => {
+              if (!phone.trim()) {
+                setError("กรุณากรอกเบอร์โทรศัพท์");
+                return;
+              }
+              
               onConfirm({
                 id: "",
                 name,
@@ -58,6 +73,7 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
               setName("");
               setPhone("");
               setTaxNo("");
+              setError("");
               onClose();
             }}
             className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
