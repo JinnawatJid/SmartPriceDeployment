@@ -1,10 +1,15 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import api from "../services/api";
+import Loader from "../components/Loader";
 
 export default function CheckProduct() {
   const [items, setItems] = useState([]);
-  const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [query, setQuery] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
 
   // Filter state
   const [filter, setFilter] = useState({
@@ -17,64 +22,115 @@ export default function CheckProduct() {
     size: "",
   });
 
-  // โหลดข้อมูลทั้งหมด
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await api.get("/api/items/");
-        setItems(res.data || []);
-        setFiltered(res.data || []);
-      } catch (err) {
-        console.error("Error loading items:", err);
-      }
-    };
-    load();
-  }, []);
+  // ⭐ โหลดข้อมูลแบบ pagination
+  const loadItems = useCallback(async (reset = false) => {
+    if (!hasMore && !reset) return;
 
-  // Filter Logic
-  useEffect(() => {
-    let result = [...items];
-
-    // Search keyword
-    if (query.trim() !== "") {
-      result = result.filter(
-        (it) =>
-          String(it.sku).toLowerCase().includes(query.toLowerCase()) ||
-          String(it.name).toLowerCase().includes(query.toLowerCase())
-      );
+    if (reset) {
+      setLoading(true);
+    } else {
+      if (loadingMore) return;
+      setLoadingMore(true);
     }
 
-    // Filter each field
-    Object.keys(filter).forEach((key) => {
-      if (filter[key]) {
-        result = result.filter((it) =>
-          String(it[key] || "")
-            .toLowerCase()
-            .includes(filter[key].toLowerCase())
-        );
-      }
-    });
+    const currentOffset = reset ? 0 : offset;
 
-    setFiltered(result);
-  }, [query, filter, items]);
+    try {
+      const params = {
+        limit: 50,
+        offset: currentOffset,
+      };
+
+      // ⭐ เพิ่ม search parameter
+      if (query.trim()) {
+        params.search = query.trim();
+      }
+
+      // ⭐ เพิ่ม filter parameters
+      Object.keys(filter).forEach((key) => {
+        if (filter[key] && filter[key].trim()) {
+          params[key] = filter[key].trim();
+        }
+      });
+
+      const res = await api.get("/api/items/list", { params });
+
+      const newItems = res.data.items || [];
+      const totalCount = res.data.total || 0;
+
+      setItems((prev) => (reset ? newItems : [...prev, ...newItems]));
+      setTotal(totalCount);
+
+      const newOffset = currentOffset + newItems.length;
+      setOffset(newOffset);
+      setHasMore(newOffset < totalCount);
+    } catch (err) {
+      console.error("Error loading items:", err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore, offset, query, filter]);
+
+  // ⭐ โหลดครั้งแรก
+  useEffect(() => {
+    setItems([]);
+    setOffset(0);
+    setHasMore(true);
+    loadItems(true);
+  }, []);
+
+  // ⭐ เมื่อ filter หรือ search เปลี่ยน ให้โหลดใหม่ (debounce 500ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setItems([]);
+      setOffset(0);
+      setHasMore(true);
+      loadItems(true);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [query, filter]);
 
   const onFilterChange = (key, value) => {
     setFilter((prev) => ({ ...prev, [key]: value }));
   };
+
+  // ⭐ Infinite scroll handler
+  const handleScroll = useCallback(
+    (e) => {
+      const el = e.currentTarget;
+      const nearBottom =
+        el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
+
+      if (nearBottom && hasMore && !loadingMore && !loading) {
+        loadItems(false);
+      }
+    },
+    [hasMore, loadingMore, loading]
+  );
 
   return (
     <div className="p-8 bg-gray-100 min-h-screen">
       <h1 className="text-3xl font-bold mb-6">ตรวจสอบรายละเอียดสินค้า</h1>
 
       {/* Search */}
-      <div className="flex mb-6">
+      <div className="flex gap-4 mb-6">
         <input
           type="text"
           className="flex-1 px-4 py-3 rounded-lg border shadow-sm"
-          placeholder="ค้นหาสินค้า... (ชื่อ, ยี่ห้อ, กลุ่ม)"
+          placeholder="ค้นหาสินค้า... (ชื่อ, รหัส)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {total > 0 && (
+          <div className="flex items-center px-4 py-3 bg-white rounded-lg border shadow-sm text-gray-700">
+            <span className="font-semibold">{items.length}</span>
+            <span className="mx-1">/</span>
+            <span>{total}</span>
+            <span className="ml-1">รายการ</span>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}
@@ -116,38 +172,68 @@ export default function CheckProduct() {
 
         {/* Product Table */}
         <div className="col-span-4">
-          <div className="bg-white rounded-xl shadow">
-            <table className="min-w-full rounded-xl overflow-hidden">
-              <thead className="bg-red-600 text-white text-left">
-                <tr>
-                  <th className="px-4 py-3">รหัสสินค้า</th>
-                  <th className="px-4 py-3">ชื่อสินค้า</th>
-                  <th className="px-4 py-3">จำนวน</th>
-                  <th className="px-4 py-3">หน่วย</th>
-                  <th className="px-4 py-3">ประเภทสินค้า</th>
-                </tr>
-              </thead>
+          <div className="bg-white rounded-xl shadow flex flex-col h-[calc(100vh-300px)]">
+            {/* Header */}
+            <div className="bg-red-600 text-white rounded-t-xl">
+              <div className="grid grid-cols-5 px-4 py-3 font-semibold">
+                <div>รหัสสินค้า</div>
+                <div>ชื่อสินค้า</div>
+                <div>จำนวน</div>
+                <div>หน่วย</div>
+                <div>ประเภทสินค้า</div>
+              </div>
+            </div>
 
-              <tbody>
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan="5" className="text-center py-6 text-gray-500">
-                      ไม่พบข้อมูลสินค้า
-                    </td>
-                  </tr>
-                )}
+            {/* Body with scroll */}
+            <div
+              className="flex-1 overflow-y-auto"
+              onScroll={handleScroll}
+            >
+              {/* Loading state */}
+              {loading && items.length === 0 && (
+                <div className="flex items-center justify-center py-20">
+                  <Loader />
+                </div>
+              )}
 
-                {filtered.map((item, i) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="px-4 py-3">{item.sku}</td>
-                    <td className="px-4 py-3">{item.name}</td>
-                    <td className="px-4 py-3">{item.unit || 0}</td>
-                    <td className="px-4 py-3">{item.unit2 || "-"}</td>
-                    <td className="px-4 py-3">{item.category}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              {/* No items */}
+              {!loading && items.length === 0 && (
+                <div className="text-center py-10 text-gray-500">
+                  ไม่พบข้อมูลสินค้า
+                </div>
+              )}
+
+              {/* Items list */}
+              {items.map((item, i) => (
+                <div
+                  key={`${item.sku}-${i}`}
+                  className="grid grid-cols-5 px-4 py-3 border-b hover:bg-gray-50"
+                >
+                  <div className="text-sm">{item.sku}</div>
+                  <div className="text-sm">{item.name}</div>
+                  <div className="text-sm">{item.unit || 0}</div>
+                  <div className="text-sm">{item.unit2 || "-"}</div>
+                  <div className="text-sm">{item.category}</div>
+                </div>
+              ))}
+
+              {/* Loading more indicator */}
+              {loadingMore && (
+                <div className="flex justify-center py-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    กำลังโหลด...
+                  </div>
+                </div>
+              )}
+
+              {/* End of list */}
+              {!hasMore && items.length > 0 && (
+                <div className="text-xs text-gray-400 text-center py-4">
+                  โหลดครบแล้ว ({total} รายการ)
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -2,35 +2,35 @@ import React, { useEffect, useState } from "react";
 import api from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 
-export default function GypsumFilter({ onFilterChange }) {
+export default function GlassFilter({ onFilterChange }) {
   const [brand, setBrand] = useState(null);
-  const [group, setGroup] = useState(null);
+  const [type, setType] = useState(null);
   const [subGroup, setSubGroup] = useState(null);
   const [color, setColor] = useState(null);
   const [thickness, setThickness] = useState(null);
 
   const [options, setOptions] = useState({
-    brand: [],
-    group: [],
-    subGroup: [],
-    color: [],
-    thickness: [],
+    brands: [],
+    types: [],
+    subGroups: [],
+    colors: [],
+    thicknesses: [],
   });
 
   const fetchOptions = async () => {
     try {
-      const res = await api.get("/api/items/categories/Y/filter-options", {
-        params: { brand, group, subGroup, color, thickness },
+      const res = await api.get("/api/glass/filter-options", {
+        params: { brand, type, subGroup, color, thickness },
       });
       setOptions({
-        brand: res.data.brand || [],
-        group: res.data.group || [],
-        subGroup: res.data.subGroup || [],
-        color: res.data.color || [],
-        thickness: res.data.thickness || [],
+        brands: res.data.brands || [],
+        types: res.data.types || [],
+        subGroups: res.data.subGroups || [],
+        colors: res.data.colors || [],
+        thicknesses: res.data.thicknesses || [],
       });
     } catch (err) {
-      console.error("Load gypsum filter options failed:", err);
+      console.error("Load glass filter options failed:", err);
     }
   };
 
@@ -40,44 +40,44 @@ export default function GypsumFilter({ onFilterChange }) {
 
   useEffect(() => {
     fetchOptions();
-  }, [brand, group, subGroup, color, thickness]);
+  }, [brand, type, subGroup, color, thickness]);
 
   useEffect(() => {
     if (onFilterChange) {
-      onFilterChange({ brand, group, subGroup, color, thickness });
+      onFilterChange({ brand, type, subGroup, color, thickness });
     }
-  }, [brand, group, subGroup, color, thickness]);
+  }, [brand, type, subGroup, color, thickness]);
 
   const handleClearAll = () => {
     setBrand(null);
-    setGroup(null);
+    setType(null);
     setSubGroup(null);
     setColor(null);
     setThickness(null);
   };
 
   return (
-    <div className="grid grid-cols-3 gap-3 p-3 border rounded-xl bg-gray-50">
+    <div className="flex items-end justify-between p-3 border rounded-xl bg-gray-50">
       <CustomDropdown
         label="Brand"
         value={brand}
-        options={options.brand}
+        options={options.brands}
         onChange={setBrand}
-        width={360}
+        width={200}
       />
 
       <CustomDropdown
-        label="Group"
-        value={group}
-        options={options.group}
-        onChange={setGroup}
-        width={300}
+        label="Type"
+        value={type}
+        options={options.types}
+        onChange={setType}
+        width={160}
       />
 
       <CustomDropdown
         label="SubGroup"
         value={subGroup}
-        options={options.subGroup}
+        options={options.subGroups}
         onChange={setSubGroup}
         width={340}
       />
@@ -85,22 +85,21 @@ export default function GypsumFilter({ onFilterChange }) {
       <CustomDropdown
         label="Color"
         value={color}
-        options={options.color}
+        options={options.colors}
         onChange={setColor}
-        width={360}
+        width={160}
       />
 
       <CustomDropdown
         label="Thickness"
         value={thickness}
-        options={options.thickness}
+        options={options.thicknesses}
         onChange={setThickness}
-        width={300}
       />
 
       <button
         onClick={handleClearAll}
-        className="px-4 py-2 h-14 mt-2 text-sm border rounded-lg hover:bg-gray-100"
+        className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
       >
         Clear All
       </button>

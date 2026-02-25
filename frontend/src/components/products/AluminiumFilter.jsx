@@ -63,7 +63,7 @@ export default function AluminiumFilter({ onFilterChange }) {
         value={brand}
         options={options.brand}
         onChange={setBrand}
-        width={200}
+        width={240}
       />
 
       <CustomDropdown
@@ -79,6 +79,7 @@ export default function AluminiumFilter({ onFilterChange }) {
         value={subGroup}
         options={options.subGroup}
         onChange={setSubGroup}
+        width={200}
       />
 
       <CustomDropdown
@@ -86,7 +87,7 @@ export default function AluminiumFilter({ onFilterChange }) {
         value={color}
         options={options.color}
         onChange={setColor}
-        width={170}
+        width={280}
       />
 
       <CustomDropdown

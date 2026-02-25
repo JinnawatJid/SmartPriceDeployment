@@ -4,6 +4,7 @@ import AccessoriesFilter from "./AccessoriesFilter.jsx";
 import CLineFilter from "./CLineFilter.jsx";
 import SealantFilter from "./SealantFilter.jsx";
 import GypsumFilter from "./GypsumFilter.jsx";
+import GlassFilter from "./GlassFilter.jsx";
 import { useState } from "react";
 
 export default function DynamicProductFilter({ category, onFilterChange }) {
@@ -32,13 +33,7 @@ export default function DynamicProductFilter({ category, onFilterChange }) {
       return <GypsumFilter onFilterChange={handleChange} />;
 
     case "G":
-      return (
-        <>
-          <button className="px-4 py-2 border rounded bg-cyan-50 text-cyan-700 font-semibold">
-            เลือกสินค้ากระจก
-          </button>
-        </>
-      );
+      return <GlassFilter onFilterChange={handleChange} />;
 
     default:
       return null;

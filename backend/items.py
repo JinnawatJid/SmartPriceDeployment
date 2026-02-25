@@ -270,6 +270,124 @@ def get_items_list_light(
 
 
 # ======================================================
+# ✅ NEW: GET /items/list (Paginated list with filters)
+# 👉 สำหรับหน้า CheckProduct - โหลดแบบ pagination + filter
+# ======================================================
+@router.get("/list")
+def get_items_paginated(
+    branch_code: str = Depends(get_branch_code),
+    limit: int = 50,
+    offset: int = 0,
+    search: str = None,
+    productType: str = None,
+    brand: str = None,
+    category: str = None,
+    subCategory: str = None,
+    color: str = None,
+    thickness: str = None,
+    size: str = None,
+):
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+
+    # ⭐ สร้าง WHERE clause
+    where_clauses = []
+    params = []
+
+    # ⭐ Filter by product type (first letter of SKU)
+    if productType and productType.strip():
+        where_clauses.append("LEFT(im.SKU, 1) = ?")
+        params.append(productType.strip().upper())
+
+    # ⭐ Search filter (SKU, No_2, Description, AlternateName)
+    if search and search.strip():
+        search_term = f"%{search.strip()}%"
+        where_clauses.append("(im.SKU LIKE ? OR im.No_2 LIKE ? OR im.Description LIKE ? OR ip.AlternateName LIKE ?)")
+        params.extend([search_term, search_term, search_term, search_term])
+
+    # ⭐ Generic filters (ใช้ LIKE เพื่อความยืดหยุ่น)
+    if brand and brand.strip():
+        where_clauses.append("im.Description LIKE ?")
+        params.append(f"%{brand.strip()}%")
+    
+    if category and category.strip():
+        where_clauses.append("im.Product_Group LIKE ?")
+        params.append(f"%{category.strip()}%")
+    
+    if subCategory and subCategory.strip():
+        where_clauses.append("im.Product_Sub_Group LIKE ?")
+        params.append(f"%{subCategory.strip()}%")
+    
+    if color and color.strip():
+        where_clauses.append("im.Description LIKE ?")
+        params.append(f"%{color.strip()}%")
+    
+    if thickness and thickness.strip():
+        where_clauses.append("im.Description LIKE ?")
+        params.append(f"%{thickness.strip()}%")
+    
+    if size and size.strip():
+        where_clauses.append("im.Description LIKE ?")
+        params.append(f"%{size.strip()}%")
+
+    where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+    # ⭐ นับจำนวนทั้งหมด
+    count_sql = f"""
+        SELECT COUNT(*) AS total
+        FROM Item_Master im
+        LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+        WHERE {where_sql}
+    """
+    cursor.execute(count_sql, branch_code, *params)
+    total = cursor.fetchone()[0]
+
+    # ⭐ ดึงข้อมูลตาม limit/offset
+    sql = f"""
+        SELECT
+            im.SKU,
+            im.No_2,
+            im.Description,
+            im.Base_Unit_of_Measure,
+            im.Product_Group,
+            im.Product_Sub_Group,
+            ip.AlternateName,
+            LEFT(im.SKU, 1) AS category
+        FROM Item_Master im
+        LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
+        WHERE {where_sql}
+        ORDER BY im.SKU
+        OFFSET ? ROWS
+        FETCH NEXT ? ROWS ONLY
+    """
+
+    cursor.execute(sql, branch_code, *params, offset, limit)
+    rows = cursor.fetchall()
+    conn.close()
+
+    return {
+        "items": [
+            {
+                "sku": r[0],
+                "sku2": r[1] or "",
+                "name": r[2] or "",
+                "unit": r[3] or "",
+                "unit2": r[3] or "",  # ⭐ ใช้ unit เดียวกัน
+                "category": r[7] or "",
+                "product_group": r[4] or "",
+                "product_sub_group": r[5] or "",
+                "alternate_names": r[6] or "",
+            }
+            for r in rows
+        ],
+        "limit": limit,
+        "offset": offset,
+        "count": len(rows),
+        "total": total,
+    }
+
+
+# ======================================================
 # GET /items/search (Full-Text Search)
 # ⭐ ต้องอยู่ก่อน /{sku} เพื่อไม่ให้ FastAPI คิดว่า "search" คือ SKU
 # ⭐ รองรับ Full-Text Search ถ้ามี Full-Text Index

@@ -99,6 +99,10 @@ function Step6_Summary({ state, dispatch }) {
   const [productItems, setProductItems] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productLoading, setProductLoading] = useState(false);
+  const [productLoadingMore, setProductLoadingMore] = useState(false);
+  const [productOffset, setProductOffset] = useState(0);
+  const [productHasMore, setProductHasMore] = useState(true);
+  const [productTotal, setProductTotal] = useState(0);
 
   // UI Tabs: "quote" | "customer" | "products"
   const [activeTab, setActiveTab] = useState("quote");
@@ -838,55 +842,97 @@ function Step6_Summary({ state, dispatch }) {
     };
   };
 
-  // โหลดสินค้าใน product tab
+  // โหลดสินค้าใน product tab (แบบ pagination)
+  const loadProductItems = async (reset = false) => {
+    if (activeTab !== "products" || !selectedCategory) return;
+    if (!productHasMore && !reset) return;
+
+    // แยก loading state
+    if (reset) {
+      setProductLoading(true);
+    } else {
+      if (productLoadingMore) return;
+      setProductLoadingMore(true);
+    }
+
+    const currentOffset = reset ? 0 : productOffset;
+
+    try {
+      let url = "";
+      const params = {
+        limit: 50,
+        offset: currentOffset,
+        ...productFilters,
+      };
+
+      switch (selectedCategory) {
+        case "A":
+          url = "/api/items/categories/A/list";
+          break;
+        case "C":
+          url = "/api/items/categories/C/list";
+          break;
+        case "E":
+          url = "/api/items/categories/E/list";
+          break;
+        case "G":
+          url = "/api/glass/list";
+          break;
+        case "Y":
+          url = "/api/items/categories/Y/list";
+          break;
+        case "S":
+          url = "/api/items/categories/S/list";
+          break;
+        default:
+          setProductLoading(false);
+          setProductLoadingMore(false);
+          return;
+      }
+
+      const res = await api.get(url, { params });
+      const newItems = res.data.items || [];
+      const totalCount = res.data.total || 0;
+
+      const mappedItems = newItems.map((it) => ({
+        ...it,
+        name: it.name || it.description || it.Description || "",
+      }));
+
+      setProductItems((prev) => (reset ? mappedItems : [...prev, ...mappedItems]));
+      setProductTotal(totalCount);
+
+      const newOffset = currentOffset + newItems.length;
+      setProductOffset(newOffset);
+      setProductHasMore(newOffset < totalCount);
+    } catch (err) {
+      console.error("load items error:", err);
+    } finally {
+      setProductLoading(false);
+      setProductLoadingMore(false);
+    }
+  };
+
+  // โหลดครั้งแรกเมื่อเปิดแท็บหรือเปลี่ยน category
   useEffect(() => {
     if (activeTab !== "products" || !selectedCategory) return;
 
-    async function loadItems() {
-      try {
-        setProductLoading(true);
-        let url = "";
-        switch (selectedCategory) {
-          case "A":
-            url = "/api/aluminium/items";
-            break;
-          case "C":
-            url = "/api/cline/items";
-            break;
-          case "E":
-            url = "/api/accessories/items";
-            break;
-          case "G":
-            url = "/api/glass/list";
-            break;
-          case "Y":
-            url = "/api/gypsum/items";
-            break;
-          case "S":
-            url = "/api/sealant/items";
-            break;
-          default:
-            setProductLoading(false);
-            return;
-        }
+    setProductItems([]);
+    setProductOffset(0);
+    setProductHasMore(true);
+    setProductTotal(0);
+    loadProductItems(true);
+  }, [activeTab, selectedCategory]);
 
-        const res = await api.get(url, { params: productFilters });
-        const items = res.data.items || res.data;
-        setProductItems(
-          items.map((it) => ({
-            ...it,
-            name: it.name || it.description || it.Description || "",
-          }))
-        );
-      } catch (err) {
-        console.error("load items error:", err);
-      } finally {
-        setProductLoading(false);
-      }
-    }
+  // โหลดใหม่เมื่อ filter เปลี่ยน
+  useEffect(() => {
+    if (activeTab !== "products" || !selectedCategory) return;
 
-    loadItems();
-  }, [activeTab, productFilters, selectedCategory]);
+    setProductItems([]);
+    setProductOffset(0);
+    setProductHasMore(true);
+    loadProductItems(true);
+  }, [productFilters]);
 
   async function saveQuotation(payload, state) {
     if (state.id) {
@@ -1529,6 +1575,9 @@ function Step6_Summary({ state, dispatch }) {
               setProductFilters({});
               setSelectedProduct(null);
               setProductItems([]);
+              setProductOffset(0);
+              setProductHasMore(true);
+              setProductTotal(0);
             }}
           />
 
@@ -1546,7 +1595,11 @@ function Step6_Summary({ state, dispatch }) {
               <ProductList
                 items={productItems}
                 loading={productLoading}
+                loadingMore={productLoadingMore}
+                hasMore={productHasMore}
+                total={productTotal}
                 onSelect={setSelectedProduct}
+                onLoadMore={() => loadProductItems(false)}
                 onCategoryClick={handleCategoryClick}
                 selectedCategory={selectedCategory}
               />

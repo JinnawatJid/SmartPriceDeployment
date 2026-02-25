@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import math
 import requests
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Any
@@ -441,63 +442,125 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     # 👉 ตอนนี้ df_lp schema ตรงกับที่ Price.py ต้องการแล้ว
     df_price = Price(df_lp)
     
-    # ⭐ เพิ่ม: ตรวจสอบประวัติราคาและใช้ราคาครั้งก่อนถ้าสูงกว่าราคาระบบ
-    from config.config_external_api import INVOICE_API_URL, INVOICE_API_HEADERS
-    from datetime import datetime, timedelta
+    # คำนวณ UnitPrice ก่อน (เพื่อใช้เปรียบเทียบกับราคาประวัติ)
+    def _compute_unit_price_temp(row):
+        raw = (
+            float(row["NewPrice"]) * float(row.get("product_weight", 0) or 0)
+            if str(row.get("category", "")).upper() == "A"
+            else float(row["NewPrice"])
+        )
+        return round_up_050(raw)
+
+    df_price["UnitPrice_temp"] = df_price.apply(_compute_unit_price_temp, axis=1)
     
-    # ดึงข้อมูล Invoice 6 เดือนย้อนหลัง
-    today = datetime.today()
-    date_from = (today - timedelta(days=180)).date().isoformat()
+    # ⭐ เพิ่ม: ตรวจสอบประวัติราคาและใช้ราคาครั้งก่อนถ้าสูงกว่าราคาระบบ
+    print(f"\n{'='*80}")
+    print(f"🔍 เริ่มตรวจสอบประวัติราคาสำหรับลูกค้า: {customer_code}")
+    print(f"{'='*80}")
     
     for idx, row in df_price.iterrows():
         sku = row["sku"]
-        system_price = float(row["NewPrice"])
+        category = str(row.get("category", "")).upper()
+        system_price_base = float(row["NewPrice"])  # ราคาต่อหน่วยพื้นฐาน (กก./ตร.ฟุต/ชิ้น)
+        system_price_display = float(row["UnitPrice_temp"])  # สำหรับแสดงผล
+        
+        # แสดงข้อมูลราคาระบบ
+        if category == "A":
+            product_weight = float(row.get("product_weight", 0) or 0)
+            print(f"\n📦 SKU: {sku} (อลูมิเนียม)")
+            print(f"   ราคาระบบ: {system_price_base:.2f} บาท/กก. (× {product_weight:.2f} กก./เส้น = {system_price_display:.2f} บาท/เส้น)")
+        elif category == "G":
+            sqft_sheet = float(row.get("Sqft_Sheet", 0) or 0)
+            print(f"\n📦 SKU: {sku} (กระจก)")
+            print(f"   ราคาระบบ: {system_price_base:.2f} บาท/ตร.ฟุต (× {sqft_sheet:.2f} ตร.ฟุต/แผ่น = {system_price_display:.2f} บาท/แผ่น)")
+        else:
+            print(f"\n📦 SKU: {sku} (หมวด {category})")
+            print(f"   ราคาระบบ: {system_price_base:.2f} บาท/ชิ้น")
         
         try:
-            # ดึงราคาล่าสุดจาก D365 API
-            payload = {
-                "page": 1,
-                "size": 1,
-                "customer_code": {"$eq": customer_code},
-                "sku": {"$eq": sku},
-                "Posting Date": {"$gte": date_from},
-            }
+            # ดึงราคาล่าสุดจาก Database โดยตรง
+            conn = get_mssql_conn()
+            cursor = conn.cursor()
             
-            resp = requests.post(
-                INVOICE_API_URL,
-                json=payload,
-                headers=INVOICE_API_HEADERS,
-                timeout=10,
-            )
+            # ดึงข้อมูล 6 เดือนย้อนหลัง
+            today = datetime.today()
+            date_from = (today - timedelta(days=180)).date()
             
-            if resp.status_code == 200:
-                data = resp.json()
-                items = data.get("data") or []
+            sql = """
+            SELECT TOP (1)
+                Posting_Date,
+                Unit_Price,
+                Quantity
+            FROM dbo.Invoice
+            WHERE sku = ? 
+                AND customer_code = ?
+                AND Posting_Date >= ?
+                AND Unit_Price > 0
+            ORDER BY Posting_Date DESC
+            """
+            
+            cursor.execute(sql, [sku, customer_code, date_from])
+            result = cursor.fetchone()
+            
+            cursor.close()
+            conn.close()
+            
+            if result:
+                last_date = result[0].isoformat() if result[0] else "N/A"
+                last_price_invoice = float(result[1]) if result[1] else 0  # Unit_Price จาก Invoice (ราคาต่อเส้น/แผ่น/ชิ้น)
+                last_qty = int(result[2]) if result[2] else 0
                 
-                if items:
-                    # Sort by Posting Date (ใหม่สุดก่อน)
-                    items_sorted = sorted(
-                        items, 
-                        key=lambda x: x.get("Posting Date", ""), 
-                        reverse=True
-                    )
-                    last_price = float(items_sorted[0].get("Unit Price") or 0)
-                    
-                    # ⭐ ถ้าราคาครั้งก่อนสูงกว่าราคาระบบ → ใช้ราคาครั้งก่อน
-                    if last_price > system_price:
-                        print(f"✅ SKU {sku}: ใช้ราคาครั้งก่อน {last_price:.2f} (สูงกว่าระบบ {system_price:.2f})")
-                        df_price.at[idx, "NewPrice"] = last_price
-                        df_price.at[idx, "price_source"] = "history"  # ⭐ เพิ่ม flag
+                # แปลงราคาจาก Invoice เป็นราคาต่อหน่วยพื้นฐาน (เพื่อเปรียบเทียบกับ NewPrice)
+                if category == "A":
+                    # อลูมิเนียม: หารด้วยน้ำหนักเพื่อได้ราคาต่อกิโลกรัม
+                    product_weight = float(row.get("product_weight", 0) or 1)
+                    if product_weight > 0:
+                        last_price_base = last_price_invoice / product_weight
+                        print(f"   📋 ประวัติการซื้อ: {last_price_invoice:.2f} บาท/เส้น = {last_price_base:.2f} บาท/กก. (วันที่ {last_date}, จำนวน {last_qty})")
                     else:
-                        df_price.at[idx, "price_source"] = "system"
+                        last_price_base = last_price_invoice
+                        print(f"   📋 ประวัติการซื้อ: {last_price_invoice:.2f} บาท (วันที่ {last_date}, จำนวน {last_qty})")
+                elif category == "G":
+                    # กระจก: หารด้วย sqft_sheet เพื่อได้ราคาต่อตารางฟุต
+                    sqft_sheet = float(row.get("Sqft_Sheet", 0) or 1)
+                    if sqft_sheet > 0:
+                        last_price_base = last_price_invoice / sqft_sheet
+                        print(f"   📋 ประวัติการซื้อ: {last_price_invoice:.2f} บาท/แผ่น = {last_price_base:.2f} บาท/ตร.ฟุต (วันที่ {last_date}, จำนวน {last_qty})")
+                    else:
+                        last_price_base = last_price_invoice
+                        print(f"   📋 ประวัติการซื้อ: {last_price_invoice:.2f} บาท (วันที่ {last_date}, จำนวน {last_qty})")
                 else:
+                    # สินค้าอื่นๆ: ใช้ราคาตรงๆ
+                    last_price_base = last_price_invoice
+                    print(f"   📋 ประวัติการซื้อ: {last_price_invoice:.2f} บาท/ชิ้น (วันที่ {last_date}, จำนวน {last_qty})")
+                
+                # ⭐ เปรียบเทียบราคาต่อหน่วยพื้นฐาน (กก./ตร.ฟุต/ชิ้น)
+                if last_price_base > system_price_base:
+                    print(f"   ✅ ใช้ราคาประวัติ {last_price_base:.2f} บาท (สูงกว่าราคาระบบ {system_price_base:.2f} บาท)")
+                    df_price.at[idx, "NewPrice"] = last_price_base
+                    df_price.at[idx, "price_source"] = "history"
+                    df_price.at[idx, "last_purchase_date"] = last_date
+                    df_price.at[idx, "last_purchase_qty"] = last_qty
+                else:
+                    print(f"   ℹ️ ใช้ราคาระบบ {system_price_base:.2f} บาท (ราคาประวัติ {last_price_base:.2f} บาท ต่ำกว่า)")
                     df_price.at[idx, "price_source"] = "system"
+                    df_price.at[idx, "last_purchase_date"] = last_date
+                    df_price.at[idx, "last_purchase_qty"] = last_qty
             else:
+                print(f"   ℹ️ ไม่พบประวัติการซื้อ → ใช้ราคาระบบ {system_price_base:.2f} บาท")
                 df_price.at[idx, "price_source"] = "system"
+                df_price.at[idx, "last_purchase_date"] = None
+                df_price.at[idx, "last_purchase_qty"] = None
                 
         except Exception as e:
             print(f"⚠️ ไม่สามารถตรวจสอบประวัติราคาสำหรับ SKU {sku}: {e}")
             df_price.at[idx, "price_source"] = "system"
+            df_price.at[idx, "last_purchase_date"] = None
+            df_price.at[idx, "last_purchase_qty"] = None
+    
+    print(f"{'='*80}")
+    print(f"✅ ตรวจสอบประวัติราคาเสร็จสิ้น")
+    print(f"{'='*80}\n")
 
 
     # ⭐ FIX UNIT (Normal Mode)
@@ -586,13 +649,14 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             "qty": row.get("Pieces", row["Quantity"]),
             "sqft_sheet": row.get("Sqft_Sheet", 0),
             "unit": row.get("unit", ""),
-            "UnitPrice": row["UnitPrice"],          # ยังส่งไว้ (เผื่อใช้)
-            "price_per_sheet": price_per_sheet,     # ⭐ ตัวใหม่
+            "UnitPrice": row["UnitPrice"],
+            "price_per_sheet": price_per_sheet,
             "_LineTotal": row["_LineTotal"],
             "_Tier_Z": row["_Tier_Z"],
             "product_weight": float(row.get("product_weight", 0) or 0),
-            "price_source": row.get("price_source", "system"),  # ⭐ เพิ่ม flag
-
+            "price_source": row.get("price_source", "system"),
+            "last_purchase_date": row.get("last_purchase_date"),
+            "last_purchase_qty": row.get("last_purchase_qty"),
         })
 
     print(

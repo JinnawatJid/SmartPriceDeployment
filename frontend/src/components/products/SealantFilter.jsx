@@ -75,7 +75,7 @@ export default function SealantFilter({ onFilterChange }) {
         value={subGroup}
         options={options.subGroup}
         onChange={setSubGroup}
-        width={240}
+        width={300}
       />
 
       <CustomDropdown
@@ -83,7 +83,7 @@ export default function SealantFilter({ onFilterChange }) {
         value={color}
         options={options.color}
         onChange={setColor}
-        width={200}
+        width={240}
       />
 
       <button
