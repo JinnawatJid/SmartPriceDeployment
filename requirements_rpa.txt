@@ -1,0 +1,5 @@
+playwright==1.41.0
+python-dotenv==1.0.0
+pyautogui==0.9.54
+pillow==10.2.0
+selenium==4.17.2

@@ -195,16 +195,7 @@ function Dashboard() {
           <p className="mt-2 text-lg text-white/70">สำหรับผู้จัดการ</p>
         </div>
 
-        <div className="mt-6 group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#c1c1c1] p-8 text-white shadow-lg transition-all hover:shadow-xl">
-          <img src="/assets/box.png" alt="Arrow" className="w-28 h-28 mb-4 ml-1" />
-          <h2 className="text-4xl font-bold">ตรวจสอบรายละเอียดสินค้า</h2>
-          <p className="mt-2 text-lg text-white/70">รายละเอียดของสินค้าต่างๆ</p>
-          <div className="mt-6 flex items-center text-lg font-bold text-white/70 transition-all group-hover:translate-x-1">
-            <span>เริ่มต้นเลย</span>
-            <img src="/assets/right-arrow.png" alt="Arrow" className="w-5 h-5 ml-1" />
-          </div>
-        </div>
-
+    
         {/* --- 2.3 Action Cards (การ์ดทำงาน 2 ใบ) --- */}
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Action 1: สร้างใบเสนอราคา (สีแดง) */}
