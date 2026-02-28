@@ -1106,19 +1106,45 @@ function Step6_Summary({ state, dispatch }) {
 
       const payload = buildQuotationPayload("complete");
 
-      const bcPayload = {
-        customerNo: payload.customer.code,
-        quoteNo: payload.quoteNo || payload.id || "",
-        items: payload.cart.map((it) => ({
-          itemNo: it.sku,
-          qty: Number(it.qty || 0),
-          price: Number(it.price || 0),
-        })),
+      // ⭐ เตรียมข้อมูลสำหรับ RPA
+      const rpaPayload = {
+        quote_code: payload.quoteNo?.substring(0, 4) || "TRQT", // เอา 4 ตัวแรกของเลขที่ใบเสนอราคา
+        customer_no: payload.customer.code,
+        sales_admin: payload.employee?.id || "20614", // ใช้ employee ID หรือค่า default
+        external_doc_no: payload.quoteNo || payload.id || "",
+        your_reference: payload.quoteNo || payload.id || "",
+        items: payload.cart.map((it) => {
+          const isGlass = (it.category || "").toUpperCase() === "G";
+          
+          if (isGlass) {
+            // สำหรับกระจก: ต้องคำนวณราคาต่อ sqft จาก price_per_sheet
+            const sqft = Number(it.sqft_sheet || 0);
+            const pricePerSheet = Number(it.price_per_sheet || it.price || 0);
+            const pricePerSqft = sqft > 0 ? (pricePerSheet / sqft).toFixed(2) : "0";
+            
+            return {
+              sku: it.sku,
+              description: it.name,
+              quantity: String(it.qty || 0),
+              price_per_sqft: String(pricePerSqft),
+              price_per_sheet: String(pricePerSheet),
+            };
+          } else {
+            // สำหรับสินค้าอื่น
+            return {
+              sku: it.sku,
+              description: it.name,
+              quantity: String(it.qty || 0),
+              unit_price: String(it.price || 0),
+            };
+          }
+        }),
       };
 
-      await api.post("/api/sq/quote", bcPayload);
+      // ⭐ เรียก RPA API แทน BC API
+      await api.post("/api/rpa/create-quote", rpaPayload);
 
-      alert("ส่งข้อมูลเข้า Dynamics 365 เรียบร้อยแล้ว");
+      alert("ส่งข้อมูลเข้า Dynamics 365 ผ่าน RPA เรียบร้อยแล้ว");
 
       // ✅ RESET ตรงนี้แทน
       dispatch({ type: "RESET_QUOTE" });
@@ -1126,7 +1152,8 @@ function Step6_Summary({ state, dispatch }) {
 
     } catch (err) {
       console.error(err);
-      alert("ส่งข้อมูลเข้า Dynamics 365 ไม่สำเร็จ");
+      const errorMsg = err.response?.data?.detail || "ส่งข้อมูลเข้า Dynamics 365 ไม่สำเร็จ";
+      alert(errorMsg);
     } finally {
       setSendingToBC(false);
     }

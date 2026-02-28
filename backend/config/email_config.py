@@ -30,6 +30,9 @@ EMAIL_CONFIG = {
     "from_email": os.getenv("FROM_EMAIL", "noreply@company.com"),
     "from_name": os.getenv("FROM_NAME", "ระบบใบเสนอราคา"),
     
+    # Feature Toggle
+    "enabled": os.getenv("EMAIL_ENABLED", "true").lower() == "true",
+    
     # Retry Settings
     "max_retries": int(os.getenv("EMAIL_MAX_RETRIES", "3")),
     "retry_delay": int(os.getenv("EMAIL_RETRY_DELAY", "60")),  # seconds
@@ -51,6 +54,8 @@ IMAP_PORT = EMAIL_CONFIG["imap_port"]
 
 FROM_EMAIL = EMAIL_CONFIG["from_email"]
 FROM_NAME = EMAIL_CONFIG["from_name"]
+
+EMAIL_ENABLED = EMAIL_CONFIG["enabled"]
 
 MAX_RETRIES = EMAIL_CONFIG["max_retries"]
 RETRY_DELAY = EMAIL_CONFIG["retry_delay"]

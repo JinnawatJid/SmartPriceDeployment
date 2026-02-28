@@ -1,8 +1,14 @@
 // frontend/src/services/api.js
 import axios from "axios";
 
-// ใช้ host ปัจจุบันแต่เปลี่ยน port เป็น 8000 อัตโนมัติ
+// ใช้ environment variable หรือ fallback ไปใช้ host ปัจจุบัน
 const getBaseURL = () => {
+  // ถ้ามี VITE_API_URL ใน .env ให้ใช้ค่านั้น (สำหรับ production)
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // ถ้าไม่มี ให้ใช้ host ปัจจุบันแต่เปลี่ยน port เป็น 8000 อัตโนมัติ
   const protocol = window.location.protocol; // http: or https:
   const hostname = window.location.hostname; // localhost, 192.168.1.x, etc.
   return `${protocol}//${hostname}:8000`;
