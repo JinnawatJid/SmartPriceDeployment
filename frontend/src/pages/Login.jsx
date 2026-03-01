@@ -38,25 +38,7 @@ function Login() {
     setLoading(true);
     try {
       await auth.login(employeeCode);
-      
-      // เรียก API เพื่อเปิด Chrome debug mode
-      try {
-        await fetch("http://localhost:8000/api/chrome-debug/start", {
-          method: "POST",
-        });
-        
-        // แสดงข้อความแนะนำให้ผู้ใช้ปิด tab นี้
-        alert(
-          "เปิด Chrome debug mode สำเร็จ!\n\n" +
-          "กรุณาปิด tab นี้และใช้งานใน Chrome window ใหม่ที่เปิดขึ้นมา\n" +
-          "(Dynamics 365 และระบบจะเปิดพร้อมกัน)"
-        );
-      } catch (chromeErr) {
-        console.error("Failed to start Chrome debug:", chromeErr);
-        // ไม่ block การ login ถ้าเปิด Chrome ไม่สำเร็จ
-      }
-      
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.detail || "รหัสพนักงานไม่ถูกต้อง");
