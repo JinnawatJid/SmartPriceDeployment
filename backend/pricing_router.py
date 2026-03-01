@@ -386,6 +386,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                 "_LineTotal": row["LineTotal"],
                 "_Tier_Z": 0,
                 "product_weight": float(row.get("product_weight", 0) or 0),
+                "priceW1": float(row.get("priceW1", 0) or 0),  # ⭐ เพิ่มราคา W1
             })
 
 
@@ -657,6 +658,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             "price_source": row.get("price_source", "system"),
             "last_purchase_date": row.get("last_purchase_date"),
             "last_purchase_qty": row.get("last_purchase_qty"),
+            "priceW1": float(row.get("priceW1", 0) or 0),  # ⭐ เพิ่มราคา W1
         })
 
     print(

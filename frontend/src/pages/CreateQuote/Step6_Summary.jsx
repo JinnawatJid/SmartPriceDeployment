@@ -23,7 +23,7 @@ import ProductCategorySelector from "../../components/products/ProductCategorySe
 import DynamicsProductFilter from "../../components/products/DynamicsProductFilter.jsx";
 import CrossSellPanel from "../../components/cross-sell/CrossSellPanel.jsx";
 import CustomDropdown from "../../components/common/CustomDropdown.jsx";
-
+import PromotionBanner from "../../components/wizard/PromotionBanner.jsx";
 
 import { uiKeyOf, pricingKeyOf, printKeyOf } from "./utils/quoteKeys";
 import { getCustomerCode } from "./utils/customer";
@@ -107,6 +107,9 @@ function Step6_Summary({ state, dispatch }) {
 
   // UI Tabs: "quote" | "customer" | "products"
   const [activeTab, setActiveTab] = useState("quote");
+
+  // Promotions state
+  const [promotions, setPromotions] = useState([]);
 
   // Category list
   const [categories, setCategories] = useState([]);
@@ -539,6 +542,74 @@ function Step6_Summary({ state, dispatch }) {
 
     fetchHistory();
   }, [state.customer, state.cart]);
+
+
+  // โหลด Promotion ตาม SKU ที่เลือก
+  useEffect(() => {
+    console.log('🎯 Promotions useEffect triggered');
+    console.log('📦 state.cart:', state.cart);
+    
+    if (!state.cart || state.cart.length === 0) {
+      console.log('⚠️ No cart items, clearing promotions');
+      setPromotions([]);
+      return;
+    }
+
+    const skus = state.cart.map(item => item.sku).filter(Boolean).join(',');
+    
+    console.log('🔍 SKUs to fetch promotions for:', skus);
+    
+    if (!skus) {
+      console.log('⚠️ No valid SKUs, clearing promotions');
+      setPromotions([]);
+      return;
+    }
+
+    const fetchPromotions = async () => {
+      try {
+        console.log('🔍 Loading promotions for SKUs:', skus);
+        const res = await api.get('/api/promotions/active-by-skus', {
+          params: { skus }
+        });
+        
+        console.log('📦 Promotions API response:', res.data);
+        
+        const promoData = res.data || {};
+        const promoList = [];
+        
+        // แปลง object เป็น array สำหรับแสดงผล
+        Object.entries(promoData).forEach(([sku, promos]) => {
+          console.log(`🎁 Processing promotions for SKU ${sku}:`, promos);
+          promos.forEach(promo => {
+            const item = state.cart.find(it => it.sku === sku);
+            const categoryName = 
+              item?.category === 'G' ? 'กระจก' :
+              item?.category === 'A' ? 'อลูมิเนียม' :
+              item?.category === 'C' ? 'ซิลิโคน' :
+              item?.category === 'Y' ? 'อุปกรณ์' :
+              item?.category === 'S' ? 'บริการ' :
+              item?.category === 'E' ? 'อื่นๆ' : 'สินค้า';
+            
+            promoList.push({
+              type: item?.category === 'G' ? 'glass' : 'other',
+              title: `${promo.promotion_name || 'โปรโมชั่น'}`,
+              description: promo.promotion_text,
+              sku: sku,
+              categoryName: categoryName
+            });
+          });
+        });
+        
+        console.log('✅ Processed promotions:', promoList);
+        setPromotions(promoList);
+      } catch (err) {
+        console.error('❌ Error loading promotions:', err);
+        setPromotions([]);
+      }
+    };
+
+    fetchPromotions();
+  }, [state.cart]);
 
 
   const handleQuickAdd = (item) => {
@@ -1527,6 +1598,9 @@ function Step6_Summary({ state, dispatch }) {
           {/* ขวา: สรุปยอด */}
           <div className="col-span-2">
             <div className="sticky top-28 space-y-6 rounded-lg bg-gray-50 p-6 shadow-sm mt-3">
+              {/* แสดง Promotion Banner */}
+              <PromotionBanner promotions={promotions} />
+              
               <div>
                 <h4 className="mb-2 text-lg font-semibold text-gray-800">ข้อมูลใบเสนอราคา</h4>
               </div>

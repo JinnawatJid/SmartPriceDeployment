@@ -14,15 +14,34 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
   const isGlass = cat === "G";
   const isAluminium = cat === "A";
 
-  // ⭐ ดึงราคา W1 (ราคาอ้างอิงจากระบบ)
-  const w1Price = Number(item.Price_System || calculatedItem?.UnitPrice || item.UnitPrice || item.price || 0);
-
   // สำหรับกระจก
   const currentSqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
   const currentPricePerSheet =
     item.priceSource === "manual"
       ? Number(item.price_per_sheet ?? Number(item.UnitPrice ?? 0) * currentSqft)
       : Number(calculatedItem?.price_per_sheet ?? item.price_per_sheet ?? 0);
+
+  // ⭐ ดึงราคา W1 (ราคาอ้างอิงจากระบบ) - แยกตามประเภทสินค้า
+  let w1Price = 0;
+  if (isGlass) {
+    // กระจก: ใช้ priceW1 * sqft_sheet เพื่อได้ราคาต่อแผ่น
+    const w1PerSqft = Number(calculatedItem?.priceW1 ?? item.priceW1 ?? 0);
+    w1Price = w1PerSqft * currentSqft;
+  } else {
+    // สินค้าอื่นๆ: ใช้ priceW1 โดยตรง (หรือคูณน้ำหนักถ้าเป็นอลู)
+    const w1Base = Number(calculatedItem?.priceW1 ?? item.priceW1 ?? 0);
+    if (isAluminium) {
+      const weight = Number(item.weight ?? item.product_weight ?? calculatedItem?.product_weight ?? 0);
+      w1Price = w1Base * weight;
+    } else {
+      w1Price = w1Base;
+    }
+  }
+
+  console.log('💰 PriceEditModal - W1 Price:', w1Price);
+  console.log('💰 PriceEditModal - isGlass:', isGlass, 'isAluminium:', isAluminium);
+  console.log('💰 PriceEditModal - calculatedItem:', calculatedItem);
+  console.log('💰 PriceEditModal - item:', item);
 
   // ถ้ามี pricePerSqft เก็บไว้แล้ว ให้ใช้ค่านั้น ไม่งั้นคำนวณจาก pricePerSheet / sqft
   const currentPricePerSqft =
@@ -79,6 +98,8 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
       newPrice = otherPrice;
     }
 
+    console.log('🔍 Checking price - New:', newPrice, 'W1:', w1Price, 'Below W1:', newPrice < w1Price);
+    
     return newPrice < w1Price;
   };
 

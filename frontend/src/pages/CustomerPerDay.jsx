@@ -125,7 +125,7 @@ function CustomerPerDay() {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             className="text-blue-600 hover:text-blue-800 mb-4 flex items-center gap-2"
           >
             ← กลับหน้าหลัก

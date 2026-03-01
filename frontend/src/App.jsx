@@ -14,6 +14,7 @@ import ApprovalPDFsPage from "./components/special_price_request/ApprovalPDFsPag
 import CustomerPerDay from "./pages/CustomerPerDay.jsx";
 import CustomerDetail from "./pages/CustomerDetail.jsx";
 import CustomerSearch from "./pages/CustomerSearch.jsx";
+import PromotionManagement from "./pages/PromotionManagement.jsx";
 
 // --- Layout 1 (สำหรับ Dashboard) ---
 const DashboardLayout = () => (
@@ -58,6 +59,7 @@ function App() {
           <Route path="/customers-today" element={<CustomerPerDay />} />
           <Route path="/customer-search" element={<CustomerSearch />} />
           <Route path="/customer/:customerId" element={<CustomerDetail />} />
+          <Route path="/promotions" element={<PromotionManagement />} />
         </Route>
 
         {/* 2.2: CreateQuote (ใช้ WizardLayout) */}
