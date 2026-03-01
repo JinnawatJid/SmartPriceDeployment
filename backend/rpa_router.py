@@ -65,9 +65,13 @@ async def create_quote_via_rpa(request: RPAQuoteRequest):
         with open(temp_file_path, "w", encoding="utf-8") as f:
             json.dump(rpa_data, f, ensure_ascii=False, indent=2)
 
+        # หา Python executable ใน venv
+        import sys
+        python_executable = sys.executable  # ใช้ Python ที่กำลังรัน backend อยู่
+        
         # เรียก RPA script (run from project root)
         result = subprocess.run(
-            ["python", rpa_script_path, request.quote_code],
+            [python_executable, rpa_script_path, request.quote_code],
             capture_output=True,
             text=True,
             timeout=300,  # 5 minutes timeout

@@ -5,13 +5,20 @@ function StartPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // ใช้ host ปัจจุบันแต่เปลี่ยน port เป็น 8000 อัตโนมัติ
+  const getBaseURL = () => {
+    const protocol = window.location.protocol; // http: or https:
+    const hostname = window.location.hostname; // localhost, 192.168.1.x, etc.
+    return `${protocol}//${hostname}:8000`;
+  };
+
   const handleStart = async () => {
     setLoading(true);
     setError("");
 
     try {
-      // เรียก API เพื่อเปิด Chrome debug mode
-      const response = await fetch("http://localhost:8000/api/chrome-debug/start", {
+      const baseURL = getBaseURL();
+      const response = await fetch(`${baseURL}/api/chrome-debug/start`, {
         method: "POST",
       });
 
@@ -19,7 +26,7 @@ function StartPage() {
         throw new Error("ไม่สามารถเปิด Chrome debug mode ได้");
       }
 
-      // ปิด tab นี้หลังจาก 2 วินาที (ถ้าเปิดด้วย JavaScript)
+      // ปิด tab นี้หลังจาก 2 วินาที 
       setTimeout(() => {
         window.close();
       }, 2000);
