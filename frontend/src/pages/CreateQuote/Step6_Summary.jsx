@@ -14,6 +14,7 @@ import CartItemRow from "../../components/wizard/CartItemRow.jsx";
 import OrderHistoryCard from "../../components/wizard/OrderHistoryCard.jsx";
 import SpecialPriceRequestButton from "../../components/special_price_request/SpecialPriceRequestButton.jsx";
 import SpecialPriceRequestModal from "../../components/special_price_request/SpecialPriceRequestModal_v2.jsx";
+import DynamicsImportConfirmModal from "../../components/wizard/DynamicsImportConfirmModal.jsx";
 
 import ProductList from "../../components/products/ProductList.jsx";
 import ProductDetail from "../../components/products/ProductDetail.jsx";
@@ -113,6 +114,7 @@ function Step6_Summary({ state, dispatch }) {
   const [catError, setCatError] = useState("");
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [sendingToBC, setSendingToBC] = useState(false);
+  const [showDynamicsConfirm, setShowDynamicsConfirm] = useState(false);
 
   const sumCartLineTotal = (cart) =>
     cart.reduce((sum, it) => sum + Number(it.lineTotal ?? 0), 0);
@@ -821,6 +823,8 @@ function Step6_Summary({ state, dispatch }) {
     const effectiveTotals = computeEffectiveTotals(state.cart, calcMap);
 
     return {
+      id: state.id || null,
+      quoteNo: state.quoteNo || null,
       status,
       employee: employee
         ? { id: employee.id, name: employee.name, branchId: employee.branchId ?? null }
@@ -1111,8 +1115,7 @@ function Step6_Summary({ state, dispatch }) {
         quote_code: payload.quoteNo?.substring(0, 4) || "TRQT", // เอา 4 ตัวแรกของเลขที่ใบเสนอราคา
         customer_no: payload.customer.code,
         sales_admin: payload.employee?.id || "20614", // ใช้ employee ID หรือค่า default
-        external_doc_no: payload.quoteNo || payload.id || "",
-        your_reference: payload.quoteNo || payload.id || "",
+        your_reference: payload.quoteNo || "", // ใส่เลขที่ใบเสนอราคาในระบบเรา
         items: payload.cart.map((it) => {
           const isGlass = (it.category || "").toUpperCase() === "G";
           
@@ -1157,6 +1160,15 @@ function Step6_Summary({ state, dispatch }) {
     } finally {
       setSendingToBC(false);
     }
+  };
+
+  const handleDynamicsImportClick = () => {
+    setShowDynamicsConfirm(true);
+  };
+
+  const handleConfirmDynamicsImport = () => {
+    setShowDynamicsConfirm(false);
+    handleSendToBC();
   };
 
 
@@ -1579,7 +1591,7 @@ function Step6_Summary({ state, dispatch }) {
                 {state.status === "complete" && (
                   <button
                     disabled={sendingToBC}
-                    onClick={handleSendToBC}
+                    onClick={handleDynamicsImportClick}
                     className="flex w-full items-center justify-center rounded-lg bg-[#2563EB] px-6 py-3 font-semibold text-white shadow-md hover:bg-blue-700 disabled:opacity-50"
                   >
                     {sendingToBC ? "กำลังส่งเข้า BC..." : "ส่งเข้า Dynamics 365"}
@@ -1732,6 +1744,13 @@ function Step6_Summary({ state, dispatch }) {
           // อัปเดตสถานะใบเสนอราคาเป็น pending_approval
           alert("ส่งคำขอราคาพิเศษสำเร็จ! ใบเสนอราคานี้จะรอการอนุมัติก่อนยืนยัน");
         }}
+      />
+
+      {/* Dynamics Import Confirmation Modal */}
+      <DynamicsImportConfirmModal
+        open={showDynamicsConfirm}
+        onCancel={() => setShowDynamicsConfirm(false)}
+        onConfirm={handleConfirmDynamicsImport}
       />
     </div>
   );

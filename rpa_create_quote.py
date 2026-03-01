@@ -5,10 +5,9 @@ RPA Script: Create Sales Quote in D365 BC
 3. Select the matching quote series based on input code
 4. Fill Customer No. and press Enter
 5. Fill Sales Admin and press Enter
-6. Fill External Document No. (our quote number)
-7. Fill Your Reference
-8. Add Item (Item No.)
-9. Press Tab 5 times and fill Description
+6. Fill Your Reference
+7. Add Item (Item No.)
+8. Press Tab 5 times and fill Description
 """
 
 from selenium import webdriver
@@ -264,7 +263,6 @@ def create_sales_quote(quote_code, rpa_data=None):
         # Get data from JSON or use defaults
         customer_no = rpa_data.get("customer_no", "00001AY") if rpa_data else "00001AY"
         sales_admin = rpa_data.get("sales_admin", "20614") if rpa_data else "20614"
-        external_doc_no = rpa_data.get("external_doc_no", "TRQT-001/001") if rpa_data else "TRQT-001/001"
         your_reference = rpa_data.get("your_reference", "TRQT-2602/0010") if rpa_data else "TRQT-2602/0010"
         
         # STEP 4: Fill in Customer No.
@@ -674,58 +672,6 @@ def create_sales_quote(quote_code, rpa_data=None):
         print("[WAIT] Waiting 2 seconds for fields to expand...")
         time.sleep(2)
         
-        # STEP 6.5: Fill External Document No.
-        print("\n" + "="*60)
-        print(f"STEP 6.5: Filling External Document No.: {external_doc_no}")
-        print("="*60)
-        
-        js_fill_external_doc = f"""
-        function FillExternalDoc() {{
-            var value = '{external_doc_no}';
-            
-            function tryFill(doc) {{
-                // หา input ด้วย id="bs1ee" (External Document No.)
-                var input = doc.querySelector('input#bs1ee');
-                if (input) {{
-                    input.focus();
-                    input.value = value;
-                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    return true;
-                }}
-                return false;
-            }}
-            
-            // ลองใน main document
-            if (tryFill(document)) {{
-                return "Filled External Document No. in main document";
-            }}
-            
-            // ลองใน iframe
-            var iframes = document.querySelectorAll('iframe');
-            for (var i = 0; i < iframes.length; i++) {{
-                try {{
-                    var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
-                    if (tryFill(iframeDoc)) {{
-                        return "Filled External Document No. in iframe " + i;
-                    }}
-                }} catch (e) {{}}
-            }}
-            
-            throw new Error("External Document No. field not found");
-        }}
-        return FillExternalDoc();
-        """
-        
-        try:
-            result = driver.execute_script(js_fill_external_doc)
-            print(f"[OK] {result}")
-        except Exception as e:
-            print(f"[ERROR] Failed to fill External Document No.: {str(e)}")
-            # Continue anyway, not critical
-        
-        time.sleep(2)
-        
         # STEP 7: Fill in Your Reference
         print("\n" + "="*60)
         print(f"STEP 7: Filling Your Reference: {your_reference}")
@@ -736,25 +682,54 @@ def create_sales_quote(quote_code, rpa_data=None):
             var value = '{your_reference}';
             
             function tryFill(doc) {{
-                // หา label ที่มี text = Your Reference
+                // วิธีที่ 1: หาด้วย id (เช่น b1ksee)
+                var input = doc.querySelector('input#b1ksee');
+                if (input) {{
+                    console.log('Found Your Reference input by id: b1ksee');
+                    input.focus();
+                    input.value = value;
+                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    return true;
+                }}
+                
+                // วิธีที่ 2: หาด้วย aria-labelledby
+                input = doc.querySelector('input[aria-labelledby="b1kslbl"]');
+                if (input) {{
+                    console.log('Found Your Reference input by aria-labelledby');
+                    input.focus();
+                    input.value = value;
+                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    return true;
+                }}
+                
+                // วิธีที่ 3: หา label ที่มี text = "Your Reference" แล้วหา input ใกล้ๆ
                 var labels = doc.querySelectorAll('label, span, div');
                 for (var i = 0; i < labels.length; i++) {{
                     var text = labels[i].textContent?.trim();
                     if (text === "Your Reference") {{
+                        console.log('Found Your Reference label');
+                        
                         // หา input ที่อยู่ใกล้ label นี้
                         var parent = labels[i].closest('div');
                         if (!parent) continue;
                         
-                        var input = parent.querySelector('input[type="text"]');
-                        if (input) {{
-                            input.focus();
-                            input.value = value;
-                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                            return true;
+                        // ลองหาใน parent และ siblings
+                        var inputs = parent.querySelectorAll('input[type="text"]');
+                        for (var j = 0; j < inputs.length; j++) {{
+                            if (inputs[j].maxLength === 35) {{  // Your Reference มี maxlength="35"
+                                console.log('Found input with maxLength 35');
+                                inputs[j].focus();
+                                inputs[j].value = value;
+                                inputs[j].dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                inputs[j].dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                return true;
+                            }}
                         }}
                     }}
                 }}
+                
                 return false;
             }}
             
@@ -771,7 +746,9 @@ def create_sales_quote(quote_code, rpa_data=None):
                     if (tryFill(iframeDoc)) {{
                         return "Filled Your Reference in iframe " + i;
                     }}
-                }} catch (e) {{}}
+                }} catch (e) {{
+                    console.log('Error accessing iframe ' + i + ': ' + e.message);
+                }}
             }}
             
             throw new Error("Your Reference field not found");
@@ -985,13 +962,66 @@ def create_sales_quote(quote_code, rpa_data=None):
                 
                 actions = ActionChains(driver)
                 
-                time.sleep(1)
+                # สำหรับบรรทัดแรก: รอให้ระบบโหลด Bin Code และข้อมูลอื่นๆ เสร็จก่อน
+                if item_index == 1:
+                    print("[WAIT] First item - waiting 3 seconds for system to load Bin Code and other fields...")
+                    time.sleep(3)
+                else:
+                    time.sleep(1)
  
-                # 2. กด Tab อีก 3ครั้ง
-                print("[WAIT] Pressing Tab 3 more times...")
+                # กด Tab 3 ครั้ง
+                print("[WAIT] Pressing Tab 3 times...")
                 for i in range(3):
                     actions.send_keys(Keys.TAB).perform()
-                    time.sleep(0.5)
+                    time.sleep(1)
+                
+                # สำหรับบรรทัดแรก: เช็คว่า focus อยู่ที่ช่อง Quantity หรือไม่
+                if item_index == 1:
+                    print("[CHECK] Checking if focused on Quantity field...")
+                    
+                    # JavaScript เพื่อเช็คว่า focus อยู่ที่ช่อง Quantity หรือไม่
+                    js_check_quantity = """
+                    function CheckQuantityFocus() {
+                        var activeElement = document.activeElement;
+                        
+                        // เช็คว่า active element อยู่ใน td ที่มี controlname="Quantity" หรือไม่
+                        var parentTd = activeElement.closest('td[controlname="Quantity"]');
+                        if (parentTd) {
+                            return true;
+                        }
+                        
+                        // เช็คใน iframe
+                        var iframes = document.querySelectorAll('iframe');
+                        for (var i = 0; i < iframes.length; i++) {
+                            try {
+                                var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+                                activeElement = iframeDoc.activeElement;
+                                parentTd = activeElement.closest('td[controlname="Quantity"]');
+                                if (parentTd) {
+                                    return true;
+                                }
+                            } catch (e) {}
+                        }
+                        
+                        return false;
+                    }
+                    return CheckQuantityFocus();
+                    """
+                    
+                    driver.switch_to.default_content()
+                    is_on_quantity = driver.execute_script(js_check_quantity)
+                    
+                    # Switch back to iframe
+                    if iframe_index >= 0:
+                        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+                        driver.switch_to.frame(iframes[iframe_index])
+                    
+                    if not is_on_quantity:
+                        print("[WAIT] Not on Quantity field, pressing Tab 1 more time...")
+                        actions.send_keys(Keys.TAB).perform()
+                        time.sleep(1)
+                    else:
+                        print("[OK] Already on Quantity field")
                 
                 # พิมพ์ Quantity
                 print(f"[WAIT] Typing quantity: {quantity}")

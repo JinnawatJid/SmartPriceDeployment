@@ -24,8 +24,7 @@ class RPAQuoteRequest(BaseModel):
     quote_code: str  # e.g., "TRQT"
     customer_no: str
     sales_admin: str
-    external_doc_no: str  # เลขที่ใบเสนอราคาของเรา
-    your_reference: str
+    your_reference: str  # เลขที่ใบเสนอราคาของเรา
     items: List[RPAItem]
 
 
@@ -48,7 +47,6 @@ async def create_quote_via_rpa(request: RPAQuoteRequest):
             "quote_code": request.quote_code,
             "customer_no": request.customer_no,
             "sales_admin": request.sales_admin,
-            "external_doc_no": request.external_doc_no,
             "your_reference": request.your_reference,
             "items": [
                 {
