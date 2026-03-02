@@ -1,7 +1,6 @@
 // src/App.jsx (แก้ไข)
 import { Routes, Route, Outlet } from "react-router-dom";
 import Login from "./pages/Login.jsx";
-import StartPage from "./pages/StartPage.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import CreateQuoteWizard from "./pages/CreateQuote/CreateQuoteWizard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -43,8 +42,7 @@ const WizardLayout = () => (
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<StartPage />} />
-      <Route path="/start" element={<StartPage />} />
+      <Route path="/" element={<Login />} />
       <Route path="/login" element={<Login />} />
 
       <Route element={<ProtectedRoute />}>
