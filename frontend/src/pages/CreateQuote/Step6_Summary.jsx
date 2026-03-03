@@ -1181,12 +1181,26 @@ function Step6_Summary({ state, dispatch }) {
 
       const payload = buildQuotationPayload("complete");
 
+      // ⭐ ตรวจจับ Client IP (เครื่องที่เปิด Chrome)
+      // 
+      // สถาปัตยกรรม:
+      // - ถ้า Backend รันบน localhost (development) → ใช้ 127.0.0.1
+      // - ถ้า Backend รันบน Server (production) → ใช้ Client IP
+      //
+      // วิธีตรวจสอบ: ดูจาก window.location.hostname
+      const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const clientIP = isLocalDev ? "127.0.0.1" : "192.192.0.162";
+      
+      console.log(`[RPA] Environment: ${isLocalDev ? 'Local Development' : 'Production Server'}`);
+      console.log(`[RPA] Chrome Address: ${clientIP}:9222`);
+
       // ⭐ เตรียมข้อมูลสำหรับ RPA
       const rpaPayload = {
         quote_code: payload.quoteNo?.substring(0, 4) || "TRQT", // เอา 4 ตัวแรกของเลขที่ใบเสนอราคา
         customer_no: payload.customer.code,
         sales_admin: payload.employee?.id || "20614", // ใช้ employee ID หรือค่า default
         your_reference: payload.quoteNo || "", // ใส่เลขที่ใบเสนอราคาในระบบเรา
+        remote_chrome_address: `${clientIP}:9222`, // ⭐ ส่ง IP ของ Client ที่เปิด Chrome
         items: payload.cart.map((it) => {
           const isGlass = (it.category || "").toUpperCase() === "G";
           

@@ -28,6 +28,16 @@ hidden_imports = [
     'uvicorn.lifespan',
     'uvicorn.lifespan.on',
     'engineio.async_drivers.threading', # If using socketio, but good measure
+    'selenium',
+    'selenium.webdriver',
+    'selenium.webdriver.chrome',
+    'selenium.webdriver.chrome.options',
+    'selenium.webdriver.common.by',
+    'selenium.webdriver.support',
+    'selenium.webdriver.support.ui',
+    'selenium.webdriver.support.expected_conditions',
+    'selenium.webdriver.common.action_chains',
+    'selenium.webdriver.common.keys',
 ]
 
 datas = [

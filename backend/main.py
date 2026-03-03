@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
 
 from customer import router as customer_router   
 from items import router as items_router
@@ -43,9 +44,16 @@ import logging
 # setup_logging(log_dir="logs", log_level="INFO")
 logger = logging.getLogger(__name__)
 
-# Ensure logs are flushed immediately to stdout for Windows Console visibility
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+# Fix encoding for Windows console - force UTF-8
+if sys.platform == "win32":
+    import io
+    # Reconfigure stdout and stderr to use UTF-8 with error handling
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+else:
+    # Ensure logs are flushed immediately for non-Windows systems
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
 
 # Detect if running in frozen mode (PyInstaller)
 if getattr(sys, 'frozen', False):
@@ -58,7 +66,66 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = FastAPI(title="Smart Pricing API", version="1.0.0")
+# ========================================
+# Background Email Checker Thread
+# ========================================
+email_thread = None
+
+def email_checker_background():
+    """
+    Background thread ที่ตรวจสอบ email ทุก 1 นาที
+    รันอัตโนมัติเมื่อ FastAPI start
+    """
+    from special_price_request.email_reply_checker import check_email_replies
+    
+    CHECK_INTERVAL_MINUTES = 1  # ปรับได้ตามต้องการ
+    
+    logger.info("="*60)
+    logger.info("Email Checker Background Service Started")
+    logger.info(f"Checking emails every {CHECK_INTERVAL_MINUTES} minute(s)")
+    logger.info("="*60)
+    
+    while True:
+        try:
+            check_email_replies()
+        except Exception as e:
+            logger.error(f"Error in email checker: {e}")
+        
+        # รอ N นาที
+        time.sleep(CHECK_INTERVAL_MINUTES * 60)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for startup and shutdown events
+    Replaces deprecated @app.on_event("startup") and @app.on_event("shutdown")
+    """
+    global email_thread
+    
+    # Startup
+    logger.info("="*60)
+    logger.info("Application startup initiated")
+    logger.info("="*60)
+    
+    # Start email checker in background thread
+    try:
+        email_thread = threading.Thread(target=email_checker_background, daemon=True)
+        email_thread.start()
+        logger.info("Email checker thread started")
+    except Exception as e:
+        logger.error(f"Failed to start email checker: {e}", exc_info=True)
+    
+    logger.info("Application startup completed")
+    
+    yield  # Application is running
+    
+    # Shutdown
+    logger.info("="*60)
+    logger.info("Application shutdown initiated")
+    logger.info("="*60)
+    logger.info("Application shutdown completed")
+
+app = FastAPI(title="Smart Pricing API", version="1.0.0", lifespan=lifespan)
 
 # โหลด template จาก backend ตรง ๆ
 env = Environment(loader=FileSystemLoader(BASE_DIR))
@@ -164,80 +231,6 @@ if os.path.exists(dist_path):
 
         # Fallback to index.html for SPA routing
         return FileResponse(os.path.join(dist_path, "index.html"))
-
-# ========================================
-# Background Email Checker Thread
-# ========================================
-def email_checker_background():
-    """
-    Background thread ที่ตรวจสอบ email ทุก 1 นาที
-    รันอัตโนมัติเมื่อ FastAPI start
-    """
-    from special_price_request.email_reply_checker import check_email_replies
-    
-    CHECK_INTERVAL_MINUTES = 1  # ปรับได้ตามต้องการ
-    
-    print("\n" + "="*60)
-    print("🚀 Email Checker Background Service Started")
-    print(f"⏰ Checking emails every {CHECK_INTERVAL_MINUTES} minute(s)")
-    print("="*60 + "\n")
-    
-    while True:
-        try:
-            check_email_replies()
-        except Exception as e:
-            print(f"❌ Error in email checker: {e}")
-        
-        # รอ N นาที
-        time.sleep(CHECK_INTERVAL_MINUTES * 60)
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Initialize application services on startup
-    """
-    logger.info("="*60)
-    logger.info("Application startup initiated")
-    logger.info("="*60)
-    
-    # Start email checker in background thread
-    try:
-        email_thread = threading.Thread(target=email_checker_background, daemon=True)
-        email_thread.start()
-        logger.info("✅ Email checker thread started")
-        print("✅ Email checker thread started")
-    except Exception as e:
-        logger.error(f"Failed to start email checker: {e}", exc_info=True)
-        print(f"⚠️  Failed to start email checker: {e}")
-    
-    # Start sync job scheduler for Item Master data
-    # from sync_scheduler import start_scheduler
-    # try:
-    #     start_scheduler()
-    #     logger.info("✅ Item Master sync job scheduler started (runs every 6 hours)")
-    #     print("✅ Item Master sync job scheduler started")
-    # except Exception as e:
-    #     logger.error(f"Failed to start sync job scheduler: {e}", exc_info=True)
-    #     print(f"⚠️  Failed to start sync job scheduler: {e}")
-    
-    logger.info("Application startup completed")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    Gracefully shutdown application services
-    """
-    logger.info("="*60)
-    logger.info("Application shutdown initiated")
-    logger.info("="*60)
-    
-    # Stop sync job scheduler
-    # from sync_scheduler import stop_scheduler
-    # try:
-    #     stop_scheduler()
-    #     logger.info("✅ Sync job scheduler stopped")
-    #     print("✅ Sync job scheduler stopped")
     # except Exception as e:
     #     logger.error(f"Error stopping sync job scheduler: {e}", exc_info=True)
     #     print(f"⚠️  Error stopping sync job scheduler: {e}")
@@ -245,6 +238,12 @@ async def shutdown_event():
     logger.info("Application shutdown completed")
 
 if __name__ == "__main__":
+    # ⭐ ตรวจสอบว่าอยู่ใน RPA mode หรือไม่
+    # ถ้าใช่ ไม่ต้องรัน FastAPI server
+    if os.getenv('RPA_MODE') == '1':
+        logger.info("Running in RPA mode - skipping FastAPI server startup")
+        sys.exit(0)
+    
     import uvicorn
     
     print("--- Starting Server ---")
@@ -264,7 +263,7 @@ if __name__ == "__main__":
     if not item_api_url or not item_api_key:
         warning_msg = "ITEM_API_URL or ITEM_API_KEY not set. Item Master sync will not work."
         logger.warning(warning_msg)
-        print(f"⚠️  {warning_msg}")
+        print(f"WARNING: {warning_msg}")
 
     # Pass the app object directly instead of the import string "main:app"
     # This prevents "Could not import module 'main'" errors in frozen (PyInstaller) environments

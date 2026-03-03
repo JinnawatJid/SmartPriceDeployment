@@ -4,7 +4,6 @@ RPA Router: API endpoint for triggering RPA script to create Sales Quote in D365
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-import subprocess
 import json
 import os
 
@@ -25,6 +24,7 @@ class RPAQuoteRequest(BaseModel):
     customer_no: str
     sales_admin: str
     your_reference: str  # เลขที่ใบเสนอราคาของเรา
+    remote_chrome_address: Optional[str] = "127.0.0.1:9222"  # ⭐ รองรับ remote Chrome
     items: List[RPAItem]
 
 
@@ -33,21 +33,34 @@ async def create_quote_via_rpa(request: RPAQuoteRequest):
     """
     Trigger RPA script to create Sales Quote in D365 BC
     """
+    import logging
+    import sys
+    logger = logging.getLogger(__name__)
+    
     try:
-        # Get the project root directory (parent of backend)
-        backend_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(backend_dir)
+        print("\n" + "="*60)
+        print("RPA REQUEST RECEIVED")
+        print(f"Quote Code: {request.quote_code}")
+        print(f"Customer: {request.customer_no}")
+        print(f"Chrome Address: {request.remote_chrome_address}")
+        print(f"Items Count: {len(request.items)}")
+        print("="*60 + "\n")
         
-        # Path to RPA script (in project root)
-        rpa_script_path = os.path.join(project_root, "rpa_create_quote.py")
-        temp_file_path = os.path.join(project_root, "rpa_temp_data.json")
+        logger.info("="*60)
+        logger.info("RPA Request Received")
+        logger.info(f"Quote Code: {request.quote_code}")
+        logger.info(f"Customer: {request.customer_no}")
+        logger.info(f"Chrome Address: {request.remote_chrome_address}")
+        logger.info(f"Items Count: {len(request.items)}")
+        logger.info("="*60)
         
-        # เตรียมข้อมูลสำหรับ RPA script
+        # เตรียมข้อมูลสำหรับ RPA
         rpa_data = {
             "quote_code": request.quote_code,
             "customer_no": request.customer_no,
             "sales_admin": request.sales_admin,
             "your_reference": request.your_reference,
+            "remote_chrome_address": request.remote_chrome_address,
             "items": [
                 {
                     "item_code": item.sku,
@@ -61,51 +74,55 @@ async def create_quote_via_rpa(request: RPAQuoteRequest):
             ],
         }
 
-        # บันทึกข้อมูลลง temp file
-        with open(temp_file_path, "w", encoding="utf-8") as f:
-            json.dump(rpa_data, f, ensure_ascii=False, indent=2)
-
-        # หา Python executable ใน venv
-        import sys
-        python_executable = sys.executable  # ใช้ Python ที่กำลังรัน backend อยู่
-        
-        # เรียก RPA script (run from project root)
-        result = subprocess.run(
-            [python_executable, rpa_script_path, request.quote_code],
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minutes timeout
-            cwd=project_root,  # Run from project root
-        )
-
-        # ลบ temp file
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-
-        if result.returncode == 0:
+        # ⭐ Import และเรียกใช้ RPA function โดยตรง
+        # Import จาก backend.rpa_create_quote เพราะไฟล์อยู่ใน backend/ แล้ว
+        try:
+            print("Importing RPA module...")
+            logger.info("Importing RPA module...")
+            
+            # Import RPA module from same directory (backend/)
+            import rpa_create_quote
+            
+            print("RPA module imported successfully")
+            logger.info("RPA module imported successfully")
+            
+            # เรียกใช้ function create_sales_quote โดยตรง
+            print("Executing RPA function...")
+            logger.info("Executing RPA function...")
+            
+            rpa_create_quote.create_sales_quote(request.quote_code, rpa_data)
+            
+            print("RPA function completed successfully")
+            logger.info("RPA function completed successfully")
+            
             return {
                 "success": True,
-                "message": "RPA script executed successfully",
-                "output": result.stdout,
+                "message": "RPA executed successfully",
+                "output": "Sales Quote created in D365 BC"
             }
-        else:
+            
+        except Exception as rpa_error:
+            error_msg = str(rpa_error)
+            print(f"[ERROR] RPA execution failed: {error_msg}")
+            logger.error(f"RPA execution failed: {error_msg}", exc_info=True)
+            
             raise HTTPException(
                 status_code=500,
                 detail={
                     "success": False,
-                    "message": "RPA script failed",
-                    "error": result.stderr,
-                    "output": result.stdout,
-                },
+                    "message": "RPA execution failed",
+                    "error": error_msg,
+                    "output": ""
+                }
             )
 
-    except subprocess.TimeoutExpired:
-        raise HTTPException(
-            status_code=504,
-            detail="RPA script timeout (exceeded 5 minutes)",
-        )
+    except HTTPException:
+        raise
     except Exception as e:
+        error_msg = str(e)
+        print(f"[ERROR] Failed to execute RPA: {error_msg}")
+        logger.error(f"Failed to execute RPA: {error_msg}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to execute RPA script: {str(e)}",
+            detail=f"Failed to execute RPA script: {error_msg}",
         )
