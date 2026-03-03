@@ -21,24 +21,24 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
       ? Number(item.price_per_sheet ?? Number(item.UnitPrice ?? 0) * currentSqft)
       : Number(calculatedItem?.price_per_sheet ?? item.price_per_sheet ?? 0);
 
-  // ⭐ ดึงราคา W1 (ราคาอ้างอิงจากระบบ) - แยกตามประเภทสินค้า
-  let w1Price = 0;
+  // ⭐ ดึงราคาปกติ (ราคาอ้างอิงจากระบบ) - แยกตามประเภทสินค้า
+  let normalPrice = 0;
   if (isGlass) {
     // กระจก: ใช้ priceW1 * sqft_sheet เพื่อได้ราคาต่อแผ่น
     const w1PerSqft = Number(calculatedItem?.priceW1 ?? item.priceW1 ?? 0);
-    w1Price = w1PerSqft * currentSqft;
+    normalPrice = w1PerSqft * currentSqft;
   } else {
     // สินค้าอื่นๆ: ใช้ priceW1 โดยตรง (หรือคูณน้ำหนักถ้าเป็นอลู)
     const w1Base = Number(calculatedItem?.priceW1 ?? item.priceW1 ?? 0);
     if (isAluminium) {
       const weight = Number(item.weight ?? item.product_weight ?? calculatedItem?.product_weight ?? 0);
-      w1Price = w1Base * weight;
+      normalPrice = w1Base * weight;
     } else {
-      w1Price = w1Base;
+      normalPrice = w1Base;
     }
   }
 
-  console.log('💰 PriceEditModal - W1 Price:', w1Price);
+  console.log('💰 PriceEditModal - Normal Price:', normalPrice);
   console.log('💰 PriceEditModal - isGlass:', isGlass, 'isAluminium:', isAluminium);
   console.log('💰 PriceEditModal - calculatedItem:', calculatedItem);
   console.log('💰 PriceEditModal - item:', item);
@@ -98,9 +98,9 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
       newPrice = otherPrice;
     }
 
-    console.log('🔍 Checking price - New:', newPrice, 'W1:', w1Price, 'Below W1:', newPrice < w1Price);
+    console.log('🔍 Checking price - New:', newPrice, 'Normal:', normalPrice, 'Below Normal:', newPrice < normalPrice);
     
-    return newPrice < w1Price;
+    return newPrice < normalPrice;
   };
 
   const handleSave = () => {

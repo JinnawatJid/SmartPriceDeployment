@@ -6,7 +6,9 @@
 from pathlib import Path
 from datetime import datetime
 from weasyprint import HTML, CSS
-from config.email_config import PDF_STORAGE_PATH
+
+# PDF Storage Path
+PDF_STORAGE_PATH = Path(__file__).parent.parent / "data" / "special_price_pdfs"
 
 
 def generate_special_price_request_pdf(request_data: dict) -> Path:
@@ -19,6 +21,9 @@ def generate_special_price_request_pdf(request_data: dict) -> Path:
     Returns:
         Path: Path ของไฟล์ PDF ที่สร้าง
     """
+    # สร้างโฟลเดอร์ถ้ายังไม่มี
+    PDF_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
+    
     # สร้าง HTML Template
     html_content = _generate_html_template(request_data)
     
@@ -54,8 +59,8 @@ def _generate_html_template(data: dict) -> str:
     # สร้างตารางรายการสินค้า
     items_html = ""
     for idx, item in enumerate(data.get("items", []), 1):
-        is_below_w1 = item.get("is_below_w1", False)
-        warning_icon = "⚠️" if is_below_w1 else ""
+        is_below_normal = item.get("is_below_normal", False)
+        warning_icon = "⚠️" if is_below_normal else ""
         
         items_html += f"""
         <tr>

@@ -14,6 +14,8 @@ import CustomerPerDay from "./pages/CustomerPerDay.jsx";
 import CustomerDetail from "./pages/CustomerDetail.jsx";
 import CustomerSearch from "./pages/CustomerSearch.jsx";
 import PromotionManagement from "./pages/PromotionManagement.jsx";
+import ApprovalRequestsPage from "./pages/ApprovalRequestsPage.jsx";
+import ApprovalRequestDetailPage from "./pages/ApprovalRequestDetailPage.jsx";
 
 // --- Layout 1 (สำหรับ Dashboard) ---
 const DashboardLayout = () => (
@@ -58,6 +60,8 @@ function App() {
           <Route path="/customer-search" element={<CustomerSearch />} />
           <Route path="/customer/:customerId" element={<CustomerDetail />} />
           <Route path="/promotions" element={<PromotionManagement />} />
+          <Route path="/approval-requests" element={<ApprovalRequestsPage />} />
+          <Route path="/approval-requests/:requestNumber" element={<ApprovalRequestDetailPage />} />
         </Route>
 
         {/* 2.2: CreateQuote (ใช้ WizardLayout) */}

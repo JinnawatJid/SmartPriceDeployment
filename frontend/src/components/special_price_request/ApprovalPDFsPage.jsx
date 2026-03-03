@@ -29,6 +29,45 @@ export default function ApprovalPDFsPage() {
     }
   }, [requestNumber]);
 
+  const formatFilename = (filename) => {
+    // แยกส่วนของชื่อไฟล์
+    // Format: SP-260303-0002_20260303_142355_SP-260223-0001_approved_20260223_100018.pdf
+    // หรือ: SP-260303-0002_approved_20260303_142355.pdf
+    
+    const parts = filename.split('_');
+    
+    if (parts.length >= 3) {
+      const requestNum = parts[0]; // SP-260303-0002
+      const date = parts[1]; // 20260303
+      const time = parts[2]; // 142355
+      
+      // แปลงวันที่
+      const year = date.substring(0, 4);
+      const month = date.substring(4, 6);
+      const day = date.substring(6, 8);
+      
+      // แปลงเวลา
+      const hour = time.substring(0, 2);
+      const minute = time.substring(2, 4);
+      const second = time.substring(4, 6);
+      
+      return {
+        displayName: `เอกสารอนุมัติ ${requestNum}`,
+        uploadDate: `${day}/${month}/${year}`,
+        uploadTime: `${hour}:${minute}:${second}`,
+        fullName: filename
+      };
+    }
+    
+    // Fallback ถ้า format ไม่ตรง
+    return {
+      displayName: filename,
+      uploadDate: '-',
+      uploadTime: '-',
+      fullName: filename
+    };
+  };
+
   const handleDownload = (downloadUrl) => {
     window.open(downloadUrl, '_blank');
   };
@@ -96,39 +135,50 @@ export default function ApprovalPDFsPage() {
               </p>
             </div>
 
-            {pdfFiles.map((pdf, index) => (
-              <div
-                key={index}
-                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => handleDownload(pdf.download_url)}
-              >
-                <div className="p-6 flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-16 h-16 bg-red-100 rounded-lg flex items-center justify-center">
-                        <span className="text-3xl">📄</span>
+            {pdfFiles.map((pdf, index) => {
+              const fileInfo = formatFilename(pdf.filename);
+              
+              return (
+                <div
+                  key={index}
+                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => handleDownload(pdf.download_url)}
+                >
+                  <div className="p-6 flex items-center justify-between">
+                    <div className="flex items-center space-x-4 flex-1 min-w-0">
+                      <div className="flex-shrink-0">
+                        <div className="w-16 h-16 bg-red-100 rounded-lg flex items-center justify-center">
+                          <span className="text-3xl">📄</span>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-gray-800 truncate">
+                          {fileInfo.displayName}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          อัปโหลดเมื่อ: {fileInfo.uploadDate} เวลา {fileInfo.uploadTime}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1 truncate" title={fileInfo.fullName}>
+                          {fileInfo.fullName}
+                        </p>
                       </div>
                     </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800">{pdf.filename}</h3>
-                      <p className="text-sm text-gray-500 mt-1">เอกสารที่ผู้อนุมัติแนบมา</p>
+                    <div className="flex items-center space-x-2 flex-shrink-0 ml-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownload(pdf.download_url);
+                        }}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center space-x-2"
+                      >
+                        <span>📥</span>
+                        <span>ดาวน์โหลด</span>
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownload(pdf.download_url);
-                      }}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center space-x-2"
-                    >
-                      <span>📥</span>
-                      <span>ดาวน์โหลด</span>
-                    </button>
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -35,7 +35,7 @@ const SpecialPriceRequestModal = ({
 
   const [formData, setFormData] = useState({
     requestReason: "",
-    approverEmail: "",
+    approverEmployeeId: "",
     branch: "",
     validFrom: "",
     validTo: "",
@@ -79,13 +79,13 @@ const SpecialPriceRequestModal = ({
       const item = cart[index];
       if (!item) return;
 
-      // ⭐ FIX: W1 price ไม่มีใน cart, ใช้ Price_System แทน (ซึ่งเป็นราคาอ้างอิงจากระบบ)
+      // ⭐ FIX: ราคาปกติไม่มีใน cart, ใช้ Price_System แทน (ซึ่งเป็นราคาอ้างอิงจากระบบ)
       // หรือถ้าไม่มี ให้ใช้ราคาปัจจุบันเป็น fallback
-      const w1Price = parseFloat(item.Price_System || item.UnitPrice || item.price || 0);
+      const normalPrice = parseFloat(item.Price_System || item.UnitPrice || item.price || 0);
       const currentPrice = parseFloat(item.price || item.UnitPrice || 0);
       const qty = parseFloat(item.qty || 0);
 
-      originalTotal += w1Price * qty;
+      originalTotal += normalPrice * qty;
       requestedTotal += currentPrice * qty;
     });
 
@@ -108,10 +108,8 @@ const SpecialPriceRequestModal = ({
       newErrors.requestReason = "กรุณากรอกเหตุผลที่ขอ";
     }
 
-    if (!formData.approverEmail.trim()) {
-      newErrors.approverEmail = "กรุณากรอก Email ผู้อนุมัติ";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.approverEmail)) {
-      newErrors.approverEmail = "รูปแบบ Email ไม่ถูกต้อง";
+    if (!formData.approverEmployeeId.trim()) {
+      newErrors.approverEmployeeId = "กรุณากรอกรหัสพนักงานผู้อนุมัติ";
     }
 
     if (!formData.branch.trim()) {
@@ -158,14 +156,14 @@ const SpecialPriceRequestModal = ({
       // เตรียมข้อมูลสินค้าที่เลือก
       const items = selectedItems.map((index) => {
         const item = cart[index];
-        // ⭐ FIX: ใช้ Price_System เป็นราคาอ้างอิง W1
-        const w1Price = parseFloat(item.Price_System || item.UnitPrice || item.price || 0);
+        // ⭐ FIX: ใช้ Price_System เป็นราคาอ้างอิงปกติ
+        const normalPrice = parseFloat(item.Price_System || item.UnitPrice || item.price || 0);
         return {
           item_code: item.sku || "",
           item_name: item.name || "",
           quantity: parseFloat(item.qty) || 0,
           unit: item.unit || "",
-          w1_price: w1Price,
+          normal_price: normalPrice,
           requested_price: parseFloat(item.price || item.UnitPrice || 0),
         };
       });
@@ -179,7 +177,7 @@ const SpecialPriceRequestModal = ({
         request_reason: formData.requestReason,
         original_total: Number(originalTotal) || 0,
         requested_total: Number(requestedTotal) || 0,
-        approver_email: formData.approverEmail,
+        approver_employee_id: formData.approverEmployeeId,
         branch: formData.branch,
         valid_from: formData.validFrom,
         valid_to: formData.validTo,
@@ -188,7 +186,7 @@ const SpecialPriceRequestModal = ({
 
       console.log("📤 Sending payload:", payload);
       console.log("🔍 Validation check:");
-      console.log("   - approverEmail:", formData.approverEmail);
+      console.log("   - approverEmployeeId:", formData.approverEmployeeId);
       console.log("   - requestReason:", formData.requestReason);
       console.log("   - branch:", formData.branch);
       console.log("   - validFrom:", formData.validFrom);
@@ -200,7 +198,7 @@ const SpecialPriceRequestModal = ({
       console.log("📥 Response:", result);
 
       alert(
-        `✅ ${result.message}\nเลขที่คำขอ: ${result.request_number}\n\nกรุณาตรวจสอบ Email ของผู้อนุมัติ`
+        `✅ ${result.message}\nเลขที่คำขอ: ${result.request_number}\n\nคำขอถูกส่งไปยังผู้อนุมัติแล้ว`
       );
       if (onSubmitSuccess) {
         onSubmitSuccess(result);
@@ -291,19 +289,19 @@ const SpecialPriceRequestModal = ({
                 </thead>
                 <tbody>
                   {cart.map((item, index) => {
-                    const w1Price = parseFloat(
+                    const normalPrice = parseFloat(
                       item.Price_System || item.UnitPrice || item.price || 0
                     );
                     const requestedPrice = parseFloat(item.price || item.UnitPrice || 0);
                     const qty = parseFloat(item.qty || 0);
-                    const isBelowW1 = requestedPrice < w1Price;
+                    const isBelowNormal = requestedPrice < normalPrice;
 
                     return (
                       <tr
                         key={index}
                         className={`border-t ${
                           selectedItems.includes(index) ? "bg-yellow-50" : ""
-                        } ${isBelowW1 ? "text-red-600" : ""}`}
+                        } ${isBelowNormal ? "text-red-600" : ""}`}
                       >
                         <td className="p-2 text-center">
                           <input
@@ -398,25 +396,25 @@ const SpecialPriceRequestModal = ({
               )}
             </div>
 
-            {/* Email ผู้อนุมัติ */}
+            {/* รหัสพนักงานผู้อนุมัติ */}
             <div className="col-span-2">
               <label className="block text-sm font-medium mb-1">
-                Email ผู้อนุมัติ <span className="text-red-500">*</span>
+                รหัสพนักงานผู้อนุมัติ <span className="text-red-500">*</span>
               </label>
               <input
-                type="email"
-                value={formData.approverEmail}
+                type="text"
+                value={formData.approverEmployeeId}
                 onChange={(e) =>
-                  setFormData({ ...formData, approverEmail: e.target.value })
+                  setFormData({ ...formData, approverEmployeeId: e.target.value })
                 }
                 className={`w-full px-3 py-2 border rounded-lg ${
-                  errors.approverEmail ? "border-red-500" : "border-gray-300"
+                  errors.approverEmployeeId ? "border-red-500" : "border-gray-300"
                 }`}
-                placeholder="manager@company.com"
+                placeholder="ระบุรหัสพนักงาน เช่น E001"
               />
-              {errors.approverEmail && (
+              {errors.approverEmployeeId && (
                 <p className="text-red-500 text-sm mt-1">
-                  {errors.approverEmail}
+                  {errors.approverEmployeeId}
                 </p>
               )}
             </div>

@@ -66,54 +66,16 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ========================================
-# Background Email Checker Thread
-# ========================================
-email_thread = None
-
-def email_checker_background():
-    """
-    Background thread ที่ตรวจสอบ email ทุก 1 นาที
-    รันอัตโนมัติเมื่อ FastAPI start
-    """
-    from special_price_request.email_reply_checker import check_email_replies
-    
-    CHECK_INTERVAL_MINUTES = 1  # ปรับได้ตามต้องการ
-    
-    logger.info("="*60)
-    logger.info("Email Checker Background Service Started")
-    logger.info(f"Checking emails every {CHECK_INTERVAL_MINUTES} minute(s)")
-    logger.info("="*60)
-    
-    while True:
-        try:
-            check_email_replies()
-        except Exception as e:
-            logger.error(f"Error in email checker: {e}")
-        
-        # รอ N นาที
-        time.sleep(CHECK_INTERVAL_MINUTES * 60)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Lifespan context manager for startup and shutdown events
     Replaces deprecated @app.on_event("startup") and @app.on_event("shutdown")
     """
-    global email_thread
-    
     # Startup
     logger.info("="*60)
     logger.info("Application startup initiated")
     logger.info("="*60)
-    
-    # Start email checker in background thread
-    try:
-        email_thread = threading.Thread(target=email_checker_background, daemon=True)
-        email_thread.start()
-        logger.info("Email checker thread started")
-    except Exception as e:
-        logger.error(f"Failed to start email checker: {e}", exc_info=True)
     
     logger.info("Application startup completed")
     

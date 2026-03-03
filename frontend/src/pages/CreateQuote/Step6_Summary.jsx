@@ -621,6 +621,13 @@ function Step6_Summary({ state, dispatch }) {
     console.log("🔍 isGlass:", isGlass);
     console.log("🔍 sqft_sheet:", item.sqft_sheet);
     
+    // ⭐ ดึงราคาจากหลายแหล่ง (prices.R2, priceR2, price)
+    const price = item.prices?.R2 ?? item.priceR2 ?? item.price ?? 0;
+    const cost = Number(item.cost || 0);
+    
+    console.log("🔍 price resolved:", price);
+    console.log("🔍 cost resolved:", cost);
+    
     const payload = {
       sku: item.sku,
       name: item.name,
@@ -636,8 +643,8 @@ function Step6_Summary({ state, dispatch }) {
     
     // ⭐ เฉพาะสินค้าที่ไม่ใช่กระจก ถึงจะส่ง price และ cost
     if (!isGlass) {
-      payload.price = item.prices?.R2 ?? item.priceR2 ?? 0;
-      payload.cost = Number(item.cost || 0);
+      payload.price = price;
+      payload.cost = cost;
     }
     
     console.log("🔍 payload to dispatch:", payload);
@@ -1371,14 +1378,23 @@ function Step6_Summary({ state, dispatch }) {
 
   const handleItemPicked = (item, qty) => {
     if (!item) return;
+    
+    // ⭐ ดึงราคาจากหลายแหล่ง (prices.R2, priceR2, price)
+    const price = item.prices?.R2 ?? item.priceR2 ?? item.price ?? 0;
+    const cost = Number(item.cost || 0);
+    
+    console.log("🔍 handleItemPicked - item:", item);
+    console.log("🔍 price resolved:", price);
+    console.log("🔍 cost resolved:", cost);
+    
     dispatch({
       type: "ADD_ITEM",
       payload: {
         sku: item.sku,
         name: item.name,
         qty,
-        price: item.prices?.R2 || 0,
-        cost: Number(item.cost || 0),
+        price,
+        cost,
         category: item.category || selectedCategory || "",
         unit: item.unit || item.saleUnit || item.uom || "",
         product_weight: Number(item.product_weight || 0),
@@ -1519,7 +1535,7 @@ function Step6_Summary({ state, dispatch }) {
                     >
                       <div className="text-sm font-semibold">{it.name}</div>
                       <div className="text-xs text-gray-500">
-                        {it.sku} · ฿{(it.prices?.R2 ?? it.priceR2 ?? 0).toLocaleString()}
+                        {it.sku} · ฿{(it.prices?.R2 ?? it.priceR2 ?? it.price ?? 0).toLocaleString()}
                       </div>
                     </div>
                   ))}

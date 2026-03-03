@@ -17,19 +17,11 @@ from special_price_request.service import (
     approve_request,
     reject_request
 )
-from services.email_service import (
-    send_approval_request_with_links,
-    send_approval_notification,
-    send_rejection_notification
-)
 from special_price_request.pdf_service import generate_special_price_request_pdf
-from special_price_request.approval_token import (
-    generate_approval_token,
-    validate_token,
-    mark_token_used
-)
-from config.email_config import PDF_STORAGE_PATH
+from special_price_request.approval_token import validate_token, mark_token_used
 
+# PDF Storage Path
+PDF_STORAGE_PATH = Path(__file__).parent.parent / "data" / "special_price_pdfs"
 
 router = APIRouter(prefix="/special-price-requests", tags=["special-price-requests"])
 
@@ -39,14 +31,12 @@ async def create_special_price_request(payload: dict = Body(...)):
     """
     สร้างคำขอราคาพิเศษใหม่
     """
-    from fastapi import BackgroundTasks
-    
     try:
         # Validate required fields
         required_fields = [
             "quote_no", "requester_name",
             "request_reason", "original_total", "requested_total",
-            "approver_email", "items"
+            "approver_employee_id", "items"
         ]
         
         for field in required_fields:
@@ -57,50 +47,15 @@ async def create_special_price_request(payload: dict = Body(...)):
         if not isinstance(payload["items"], list) or len(payload["items"]) == 0:
             raise HTTPException(400, "Items must be a non-empty array")
         
-        # สร้างคำขอ (เร็ว)
+        # สร้างคำขอ
         result = create_request(payload)
         request_number = result["request_number"]
-        
-        # ส่งคำขอกลับทันที แล้วทำ PDF และ Email ใน background
-        import threading
-        
-        def send_approval_email_background():
-            """ทำงานใน background thread"""
-            try:
-                # ดึงข้อมูลคำขอ
-                request_data = get_request_detail(request_number)
-                
-                # สร้าง PDF
-                pdf_path = generate_special_price_request_pdf(request_data)
-                print(f"✅ PDF generated: {pdf_path}")
-                
-                # สร้าง approval token
-                token = generate_approval_token(request_number)
-                print(f"✅ Token generated: {token[:20]}...")
-                
-                # ส่ง Email
-                email_result = send_approval_request_with_links(request_data, pdf_path, token)
-                
-                if email_result["success"]:
-                    print(f"✅ Email sent successfully for {request_number}")
-                else:
-                    print(f"❌ Email failed for {request_number}: {email_result.get('error')}")
-                    
-            except Exception as e:
-                print(f"❌ Background task error for {request_number}: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        # เริ่ม background thread
-        thread = threading.Thread(target=send_approval_email_background, daemon=True)
-        thread.start()
         
         # ส่งผลลัพธ์กลับทันที
         return {
             "request_number": request_number,
             "status": result["status"],
-            "email_sent": "processing",
-            "message": "สร้างคำขอสำเร็จ กำลังส่ง Email..."
+            "message": "สร้างคำขอสำเร็จ"
         }
         
     except HTTPException:
@@ -112,14 +67,21 @@ async def create_special_price_request(payload: dict = Body(...)):
 @router.get("", summary="ดึงรายการคำขอราคาพิเศษ")
 def list_special_price_requests(
     status: Optional[str] = Query(None, description="pending, approved, rejected, all"),
+    approver_employee_id: Optional[str] = Query(None, description="รหัสพนักงานผู้อนุมัติ"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0)
 ):
     """
     ดึงรายการคำขอราคาพิเศษทั้งหมด
+    ถ้าระบุ approver_employee_id จะแสดงเฉพาะคำขอที่ส่งมาหาพนักงานคนนั้น
     """
     try:
-        result = get_requests(status=status, limit=limit, offset=offset)
+        result = get_requests(
+            status=status, 
+            approver_employee_id=approver_employee_id,
+            limit=limit, 
+            offset=offset
+        )
         return result
     except Exception as e:
         raise HTTPException(500, f"Error fetching requests: {str(e)}")
@@ -200,12 +162,6 @@ def approve_special_price_request(
         
         if not success:
             raise HTTPException(404, f"Request {request_number} not found or already processed")
-        
-        # ดึงข้อมูลคำขอ
-        request_data = get_request_detail(request_number)
-        
-        # ส่ง Email แจ้งผล
-        send_approval_notification(request_data)
         
         return {
             "request_number": request_number,
@@ -317,13 +273,19 @@ def approve_via_link(token: str):
         raise HTTPException(500, f"Error approving request: {str(e)}")
 
 
-@router.post("/upload-approval-files/{request_number}", summary="อัปโหลดไฟล์สำหรับการอนุมัติ")
+@router.post("/{request_number}/upload-approval-files", summary="อัปโหลดไฟล์สำหรับการอนุมัติ")
 async def upload_approval_files(request_number: str, files: List[UploadFile] = File(...)):
     """
-    อัปโหลดไฟล์ PDF สำหรับการอนุมัติ (ก่อนกดอนุมัติ)
+    อัปโหลดไฟล์ PDF/เอกสารสำหรับการอนุมัติ
     """
-    from pathlib import Path
-    from config.email_config import PDF_STORAGE_PATH
+    import json
+    
+    print(f"\n{'='*60}")
+    print(f"📤 UPLOAD FILES REQUEST")
+    print(f"Request Number: {request_number}")
+    print(f"Files Count: {len(files)}")
+    print(f"PDF Storage Path: {PDF_STORAGE_PATH}")
+    print(f"{'='*60}\n")
     
     try:
         # ตรวจสอบว่าคำขอมีอยู่จริง
@@ -337,36 +299,91 @@ async def upload_approval_files(request_number: str, files: List[UploadFile] = F
         
         # สร้างโฟลเดอร์ถ้ายังไม่มี
         PDF_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
+        print(f"✅ PDF Storage Path exists: {PDF_STORAGE_PATH.exists()}")
         
         uploaded_files = []
         
         # บันทึกไฟล์ที่อัปโหลด
         for file in files:
-            if file.filename and file.filename.lower().endswith('.pdf'):
+            if file.filename:
                 # สร้างชื่อไฟล์ที่ไม่ซ้ำ
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                safe_filename = f"{request_number}_approved_{timestamp}_{file.filename}"
+                safe_filename = f"{request_number}_{timestamp}_{file.filename}"
                 file_path = PDF_STORAGE_PATH / safe_filename
+                
+                print(f"📝 Processing file: {file.filename}")
+                print(f"   Safe filename: {safe_filename}")
+                print(f"   Full path: {file_path}")
                 
                 # บันทึกไฟล์
                 content = await file.read()
+                print(f"   File size: {len(content)} bytes")
+                
                 with open(file_path, 'wb') as f:
                     f.write(content)
                 
-                # ⭐ เก็บแค่ชื่อไฟล์ (relative path) แทน absolute path
-                uploaded_files.append(safe_filename)
-                print(f"📎 Saved uploaded file: {safe_filename}")
+                # ตรวจสอบว่าไฟล์ถูกบันทึกจริง
+                if file_path.exists():
+                    print(f"   ✅ File saved successfully")
+                    uploaded_files.append(safe_filename)
+                else:
+                    print(f"   ❌ File NOT saved!")
+        
+        print(f"\n📦 Total files uploaded: {len(uploaded_files)}")
+        print(f"Files: {uploaded_files}")
+        
+        # อัปเดต database
+        from config.db_mssql import get_mssql_conn
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        # ดึงไฟล์เดิม (ถ้ามี)
+        cursor.execute("""
+            SELECT attached_documents FROM special_price_requests
+            WHERE request_number = ?
+        """, (request_number,))
+        result = cursor.fetchone()
+        
+        existing_files = []
+        if result and result[0]:
+            try:
+                existing_files = json.loads(result[0])
+                print(f"📋 Existing files: {existing_files}")
+            except:
+                existing_files = []
+        
+        # รวมไฟล์เดิมกับไฟล์ใหม่
+        all_files = existing_files + uploaded_files
+        print(f"📋 All files (after merge): {all_files}")
+        
+        # อัปเดต database
+        cursor.execute("""
+            UPDATE special_price_requests
+            SET attached_documents = ?,
+                updated_at = ?
+            WHERE request_number = ?
+        """, (json.dumps(all_files), datetime.now().isoformat(timespec="seconds"), request_number))
+        
+        rows_affected = cursor.rowcount
+        print(f"💾 Database UPDATE rows affected: {rows_affected}")
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Upload completed successfully\n")
         
         return {
             "success": True,
             "files_uploaded": len(uploaded_files),
-            "files": uploaded_files  # ⭐ ส่งชื่อไฟล์กลับไปแทน Path object
+            "files": uploaded_files,
+            "total_files": len(all_files)
         }
         
     except HTTPException:
         raise
     except Exception as e:
         import traceback
+        print(f"\n❌ ERROR in upload_approval_files:")
         traceback.print_exc()
         raise HTTPException(500, f"Error uploading files: {str(e)}")
 
@@ -376,8 +393,6 @@ async def process_approval(token: str):
     """
     ประมวลผลการอนุมัติพร้อมรับไฟล์แนบ
     """
-    from pathlib import Path
-    from config.email_config import PDF_STORAGE_PATH
     
     try:
         # ตรวจสอบ token
@@ -408,27 +423,24 @@ async def process_approval(token: str):
         # บันทึกไฟล์ที่อัปโหลด
         pdf_files = []
         
-        # ค้นหาไฟล์ที่แนบมาจาก email (ถ้ามี)
+        # ค้นหาไฟล์ที่แนบมา (ถ้ามี)
         if PDF_STORAGE_PATH.exists():
             pattern = f"{request_number}_approved_*.pdf"
             # ⭐ เก็บแค่ชื่อไฟล์ (relative path) แทน absolute path
-            email_pdfs = [f.name for f in PDF_STORAGE_PATH.glob(pattern)]
-            pdf_files.extend(email_pdfs)
-            if email_pdfs:
-                print(f"📧 Found {len(email_pdfs)} email-attached PDFs")
+            attached_pdfs = [f.name for f in PDF_STORAGE_PATH.glob(pattern)]
+            pdf_files.extend(attached_pdfs)
+            if attached_pdfs:
+                print(f"📧 Found {len(attached_pdfs)} attached PDFs")
         
         # อนุมัติคำขอ
-        approver_email = request_data.get("approver_email", "Unknown")
-        success = approve_request(request_number, approver_email, pdf_files if pdf_files else None)
+        approver_id = request_data.get("approver_employee_id", "Unknown")
+        success = approve_request(request_number, approver_id, pdf_files if pdf_files else None)
         
         if not success:
             raise HTTPException(500, "Failed to approve request")
         
         # ทำเครื่องหมายว่า token ถูกใช้แล้ว
         mark_token_used(token)
-        
-        # ส่ง Email แจ้งผล
-        send_approval_notification(request_data)
         
         # แสดงรายการไฟล์ที่แนบ
         attachment_html = ""
@@ -456,7 +468,7 @@ async def process_approval(token: str):
                 <div class="success">✅ อนุมัติคำขอสำเร็จ</div>
                 <div class="info">
                     <p>เลขที่คำขอ: <strong>{request_number}</strong></p>
-                    <p>ผู้อนุมัติ: <strong>{approver_email}</strong></p>
+                    <p>ผู้อนุมัติ: <strong>{approver_id}</strong></p>
                     <p>วันที่อนุมัติ: <strong>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</strong></p>
                     {attachment_html}
                 </div>
@@ -697,7 +709,7 @@ def reject_via_link(token: str, reason: str = Form(...)):
             raise HTTPException(404, "Request not found")
         
         # ปฏิเสธคำขอ
-        rejected_by = request_data.get("approver_email", "Unknown")
+        rejected_by = request_data.get("approver_employee_id", "Unknown")
         success = reject_request(request_number, rejected_by, reason)
         
         if not success:
@@ -705,9 +717,6 @@ def reject_via_link(token: str, reason: str = Form(...)):
         
         # ทำเครื่องหมายว่า token ถูกใช้แล้ว
         mark_token_used(token)
-        
-        # ส่ง Email แจ้งผล
-        send_rejection_notification(request_data)
         
         return HTMLResponse(content=f"""
             <html>
@@ -766,12 +775,6 @@ def reject_special_price_request(
         if not success:
             raise HTTPException(404, f"Request {request_number} not found or already processed")
         
-        # ดึงข้อมูลคำขอ
-        request_data = get_request_detail(request_number)
-        
-        # ส่ง Email แจ้งผล
-        send_rejection_notification(request_data)
-        
         return {
             "request_number": request_number,
             "status": "rejected",
@@ -788,18 +791,7 @@ def reject_special_price_request(
 @router.get("/{request_number}/approval-pdfs", summary="ดาวน์โหลด PDF ที่ผู้อนุมัติแนบมา")
 def download_approval_pdfs(request_number: str):
     """
-    ดาวน์โหลดรายการ PDF ที่ผู้อนุมัติแนบมากับ email
-    
-    Returns:
-    {
-        "request_number": "SP-250130-0001",
-        "pdf_files": [
-            {
-                "filename": "SP-250130-0001_approved_20250130_143022.pdf",
-                "download_url": "/api/special-price-requests/SP-250130-0001/approval-pdfs/0"
-            }
-        ]
-    }
+    ดึงรายการไฟล์ที่แนบมากับคำขอ (ทั้งที่อัปโหลดผ่าน web และที่แนบมาโดยผู้อนุมัติ)
     """
     try:
         request_data = get_request_detail(request_number)
@@ -807,78 +799,117 @@ def download_approval_pdfs(request_number: str):
         if not request_data:
             raise HTTPException(404, f"Request {request_number} not found")
         
-        # ดึงรายการไฟล์ PDF
-        pdf_files_json = request_data.get("approval_pdf_files")
+        import json
+        all_files = []
         
-        if not pdf_files_json:
-            return {
-                "request_number": request_number,
-                "pdf_files": []
-            }
+        # ⭐ 1. ดึงไฟล์จาก attached_documents (ไฟล์ที่อัปโหลดผ่าน web)
+        if request_data.get("attached_documents"):
+            try:
+                attached = json.loads(request_data["attached_documents"])
+                all_files.extend(attached)
+                print(f"📎 Found {len(attached)} files in attached_documents")
+            except Exception as e:
+                print(f"⚠️ Error parsing attached_documents: {e}")
         
-        pdf_files = json.loads(pdf_files_json)
+        # ⭐ 2. ดึงไฟล์จาก approval_pdf_files (ไฟล์ที่ผู้อนุมัติแนบมา)
+        if request_data.get("approval_pdf_files"):
+            try:
+                approval_files = json.loads(request_data["approval_pdf_files"])
+                all_files.extend(approval_files)
+                print(f"📧 Found {len(approval_files)} files in approval_pdf_files")
+            except Exception as e:
+                print(f"⚠️ Error parsing approval_pdf_files: {e}")
         
-        # สร้าง response
-        result = []
-        for idx, filename in enumerate(pdf_files):
-            # ⭐ สร้าง full path จากชื่อไฟล์
-            file_path = PDF_STORAGE_PATH / filename
-            if file_path.exists():
-                result.append({
-                    "filename": filename,
-                    "download_url": f"/api/special-price-requests/{request_number}/approval-pdfs/{idx}"
-                })
+        print(f"📦 Total files: {len(all_files)}")
+        print(f"Files: {all_files}")
+        
+        # สร้าง URL สำหรับดาวน์โหลด
+        files_info = []
+        for filename in all_files:
+            files_info.append({
+                "filename": filename,
+                "download_url": f"/api/special-price-requests/{request_number}/download-approval-file?filename={filename}"
+            })
         
         return {
             "request_number": request_number,
-            "pdf_files": result
+            "pdf_files": files_info,
+            "total": len(files_info)
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Error fetching approval PDFs: {str(e)}")
+        import traceback
+        print(f"❌ Error in download_approval_pdfs:")
+        traceback.print_exc()
+        raise HTTPException(500, f"Error fetching files: {str(e)}")
 
 
-@router.get("/{request_number}/approval-pdfs/{file_index}", summary="ดาวน์โหลดไฟล์ PDF ที่ผู้อนุมัติแนบมา")
-def download_approval_pdf_file(request_number: str, file_index: int):
+@router.get("/{request_number}/download-approval-file", summary="ดาวน์โหลดไฟล์ที่แนบมา")
+def download_approval_file(request_number: str, filename: str = Query(...)):
     """
-    ดาวน์โหลดไฟล์ PDF ที่ผู้อนุมัติแนบมา (ตาม index)
+    ดาวน์โหลดไฟล์ที่แนบมากับคำขอ (ทั้งที่อัปโหลดผ่าน web และที่แนบมาโดยผู้อนุมัติ)
     """
     try:
         request_data = get_request_detail(request_number)
         
         if not request_data:
-            raise HTTPException(404, f"Request {request_number} not found")
+            raise HTTPException(404, "Request not found")
         
-        # ดึงรายการไฟล์ PDF
-        pdf_files_json = request_data.get("approval_pdf_files")
+        # ตรวจสอบว่าไฟล์อยู่ในรายการที่แนบมา
+        import json
+        all_files = []
         
-        if not pdf_files_json:
-            raise HTTPException(404, "No approval PDFs found")
+        # รวมไฟล์จาก attached_documents
+        if request_data.get("attached_documents"):
+            try:
+                all_files.extend(json.loads(request_data["attached_documents"]))
+            except:
+                pass
         
-        pdf_files = json.loads(pdf_files_json)
+        # รวมไฟล์จาก approval_pdf_files
+        if request_data.get("approval_pdf_files"):
+            try:
+                all_files.extend(json.loads(request_data["approval_pdf_files"]))
+            except:
+                pass
         
-        if file_index < 0 or file_index >= len(pdf_files):
-            raise HTTPException(404, "Invalid file index")
+        if filename not in all_files:
+            raise HTTPException(404, f"File '{filename}' not found in request attachments")
         
-        # ⭐ สร้าง full path จากชื่อไฟล์
-        filename = pdf_files[file_index]
         file_path = PDF_STORAGE_PATH / filename
         
         if not file_path.exists():
-            raise HTTPException(404, "PDF file not found")
+            raise HTTPException(404, f"File '{filename}' not found on server at {file_path}")
+        
+        # ตรวจสอบ file extension เพื่อกำหนด media type
+        file_ext = filename.split('.')[-1].lower()
+        media_types = {
+            'pdf': 'application/pdf',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+        }
+        media_type = media_types.get(file_ext, 'application/octet-stream')
         
         return FileResponse(
             path=file_path,
-            filename=file_path.name,
-            media_type="application/pdf"
+            filename=filename,
+            media_type=media_type
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Error downloading approval PDF: {str(e)}")
+        import traceback
+        print(f"❌ Error in download_approval_file:")
+        traceback.print_exc()
+        raise HTTPException(500, f"Error downloading file: {str(e)}")
 
 
 

@@ -74,8 +74,8 @@ def create_request(data: dict) -> dict:
                 request_number, quote_no, customer_code, customer_name, customer_type,
                 requester_name, request_reason,
                 original_total, requested_total, discount_percentage,
-                status, approver_email, branch, valid_from, valid_to,
-                email_sent_at, created_at, updated_at
+                status, approver_employee_id, branch, valid_from, valid_to,
+                attached_documents, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             request_number,
@@ -89,11 +89,11 @@ def create_request(data: dict) -> dict:
             data["requested_total"],
             discount_pct,
             "pending",
-            data["approver_email"],
+            data.get("approver_employee_id", ""),
             data.get("branch", ""),
             data.get("valid_from", ""),
             data.get("valid_to", ""),
-            now,
+            data.get("attached_documents", None),
             now,
             now
         ))
@@ -124,15 +124,15 @@ def create_request(data: dict) -> dict:
     
     # Insert items
     for item in data.get("items", []):
-        original_amount = item["w1_price"] * item["quantity"]
+        original_amount = item["normal_price"] * item["quantity"]
         requested_amount = item["requested_price"] * item["quantity"]
-        is_below_w1 = item["requested_price"] < item["w1_price"]
+        is_below_normal = item["requested_price"] < item["normal_price"]
         
         cursor.execute("""
             INSERT INTO special_price_request_items (
                 request_id, item_code, item_name, quantity, unit,
-                w1_price, requested_price, original_amount, requested_amount,
-                is_below_w1, created_at
+                normal_price, requested_price, original_amount, requested_amount,
+                is_below_normal, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             request_id,
@@ -140,11 +140,11 @@ def create_request(data: dict) -> dict:
             item["item_name"],
             item["quantity"],
             item.get("unit", ""),
-            item["w1_price"],
+            item["normal_price"],
             item["requested_price"],
             original_amount,
             requested_amount,
-            is_below_w1,
+            is_below_normal,
             now
         ))
     
@@ -169,18 +169,19 @@ def create_request(data: dict) -> dict:
 
 
 
-def get_requests(status: Optional[str] = None, limit: int = 20, offset: int = 0) -> dict:
+def get_requests(status: Optional[str] = None, approver_employee_id: Optional[str] = None, limit: int = 20, offset: int = 0) -> dict:
     """
     ดึงรายการคำขอราคาพิเศษ
     
     Args:
         status: "pending", "approved", "rejected", None (all)
+        approver_employee_id: รหัสพนักงานผู้อนุมัติ (กรองเฉพาะคำขอที่ส่งมาหาพนักงานคนนี้)
         limit: จำนวนรายการต่อหน้า
         offset: เริ่มต้นที่รายการที่
     
     Returns:
         dict: {
-            "items": [...],
+            "requests": [...],
             "total": int,
             "limit": int,
             "offset": int
@@ -190,12 +191,20 @@ def get_requests(status: Optional[str] = None, limit: int = 20, offset: int = 0)
     cursor = conn.cursor()
     
     # Build WHERE clause
-    where_clause = ""
+    where_conditions = []
     params = []
     
     if status and status != "all":
-        where_clause = "WHERE status = ?"
+        where_conditions.append("status = ?")
         params.append(status)
+    
+    if approver_employee_id:
+        where_conditions.append("approver_employee_id = ?")
+        params.append(approver_employee_id)
+    
+    where_clause = ""
+    if where_conditions:
+        where_clause = "WHERE " + " AND ".join(where_conditions)
     
     # Count total
     count_sql = f"SELECT COUNT(*) as total FROM special_price_requests {where_clause}"
@@ -205,13 +214,14 @@ def get_requests(status: Optional[str] = None, limit: int = 20, offset: int = 0)
     # Get items (⭐ MSSQL: ใช้ OFFSET/FETCH แทน LIMIT)
     sql = f"""
         SELECT 
-            request_number, quote_no, customer_code, customer_name,
-            requester_name, original_total, requested_total,
-            discount_percentage, status, approver_email, approved_by, approved_at,
-            created_at, updated_at
-        FROM special_price_requests
+            spr.request_number, spr.quote_no, spr.customer_code, spr.customer_name,
+            spr.requester_name, spr.original_total, spr.requested_total,
+            spr.discount_percentage, spr.status, spr.approver_employee_id, spr.approved_by, spr.approved_at,
+            spr.created_at, spr.updated_at,
+            (SELECT COUNT(*) FROM special_price_request_items WHERE request_id = spr.id) as item_count
+        FROM special_price_requests spr
         {where_clause}
-        ORDER BY created_at DESC
+        ORDER BY spr.created_at DESC
         OFFSET ? ROWS
         FETCH NEXT ? ROWS ONLY
     """
@@ -220,14 +230,30 @@ def get_requests(status: Optional[str] = None, limit: int = 20, offset: int = 0)
     
     # ⭐ MSSQL: แปลง rows เป็น dict
     columns = [column[0] for column in cursor.description]
-    items = []
+    requests = []
     for row in cursor.fetchall():
-        items.append(dict(zip(columns, row)))
+        request_dict = dict(zip(columns, row))
+        
+        # ⭐ ดึง items สำหรับแต่ละ request
+        cursor.execute("""
+            SELECT *
+            FROM special_price_request_items
+            WHERE request_id = (SELECT id FROM special_price_requests WHERE request_number = ?)
+            ORDER BY id
+        """, (request_dict['request_number'],))
+        
+        item_columns = [column[0] for column in cursor.description]
+        items = []
+        for item_row in cursor.fetchall():
+            items.append(dict(zip(item_columns, item_row)))
+        
+        request_dict['items'] = items
+        requests.append(request_dict)
     
     conn.close()
     
     return {
-        "items": items,
+        "requests": requests,
         "total": total,
         "limit": limit,
         "offset": offset
