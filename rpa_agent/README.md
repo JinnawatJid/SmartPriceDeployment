@@ -14,20 +14,33 @@ Previously, the backend server attempted to connect to the client computer's Goo
 3. When the user clicks "Send to BC" on the Web App, their browser sends the payload directly to `localhost:8001`.
 4. The Local Agent receives the payload and uses Selenium to drive the user's *already open* Chrome browser (`127.0.0.1:9222`) to create the Quote.
 
-## Building the Agent
-To distribute the Agent to branch users, you should build it into a standalone `.exe` so they do not need to install Python.
+---
 
-1. Ensure Python 3.9+ is installed.
+## 🏗️ Phase 1: Building the Agent (IT Team / Developer)
+
+**⚠️ Requires Internet Access and Python 3.9+**
+
+To distribute the Agent to branch users, you must build it into a standalone `.exe` so they do not need to install Python or connect to the internet to download dependencies (like `pip install`).
+
+1. Ensure Python 3.9+ is installed on your **developer machine**.
 2. Open a terminal in the `rpa_agent/` directory.
 3. Run `build_agent.bat`.
-4. This will create a zero-dependency executable at `rpa_agent/dist/rpa_agent.exe`.
+4. This script will automatically create a virtual environment, download `FastAPI`, `Selenium`, etc. via `pip`, and compile the Python script into a zero-dependency executable using PyInstaller.
+5. The final artifact will be located at `rpa_agent/dist/rpa_agent.exe`.
 
-## Distribution to Branches
-Provide the branch users with a ZIP folder containing:
-1. `rpa_agent.exe` (from the `dist` folder)
+---
+
+## 🚀 Phase 2: Distribution to Branches (Offline)
+
+**✅ No Internet or Python Required on Branch PCs**
+
+Provide the branch users with a ZIP folder containing only these two files:
+1. `rpa_agent.exe` (from the `dist` folder generated in Phase 1)
 2. `start_agent_and_chrome.bat`
 
-## Daily Usage for Branch Users
+---
+
+## 💻 Daily Usage for Branch Users
 1. In the morning, users should run `start_agent_and_chrome.bat`.
 2. This script will automatically:
    - Find and launch Google Chrome with the `--remote-debugging-port=9222` flag enabled.
