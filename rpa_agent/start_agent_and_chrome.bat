@@ -10,23 +10,26 @@ echo We will launch Google Chrome to listen on port 9222.
 echo Please leave this command window open while working!
 
 :: Set common paths for Chrome installation
-set CHROME_PATHS=^
-"%ProgramFiles%\Google\Chrome\Application\chrome.exe";^
-"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe";^
-"%LocalAppData%\Google\Chrome\Application\chrome.exe"
+set CHROME_EXE=
 
-set CHROME_EXE=""
+:: Try common Chrome installation paths
+if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" (
+    set CHROME_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe
+    goto :FOUND_CHROME
+)
 
-:: Find Chrome
-for %%I in (%CHROME_PATHS%) do (
-    if exist %%I (
-        set CHROME_EXE=%%I
-        goto :FOUND_CHROME
-    )
+if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" (
+    set CHROME_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe
+    goto :FOUND_CHROME
+)
+
+if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" (
+    set CHROME_EXE=%LocalAppData%\Google\Chrome\Application\chrome.exe
+    goto :FOUND_CHROME
 )
 
 :FOUND_CHROME
-if %CHROME_EXE%=="" (
+if "%CHROME_EXE%"=="" (
     echo [ERROR] Google Chrome was not found on this system!
     echo Please install Chrome or check the installation path.
     pause
@@ -36,9 +39,18 @@ if %CHROME_EXE%=="" (
 echo [OK] Found Chrome at: %CHROME_EXE%
 echo Launching...
 
-:: Start Chrome in background with debugging port
-start "" %CHROME_EXE% --remote-debugging-port=9222 --restore-last-session
-echo [OK] Chrome started on port 9222
+:: Close all existing Chrome instances first
+echo Closing existing Chrome instances...
+taskkill /F /IM chrome.exe >nul 2>&1
+timeout /t 2 >nul
+
+:: Start Chrome in background with debugging port and open required tabs
+start "" "%CHROME_EXE%" --remote-debugging-port=9222 --user-data-dir="%TEMP%\chrome_rpa_profile" "http://192.192.0.36:8080/BCTNG" "http://192.192.0.37:8000/create?step=6"
+echo [OK] Chrome started on port 9222 with BC and Smart Pricing tabs
+
+:: Give Chrome more time to fully start
+echo Waiting for Chrome to initialize...
+timeout /t 5 >nul
 
 :: Give Chrome a moment to open
 timeout /t 2 >nul

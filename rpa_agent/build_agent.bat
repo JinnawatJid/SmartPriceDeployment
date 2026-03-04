@@ -29,7 +29,6 @@ echo.
 echo ==============================================
 echo 3) Installing Dependencies...
 echo ==============================================
-pip install --upgrade pip
 pip install -r requirements.txt
 pip install pyinstaller
 
@@ -42,7 +41,7 @@ if exist "dist\rpa_agent.exe" del /Q "dist\rpa_agent.exe"
 if exist "build" rmdir /S /Q "build"
 
 echo Compiling rpa_agent.py to standalone executable...
-pyinstaller --noconfirm --onefile --console --name rpa_agent --hidden-import uvicorn.loops --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto rpa_agent.py
+pyinstaller --noconfirm rpa_agent.spec
 
 if exist "dist\rpa_agent.exe" (
     echo.

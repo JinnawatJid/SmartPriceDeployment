@@ -78,21 +78,40 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
     # Convert the quote code
     target_series = convert_quote_code(quote_code)
     
-    # ⭐️ Use hardcoded localhost address since this runs locally
-    chrome_address = "127.0.0.1:9222"
+    # ⭐️ Try multiple Chrome addresses
+    chrome_addresses = [
+        "127.0.0.1:9222",
+        "192.192.99.1:9222"
+    ]
     
-    print(f"[INFO] Connecting to Chrome at: {chrome_address}")
+    driver = None
+    last_error = None
     
-    # Chrome options to connect to existing browser
-    chrome_options = Options()
-    chrome_options.debugger_address = chrome_address
+    for chrome_address in chrome_addresses:
+        try:
+            print(f"[INFO] Trying to connect to Chrome at: {chrome_address}")
+            
+            # Chrome options to connect to existing browser
+            chrome_options = Options()
+            chrome_options.debugger_address = chrome_address
+            
+            print("🔌 Connecting to existing Chrome browser...")
+            driver = webdriver.Chrome(options=chrome_options)
+            
+            print(f"[OK] Connected to Chrome at {chrome_address}")
+            break  # Success! Exit loop
+            
+        except Exception as e:
+            last_error = str(e)
+            print(f"[WARNING] Failed to connect to {chrome_address}: {last_error}")
+            continue
+    
+    if not driver:
+        error_msg = f"Cannot connect to Chrome at any address. Last error: {last_error}"
+        print(f"[ERROR] {error_msg}")
+        raise Exception(error_msg)
     
     try:
-        print("🔌 Connecting to existing Chrome browser...")
-        driver = webdriver.Chrome(options=chrome_options)
-        
-        print(f"[OK] Connected to Chrome at {chrome_address}")
-        
         # Get all window handles (tabs)
         windows = driver.window_handles
         print(f"[OK] Found {len(windows)} open tabs")
