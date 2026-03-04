@@ -111,7 +111,11 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
     
     try:
         print("🔌 Connecting to existing Chrome browser...")
-        driver = webdriver.Chrome(options=chrome_options)
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+        except Exception as e:
+            print(f"[ERROR] Could not connect to Chrome at {chrome_address}: {e}")
+            raise HTTPException(status_code=500, detail="Cannot connect to Chrome. Make sure Chrome is opened with remote debugging enabled (port 9222). Please restart Chrome using 'start_agent_and_chrome.bat'.")
         
         print(f"[OK] Connected to Chrome at {chrome_address}")
         
