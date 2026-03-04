@@ -21,6 +21,8 @@ from api.router_sq import router as sq_router
 from products_router import api_router
 from special_price_request.router import router as special_price_request_router
 from cache_refresh_router import router as cache_refresh_router
+from item_master_router import router as item_master_router
+from admin_router import router as admin_router
 from branch import router as branch_router
 from credit_router import router as credit_router
 from chrome_debug_router import router as chrome_debug_router

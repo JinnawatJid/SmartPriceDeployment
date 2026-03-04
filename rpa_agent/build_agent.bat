@@ -42,7 +42,7 @@ if exist "dist\rpa_agent.exe" del /Q "dist\rpa_agent.exe"
 if exist "build" rmdir /S /Q "build"
 
 echo Compiling rpa_agent.py to standalone executable...
-pyinstaller --noconfirm --onefile --console --name rpa_agent rpa_agent.py
+pyinstaller --noconfirm --onefile --console --name rpa_agent --hidden-import uvicorn.loops --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto rpa_agent.py
 
 if exist "dist\rpa_agent.exe" (
     echo.
