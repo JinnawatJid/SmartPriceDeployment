@@ -1,5 +1,4 @@
 @echo off
-setlocal enabledelayedexpansion
 title Start Smart Pricing RPA Agent ^& Chrome
 chcp 65001 > nul
 
@@ -9,20 +8,20 @@ echo ============================================================
 echo We will launch Google Chrome to listen on port 9222.
 echo Please leave this command window open while working!
 
-:: Set common paths for Chrome installation
-set CHROME_PATHS=^
-"%ProgramFiles%\Google\Chrome\Application\chrome.exe";^
-"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe";^
-"%LocalAppData%\Google\Chrome\Application\chrome.exe"
-
 set CHROME_EXE=""
 
-:: Find Chrome
-for %%I in (%CHROME_PATHS%) do (
-    if exist %%I (
-        set CHROME_EXE=%%I
-        goto :FOUND_CHROME
-    )
+:: Find Chrome without complex FOR loops that break batch scripts
+if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" (
+    set CHROME_EXE="%ProgramFiles%\Google\Chrome\Application\chrome.exe"
+    goto :FOUND_CHROME
+)
+if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" (
+    set CHROME_EXE="%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+    goto :FOUND_CHROME
+)
+if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" (
+    set CHROME_EXE="%LocalAppData%\Google\Chrome\Application\chrome.exe"
+    goto :FOUND_CHROME
 )
 
 :FOUND_CHROME
@@ -52,14 +51,14 @@ echo We will start the background Agent to listen for web requests.
 :: Look for the PyInstaller compiled EXE
 if exist "rpa_agent.exe" (
     echo [OK] Found compiled rpa_agent.exe
-    start "RPA Agent" cmd /c "rpa_agent.exe & pause"
+    start "RPA Agent" cmd /k "rpa_agent.exe"
     goto :AGENT_STARTED
 )
 
 :: Look for the PyInstaller compiled EXE inside dist directory
 if exist "dist\rpa_agent.exe" (
     echo [OK] Found compiled rpa_agent.exe in dist folder
-    start "RPA Agent" cmd /c "dist\rpa_agent.exe & pause"
+    start "RPA Agent" cmd /k "dist\rpa_agent.exe"
     goto :AGENT_STARTED
 )
 
@@ -68,7 +67,7 @@ python --version >nul 2>&1
 if not errorlevel 1 (
     if exist "rpa_agent.py" (
         echo [INFO] No .exe found, but Python is installed. Running raw script...
-        start "RPA Agent" cmd /c "python rpa_agent.py & pause"
+        start "RPA Agent" cmd /k "python rpa_agent.py"
         goto :AGENT_STARTED
     )
 )
