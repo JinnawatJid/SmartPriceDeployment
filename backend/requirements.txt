@@ -16,3 +16,4 @@ httpx
 schedule
 cachetools
 apscheduler
+pyodbc
