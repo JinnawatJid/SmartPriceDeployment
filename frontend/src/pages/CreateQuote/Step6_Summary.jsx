@@ -1188,26 +1188,14 @@ function Step6_Summary({ state, dispatch }) {
 
       const payload = buildQuotationPayload("complete");
 
-      // ⭐ ตรวจจับ Client IP (เครื่องที่เปิด Chrome)
-      // 
-      // สถาปัตยกรรม:
-      // - ถ้า Backend รันบน localhost (development) → ใช้ 127.0.0.1
-      // - ถ้า Backend รันบน Server (production) → ใช้ Client IP
-      //
-      // วิธีตรวจสอบ: ดูจาก window.location.hostname
-      const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const clientIP = isLocalDev ? "127.0.0.1" : "192.192.0.162";
-      
-      console.log(`[RPA] Environment: ${isLocalDev ? 'Local Development' : 'Production Server'}`);
-      console.log(`[RPA] Chrome Address: ${clientIP}:9222`);
-
-      // ⭐ เตรียมข้อมูลสำหรับ RPA
+      // ⭐ เตรียมข้อมูลสำหรับ RPA Local Agent
       const rpaPayload = {
         quote_code: payload.quoteNo?.substring(0, 4) || "TRQT", // เอา 4 ตัวแรกของเลขที่ใบเสนอราคา
         customer_no: payload.customer.code,
         sales_admin: payload.employee?.id || "20614", // ใช้ employee ID หรือค่า default
         your_reference: payload.quoteNo || "", // ใส่เลขที่ใบเสนอราคาในระบบเรา
-        remote_chrome_address: `${clientIP}:9222`, // ⭐ ส่ง IP ของ Client ที่เปิด Chrome
+        // ไม่ต้องใช้ remote_chrome_address อีกต่อไปเพราะ Local Agent รันที่เครื่องเดียวกัน (127.0.0.1) เสมอ
+        remote_chrome_address: "127.0.0.1:9222",
         items: payload.cart.map((it) => {
           const isGlass = (it.category || "").toUpperCase() === "G";
           
@@ -1236,8 +1224,23 @@ function Step6_Summary({ state, dispatch }) {
         }),
       };
 
-      // ⭐ เรียก RPA API แทน BC API
-      await api.post("/api/rpa/create-quote", rpaPayload);
+      // ⭐ เรียก Local RPA Agent ที่พอร์ต 8001 (Client-Side Agent)
+      // ใช้ fetch ธรรมดาเพราะเราต้องการยิงไปที่ localhost เสมอ ไม่เกี่ยวกับ backend URL
+      console.log("[RPA] Sending request to Local Agent: http://127.0.0.1:8001/api/rpa/create-quote");
+      const rpaRes = await fetch("http://127.0.0.1:8001/api/rpa/create-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rpaPayload),
+      });
+
+      if (!rpaRes.ok) {
+        let errorDetail = "ส่งข้อมูลเข้า Dynamics 365 ไม่สำเร็จ";
+        try {
+          const errorData = await rpaRes.json();
+          errorDetail = errorData.detail || errorDetail;
+        } catch(e) {}
+        throw new Error(errorDetail);
+      }
 
       alert("ส่งข้อมูลเข้า Dynamics 365 ผ่าน RPA เรียบร้อยแล้ว");
 
@@ -1247,7 +1250,7 @@ function Step6_Summary({ state, dispatch }) {
 
     } catch (err) {
       console.error(err);
-      const errorMsg = err.response?.data?.detail || "ส่งข้อมูลเข้า Dynamics 365 ไม่สำเร็จ";
+      const errorMsg = err.message || "ส่งข้อมูลเข้า Dynamics 365 ไม่สำเร็จ - โปรดตรวจสอบว่า RPA Agent บนเครื่องเปิดอยู่หรือไม่";
       alert(errorMsg);
     } finally {
       setSendingToBC(false);

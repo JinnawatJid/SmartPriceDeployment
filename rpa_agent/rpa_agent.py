@@ -1,47 +1,56 @@
-﻿"""
-RPA Script: Create Sales Quote in D365 BC
-1. Click +New button
-2. Click Review or update the value for No.
-3. Select the matching quote series based on input code
-4. Fill Customer No. and press Enter
-5. Fill Sales Admin and press Enter
-6. Fill Your Reference
-7. Add Item (Item No.)
-8. Press Tab 5 times and fill Description
-"""
+import os
+import sys
+import json
+import time
+import logging
+from typing import List, Optional
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-import time
-import sys
-import json
-import os
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 
-# Fix encoding for Windows console - only when running as main script
-# Don't reconfigure when imported as module to avoid breaking parent process
-if sys.platform == "win32" and __name__ == "__main__":
+# Fix encoding for Windows console
+if sys.platform == "win32":
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-def load_rpa_data():
-    """
-    Load RPA data from JSON file if exists, otherwise return None
-    """
-    temp_file = "rpa_temp_data.json"
-    if os.path.exists(temp_file):
-        try:
-            with open(temp_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                print("[OK] Loaded data from rpa_temp_data.json")
-                return data
-        except Exception as e:
-            print(f"[WARNING] Failed to load JSON data: {e}")
-            return None
-    return None
+app = FastAPI(title="Local RPA Agent for Dynamics 365 BC")
+
+# Allow all origins for the local agent
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class RPAItem(BaseModel):
+    sku: str
+    description: str
+    quantity: str
+    unit_price: Optional[str] = None
+    price_per_sqft: Optional[str] = None
+    price_per_sheet: Optional[str] = None
+
+
+class RPAQuoteRequest(BaseModel):
+    quote_code: str
+    customer_no: str
+    sales_admin: str
+    your_reference: str
+    remote_chrome_address: Optional[str] = "127.0.0.1:9222"
+    items: List[RPAItem]
+
 
 def convert_quote_code(input_code):
     """
@@ -59,7 +68,7 @@ def convert_quote_code(input_code):
     print(f"[INFO] Converting: {input_code} → {converted}")
     return converted
 
-def create_sales_quote(quote_code, rpa_data=None):
+def execute_create_sales_quote(quote_code, rpa_data=None):
     """
     Automate creating a sales quote with specific series code
     """
@@ -69,10 +78,8 @@ def create_sales_quote(quote_code, rpa_data=None):
     # Convert the quote code
     target_series = convert_quote_code(quote_code)
     
-    # ⭐ รับ Chrome address จาก rpa_data (รองรับ remote Chrome)
-    chrome_address = "127.0.0.1:9222"  # default
-    if rpa_data and "remote_chrome_address" in rpa_data:
-        chrome_address = rpa_data["remote_chrome_address"]
+    # ⭐️ Use hardcoded localhost address since this runs locally
+    chrome_address = "127.0.0.1:9222"
     
     print(f"[INFO] Connecting to Chrome at: {chrome_address}")
     
@@ -776,42 +783,15 @@ def create_sales_quote(quote_code, rpa_data=None):
         time.sleep(2)
         
         # STEP 8-11: Add Items (Loop for multiple items)
-        # Get items from JSON data or use default test items
         if rpa_data and "items" in rpa_data:
             items_to_add = rpa_data["items"]
             print("[OK] Using items from API data")
         else:
-            # Default test items
-            items_to_add = [
-                {
-                    "item_code": "A010010100101",
-                    "description": "อลูมิเนียมเส้น Test Variant",
-                    "quantity": "20",
-                    "unit_price": "500"
-                },
-                {
-                    "item_code": "G123456789012",
-                    "description": "กระจกใส 5mm",
-                    "quantity": "10",
-                    "price_per_sqft": "24",
-                    "price_per_sheet": "300"
-                },
-                {
-                    "item_code": "A020020200202",
-                    "description": "อลูมิเนียมแผ่น Test 2",
-                    "quantity": "15",
-                    "unit_price": "450"
-                }
-            ]
-            print("[WARNING]  Using default test items")
+            items_to_add = []
         
         print("\n" + "="*60)
         print(f"STEP 8-11: Adding {len(items_to_add)} items")
         print("="*60)
-        
-        # Import ActionChains and Keys for real keyboard simulation
-        from selenium.webdriver.common.action_chains import ActionChains
-        from selenium.webdriver.common.keys import Keys
         
         # JavaScript to switch to iframe
         js_switch_to_iframe = """
@@ -833,12 +813,12 @@ def create_sales_quote(quote_code, rpa_data=None):
         
         for item_index, item in enumerate(items_to_add, 1):
             print("\n" + "-"*60)
-            print(f"Processing Item {item_index}/{len(items_to_add)}: {item['item_code']}")
+            print(f"Processing Item {item_index}/{len(items_to_add)}: {item.get('item_code', '')}")
             print("-"*60)
             
-            item_code = item['item_code']
-            description_text = item['description']
-            quantity = item['quantity']
+            item_code = item.get('item_code', '')
+            description_text = item.get('description', '')
+            quantity = item.get('quantity', '1')
             is_glass_item = item_code.upper().startswith('G')
             
             # STEP 8: Add Item Code
@@ -849,21 +829,16 @@ def create_sales_quote(quote_code, rpa_data=None):
                 var itemCode = '{item_code}';
                 
                 function tryAdd(doc) {{
-                    // หา lookup ปุ่มของช่อง No.
                     var lookupBtn = doc.querySelector('a[aria-label="Choose a value for No."]');
                     if (!lookupBtn) return false;
                     
-                    // หา input ที่ถูกควบคุมโดย aria-controls
                     var inputId = lookupBtn.getAttribute('aria-controls');
                     if (!inputId) return false;
                     
                     var input = doc.getElementById(inputId);
                     if (!input) return false;
                     
-                    // focus
                     input.focus();
-                    
-                    // ใส่ค่า
                     input.value = itemCode;
                     input.dispatchEvent(new Event('input', {{ bubbles: true }}));
                     input.dispatchEvent(new Event('change', {{ bubbles: true }}));
@@ -871,12 +846,10 @@ def create_sales_quote(quote_code, rpa_data=None):
                     return true;
                 }}
                 
-                // 1️⃣ ลอง main document
                 if (tryAdd(document)) {{
                     return "Item added in main document";
                 }}
                 
-                // 2️⃣ ลอง iframe
                 var iframes = document.querySelectorAll('iframe');
                 for (var i = 0; i < iframes.length; i++) {{
                     try {{
@@ -899,7 +872,6 @@ def create_sales_quote(quote_code, rpa_data=None):
                 print(f"[ERROR] Failed to add item: {str(e)}")
                 continue
             
-            # Wait 2 seconds after adding item
             print("[WAIT] Waiting 1 seconds after adding item...")
             time.sleep(1)
             
@@ -907,36 +879,29 @@ def create_sales_quote(quote_code, rpa_data=None):
             print(f"\n[Item {item_index}] Step 9: Filling Description: {description_text}")
             
             try:
-                # Switch to the iframe
                 iframe_index = driver.execute_script(js_switch_to_iframe)
                 if iframe_index >= 0:
                     iframes = driver.find_elements(By.TAG_NAME, "iframe")
                     driver.switch_to.frame(iframes[iframe_index])
                 
-                # Create ActionChains object
                 actions = ActionChains(driver)
                 
-                # สำหรับบรรทัดแรก: ต้องรอให้ระบบโหลด Description อัตโนมัติก่อน
                 if item_index == 1:
                     print("[WAIT] First item - waiting 1 seconds for auto-description...")
                     time.sleep(2)
                 
-                # 1. กด Tab 1 ครั้ง
                 print("[WAIT] Pressing Tab 1 time...")
                 actions.send_keys(Keys.TAB).perform()
                 time.sleep(1)
                 
-                # 2. กด Tab อีก 3 ครั้ง
                 print("[WAIT] Pressing Tab 3 more times...")
                 for i in range(3):
                     actions.send_keys(Keys.TAB).perform()
                     time.sleep(0.5)
                 
-                # 3. รอ 2 วินาที
                 print("[WAIT] Waiting 1 seconds...")
                 time.sleep(1)
                 
-                # 4. กด Ctrl+A, Delete, แล้วพิมพ์ Description
                 print("[WAIT] Selecting all text (Ctrl+A)...")
                 actions.key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL).perform()
                 time.sleep(0.5)
@@ -972,35 +937,29 @@ def create_sales_quote(quote_code, rpa_data=None):
                 
                 actions = ActionChains(driver)
                 
-                # สำหรับบรรทัดแรก: รอให้ระบบโหลด Bin Code และข้อมูลอื่นๆ เสร็จก่อน
                 if item_index == 1:
                     print("[WAIT] First item - waiting 3 seconds for system to load Bin Code and other fields...")
                     time.sleep(3)
                 else:
                     time.sleep(1)
  
-                # กด Tab 3 ครั้ง
                 print("[WAIT] Pressing Tab 3 times...")
                 for i in range(3):
                     actions.send_keys(Keys.TAB).perform()
                     time.sleep(1)
                 
-                # สำหรับบรรทัดแรก: เช็คว่า focus อยู่ที่ช่อง Quantity หรือไม่
                 if item_index == 1:
                     print("[CHECK] Checking if focused on Quantity field...")
                     
-                    # JavaScript เพื่อเช็คว่า focus อยู่ที่ช่อง Quantity หรือไม่
                     js_check_quantity = """
                     function CheckQuantityFocus() {
                         var activeElement = document.activeElement;
                         
-                        // เช็คว่า active element อยู่ใน td ที่มี controlname="Quantity" หรือไม่
                         var parentTd = activeElement.closest('td[controlname="Quantity"]');
                         if (parentTd) {
                             return true;
                         }
                         
-                        // เช็คใน iframe
                         var iframes = document.querySelectorAll('iframe');
                         for (var i = 0; i < iframes.length; i++) {
                             try {
@@ -1021,7 +980,6 @@ def create_sales_quote(quote_code, rpa_data=None):
                     driver.switch_to.default_content()
                     is_on_quantity = driver.execute_script(js_check_quantity)
                     
-                    # Switch back to iframe
                     if iframe_index >= 0:
                         iframes = driver.find_elements(By.TAG_NAME, "iframe")
                         driver.switch_to.frame(iframes[iframe_index])
@@ -1033,7 +991,6 @@ def create_sales_quote(quote_code, rpa_data=None):
                     else:
                         print("[OK] Already on Quantity field")
                 
-                # พิมพ์ Quantity
                 print(f"[WAIT] Typing quantity: {quantity}")
                 actions.send_keys(quantity).perform()
                 
@@ -1062,27 +1019,22 @@ def create_sales_quote(quote_code, rpa_data=None):
                 actions = ActionChains(driver)
                 
                 if is_glass_item:
-                    # สินค้าขึ้นต้นด้วย G (กระจก)
                     print("[WAIT] Item starts with 'G' - filling glass prices...")
                     
-                    # กด Tab 2 ครั้ง
                     print("[WAIT] Pressing Tab 2 times to reach price per sq.ft...")
                     for i in range(2):
                         actions.send_keys(Keys.TAB).perform()
                         time.sleep(0.5)
                     
-                    # ใส่ราคาต่อตารางฟุต
                     price_per_sqft = item.get('price_per_sqft', '24')
                     print(f"[WAIT] Typing price per sq.ft: {price_per_sqft}")
                     actions.send_keys(price_per_sqft).perform()
                     time.sleep(0.5)
                     
-                    # กด Tab 1 ครั้ง
                     print("[WAIT] Pressing Tab 1 time to reach price per sheet...")
                     actions.send_keys(Keys.TAB).perform()
                     time.sleep(0.5)
                     
-                    # ใส่ราคาต่อแผ่น
                     price_per_sheet = item.get('price_per_sheet', '300')
                     print(f"[WAIT] Typing price per sheet: {price_per_sheet}")
                     actions.send_keys(price_per_sheet).perform()
@@ -1090,16 +1042,13 @@ def create_sales_quote(quote_code, rpa_data=None):
                     print(f"[OK] Glass prices filled: {price_per_sqft} baht/sq.ft, {price_per_sheet} baht/sheet")
                     
                 else:
-                    # สินค้าไม่ใช่กระจก
                     print("[WAIT] Item does not start with 'G' - filling unit price...")
                     
-                    # กด Tab 3 ครั้ง
                     print("[WAIT] Pressing Tab 3 times to reach unit price...")
                     for i in range(3):
                         actions.send_keys(Keys.TAB).perform()
                         time.sleep(0.5)
                     
-                    # ใส่ราคา
                     unit_price = item.get('unit_price', '500')
                     print(f"[WAIT] Typing unit price: {unit_price}")
                     actions.send_keys(unit_price).perform()
@@ -1118,7 +1067,6 @@ def create_sales_quote(quote_code, rpa_data=None):
             
             time.sleep(2)
             
-            # If not the last item, press Tab 7 times to go to next line
             if item_index < len(items_to_add):
                 print(f"\n[Item {item_index}] Moving to next line...")
                 
@@ -1130,7 +1078,6 @@ def create_sales_quote(quote_code, rpa_data=None):
                     
                     actions = ActionChains(driver)
                     
-                    # กด Tab 7 ครั้งเพื่อไปบรรทัดใหม่
                     print("[WAIT] Pressing Tab 7 times to go to next line...")
                     for i in range(7):
                         actions.send_keys(Keys.TAB).perform()
@@ -1153,11 +1100,7 @@ def create_sales_quote(quote_code, rpa_data=None):
         print("\n" + "="*60)
         print(f"[OK] All {len(items_to_add)} items added successfully!")
         print("="*60)
-        
         time.sleep(2)
-        
-        print("\n" + "="*60)
-        print("[OK] RPA script completed successfully!")
         print("\n" + "="*60)
         print("[OK] RPA script completed successfully!")
         print("="*60)
@@ -1166,23 +1109,60 @@ def create_sales_quote(quote_code, rpa_data=None):
         print(f"[ERROR] Error occurred: {str(e)}")
         print("\n[TIP] Make sure Chrome is running with remote debugging:")
         print('   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222')
+        raise
 
+@app.post("/api/rpa/create-quote")
+async def create_quote_via_rpa(request: RPAQuoteRequest):
+    """
+    Trigger RPA script to create Sales Quote in D365 BC (runs locally)
+    """
+    logger = logging.getLogger(__name__)
     
+    try:
+        print("\n" + "="*60)
+        print("LOCAL RPA REQUEST RECEIVED")
+        print(f"Quote Code: {request.quote_code}")
+        print(f"Customer: {request.customer_no}")
+        print(f"Items Count: {len(request.items)}")
+        print("="*60 + "\n")
+
+        rpa_data = {
+            "quote_code": request.quote_code,
+            "customer_no": request.customer_no,
+            "sales_admin": request.sales_admin,
+            "your_reference": request.your_reference,
+            # We ignore request.remote_chrome_address because we always use localhost
+            "items": [
+                {
+                    "item_code": item.sku,
+                    "description": item.description,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "price_per_sqft": item.price_per_sqft,
+                    "price_per_sheet": item.price_per_sheet,
+                }
+                for item in request.items
+            ],
+        }
+
+        execute_create_sales_quote(request.quote_code, rpa_data)
+
+        return {
+            "success": True,
+            "message": "Local RPA executed successfully",
+            "output": "Sales Quote created in D365 BC"
+        }
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[ERROR] Failed to execute RPA: {error_msg}")
+        logger.error(f"Failed to execute RPA: {error_msg}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute RPA script: {error_msg}",
+        )
 
 if __name__ == "__main__":
-    # Load RPA data from JSON file (if called from API)
-    rpa_data = load_rpa_data()
-    
-    # Get quote code from command line argument or prompt user
-    if len(sys.argv) > 1:
-        quote_code = sys.argv[1]
-    else:
-        print("[INFO] Enter the quote code (e.g., TRQT, AYSQ, etc.):")
-        quote_code = input("Quote code: ").strip().upper()
-    
-    if not quote_code:
-        print("[ERROR] No quote code provided. Exiting.")
-        sys.exit(1)
-    
-    # Pass rpa_data to the function
-    create_sales_quote(quote_code, rpa_data)
+    import uvicorn
+    print("Starting Local RPA Agent on port 8001...")
+    uvicorn.run(app, host="0.0.0.0", port=8001)
