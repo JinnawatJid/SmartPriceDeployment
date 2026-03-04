@@ -25,7 +25,29 @@ if sys.platform == "win32":
 
 app = FastAPI(title="Local RPA Agent for Dynamics 365 BC")
 
-# Allow all origins for the local agent
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+# 1. First Middleware: Handle Chrome's Private Network Access (PNA) preflight requests.
+# Chrome blocks HTTP sites (e.g. 192.168.x.x) from calling localhost (127.0.0.1)
+# unless the server explicitly allows it via this specific header.
+class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.method == "OPTIONS" and "Access-Control-Request-Private-Network" in request.headers:
+            response = Response()
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            return response
+
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+
+app.add_middleware(PrivateNetworkAccessMiddleware)
+
+# 2. Standard CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
