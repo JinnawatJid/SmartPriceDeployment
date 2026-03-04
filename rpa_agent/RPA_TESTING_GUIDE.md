@@ -49,6 +49,16 @@
 
 ## 3. การรัน Web Application (Smart Pricing)
 
+**สำคัญมาก (สำหรับ Google Chrome):** เนื่องจาก Smart Pricing รันผ่าน IP ภายใน (เช่น `http://192.168.x.x`) แต่ตัว Agent รันที่ `localhost` Chrome จะมองว่าเป็นการข้าม Network แบบไม่ปลอดภัย (Private Network Access) คุณต้องเข้าไปตั้งค่าเพื่ออนุญาตก่อน:
+1. เปิดเบราว์เซอร์ Chrome ที่จะใช้เข้าเว็บ Smart Pricing
+2. พิมพ์ URL นี้ลงในช่อง Address Bar: `chrome://flags/#block-insecure-private-network-requests`
+3. เปลี่ยนค่า `Block insecure private network requests` ให้เป็น **Disabled**
+4. กดปุ่ม Relaunch (มุมขวาล่าง) เพื่อรีสตาร์ทเบราว์เซอร์
+
+---
+
+## 3. การรัน Web Application (Smart Pricing)
+
 1. **เปิด Terminal หน้าต่างใหม่ (หน้าต่างที่ 2)** เพื่อรัน Backend
    ```cmd
    cd backend
