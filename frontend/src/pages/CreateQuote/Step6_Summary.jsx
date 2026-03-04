@@ -1228,6 +1228,7 @@ function Step6_Summary({ state, dispatch }) {
       // ลองหลาย URL เพื่อรองรับทั้งกรณีที่เปิดจากเครื่องเดียวกันและเครื่องอื่น
       const rpaUrls = [
         "http://127.0.0.1:8001/api/rpa/create-quote",      // ลอง localhost ก่อน (เครื่องที่เปิด browser)
+        "http://192.192.0.37:8001/api/rpa/create-quote",   // ลองเครื่อง Server
         "http://192.168.1.185:8001/api/rpa/create-quote",  // ลองเครื่อง Dev (สำหรับทดสอบ)
         "http://192.192.99.1:8001/api/rpa/create-quote"    // ลองเครื่องผ่าน SonicWall
       ];
