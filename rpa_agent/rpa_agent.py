@@ -80,8 +80,8 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
     
     # ⭐️ Try multiple Chrome addresses
     chrome_addresses = [
-        "127.0.0.1:9222",
-        "192.192.99.1:9222"
+         # localhost (เครื่องเดียวกัน)       # เครื่อง Dev (สำหรับทดสอบ)
+        "10.10.10.6:9222"         # SonicWall IP
     ]
     
     driver = None

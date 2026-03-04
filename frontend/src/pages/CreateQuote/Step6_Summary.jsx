@@ -1225,20 +1225,50 @@ function Step6_Summary({ state, dispatch }) {
       };
 
       // ⭐ เรียก Local RPA Agent ที่พอร์ต 8001 (Client-Side Agent)
-      // ใช้ fetch ธรรมดาเพราะเราต้องการยิงไปที่ localhost เสมอ ไม่เกี่ยวกับ backend URL
-      console.log("[RPA] Sending request to Local Agent: http://127.0.0.1:8001/api/rpa/create-quote");
-      const rpaRes = await fetch("http://127.0.0.1:8001/api/rpa/create-quote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(rpaPayload),
-      });
+      // ลองหลาย URL เพื่อรองรับทั้งกรณีที่เปิดจากเครื่องเดียวกันและเครื่องอื่น
+      const rpaUrls = [
+        "http://127.0.0.1:8001/api/rpa/create-quote",      // ลอง localhost ก่อน (เครื่องที่เปิด browser)
+        "http://192.168.1.185:8001/api/rpa/create-quote",  // ลองเครื่อง Dev (สำหรับทดสอบ)
+        "http://192.192.99.1:8001/api/rpa/create-quote"    // ลองเครื่องผ่าน SonicWall
+      ];
 
-      if (!rpaRes.ok) {
-        let errorDetail = "ส่งข้อมูลเข้า Dynamics 365 ไม่สำเร็จ";
+      let rpaRes = null;
+      let lastError = null;
+
+      for (const url of rpaUrls) {
         try {
-          const errorData = await rpaRes.json();
-          errorDetail = errorData.detail || errorDetail;
-        } catch(e) {}
+          console.log(`[RPA] Trying to send request to: ${url}`);
+          rpaRes = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(rpaPayload),
+          });
+
+          if (rpaRes.ok) {
+            console.log(`[RPA] Successfully connected to: ${url}`);
+            break; // สำเร็จแล้ว ออกจาก loop
+          } else {
+            console.warn(`[RPA] Failed with status ${rpaRes.status} from: ${url}`);
+            lastError = `HTTP ${rpaRes.status}`;
+          }
+        } catch (err) {
+          console.warn(`[RPA] Connection failed to: ${url}`, err);
+          lastError = err.message;
+          rpaRes = null; // Reset เพื่อลอง URL ถัดไป
+        }
+      }
+
+      if (!rpaRes || !rpaRes.ok) {
+        let errorDetail = "ไม่สามารถเชื่อมต่อ RPA Agent ได้ - โปรดตรวจสอบว่า RPA Agent เปิดอยู่หรือไม่";
+        if (lastError) {
+          errorDetail += ` (${lastError})`;
+        }
+        if (rpaRes && !rpaRes.ok) {
+          try {
+            const errorData = await rpaRes.json();
+            errorDetail = errorData.detail || errorDetail;
+          } catch(e) {}
+        }
         throw new Error(errorDetail);
       }
 

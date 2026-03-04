@@ -45,15 +45,30 @@ taskkill /F /IM chrome.exe >nul 2>&1
 timeout /t 2 >nul
 
 :: Start Chrome in background with debugging port and open required tabs
-start "" "%CHROME_EXE%" --remote-debugging-port=9222 --user-data-dir="%TEMP%\chrome_rpa_profile" "http://192.192.0.36:8080/BCTNG" "http://192.192.0.37:8000/create?step=6"
+start "" "%CHROME_EXE%" --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir="%TEMP%\chrome_rpa_profile" "http://192.192.0.36:8080/BCTNG" "http://192.192.0.37:8000/create?step=6"
 echo [OK] Chrome started on port 9222 with BC and Smart Pricing tabs
 
 :: Give Chrome more time to fully start
 echo Waiting for Chrome to initialize...
-timeout /t 5 >nul
+timeout /t 10 >nul
 
-:: Give Chrome a moment to open
-timeout /t 2 >nul
+:: Verify Chrome debugging port is listening
+echo Verifying Chrome debugging port...
+netstat -ano | findstr :9222 >nul 2>&1
+if errorlevel 1 (
+    echo [WARNING] Chrome debugging port 9222 is not listening yet!
+    echo [INFO] Waiting a bit more...
+    timeout /t 5 >nul
+    netstat -ano | findstr :9222 >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Chrome debugging port still not accessible!
+        echo [INFO] This might cause RPA to fail. Please check Chrome is running.
+    ) else (
+        echo [OK] Chrome debugging port is now listening!
+    )
+) else (
+    echo [OK] Chrome debugging port is listening!
+)
 
 echo.
 echo ============================================================
