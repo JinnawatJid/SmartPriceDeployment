@@ -16,6 +16,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
 
 # Fix encoding for Windows console
 if sys.platform == "win32":
@@ -112,6 +113,24 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
     try:
         print("🔌 Connecting to existing Chrome browser...")
         
+        # For offline branch machines, we use a local bundled chromedriver.exe to prevent
+        # Selenium Manager from attempting to download drivers from the internet (which fails in restricted networks).
+        # We look for chromedriver.exe in the same folder as this running script/executable.
+        if getattr(sys, 'frozen', False):
+            # Running as compiled PyInstaller executable
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # Running as standard Python script
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        driver_path = os.path.join(base_dir, "chromedriver.exe")
+        service = None
+        if os.path.exists(driver_path):
+            print(f"[INFO] Found local offline driver at: {driver_path}")
+            service = Service(executable_path=driver_path)
+        else:
+            print("[WARN] Local chromedriver.exe not found! Attempting to use default Selenium Manager (requires internet)...")
+
         # Retry logic: Try to connect up to 5 times, waiting 2 seconds between each
         max_retries = 5
         driver = None
@@ -119,7 +138,10 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
 
         for attempt in range(1, max_retries + 1):
             try:
-                driver = webdriver.Chrome(options=chrome_options)
+                if service:
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                else:
+                    driver = webdriver.Chrome(options=chrome_options)
                 print(f"[OK] Connected to Chrome at {chrome_address} on attempt {attempt}")
                 break
             except Exception as e:
