@@ -47,4 +47,5 @@ Provide the branch users with a ZIP folder containing only these two files:
    - Start the `rpa_agent.exe` in the background (a black terminal window will appear).
 3. The user must **leave the black terminal window open** while working.
 4. They can log into Dynamics 365 BC normally in the Chrome window.
-5. When they create a quote in the web app and click "Send to BC", the Local Agent will take over Chrome and automate the entry.
+5. **(One-Time Setup)** The user must open a new tab, go to `chrome://flags/#block-insecure-private-network-requests`, and set it to **Disabled**. This allows the internal HTTP web app to communicate with the `localhost` agent.
+6. When they create a quote in the web app and click "Send to BC", the Local Agent will take over Chrome and automate the entry.

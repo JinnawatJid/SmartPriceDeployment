@@ -35,6 +35,11 @@ if %CHROME_EXE%=="" (
 echo [OK] Found Chrome at: %CHROME_EXE%
 echo Launching...
 
+:: Close any existing Chrome processes to ensure the debugging port binds correctly
+echo Closing existing Chrome instances...
+taskkill /F /IM chrome.exe /T >nul 2>&1
+timeout /t 2 >nul
+
 :: Start Chrome in background with debugging port
 start "" %CHROME_EXE% --remote-debugging-port=9222 --restore-last-session
 echo [OK] Chrome started on port 9222
