@@ -35,13 +35,20 @@ if %CHROME_EXE%=="" (
 echo [OK] Found Chrome at: %CHROME_EXE%
 echo Launching...
 
+:: Create a dedicated User Data Directory for RPA Chrome to avoid profile locks
+set CHROME_USER_DATA="%TEMP%\chrome_rpa_profile"
+if not exist %CHROME_USER_DATA% mkdir %CHROME_USER_DATA%
+
 :: Close any existing Chrome processes to ensure the debugging port binds correctly
 echo Closing existing Chrome instances...
 taskkill /F /IM chrome.exe /T >nul 2>&1
 timeout /t 2 >nul
 
-:: Start Chrome in background with debugging port
-start "" %CHROME_EXE% --remote-debugging-port=9222 --restore-last-session
+:: Start Chrome in background with debugging port and dedicated profile
+:: --no-first-run prevents the welcome screen
+:: --no-default-browser-check prevents annoying popups
+echo Launching Chrome with dedicated RPA profile...
+start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir=%CHROME_USER_DATA% --no-first-run --no-default-browser-check
 echo [OK] Chrome started on port 9222
 
 :: Give Chrome a moment to open

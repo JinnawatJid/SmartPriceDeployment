@@ -111,13 +111,28 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
     
     try:
         print("🔌 Connecting to existing Chrome browser...")
-        try:
-            driver = webdriver.Chrome(options=chrome_options)
-        except Exception as e:
-            print(f"[ERROR] Could not connect to Chrome at {chrome_address}: {e}")
-            raise HTTPException(status_code=500, detail="Cannot connect to Chrome. Make sure Chrome is opened with remote debugging enabled (port 9222). Please restart Chrome using 'start_agent_and_chrome.bat'.")
         
-        print(f"[OK] Connected to Chrome at {chrome_address}")
+        # Retry logic: Try to connect up to 5 times, waiting 2 seconds between each
+        max_retries = 5
+        driver = None
+        last_error = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                driver = webdriver.Chrome(options=chrome_options)
+                print(f"[OK] Connected to Chrome at {chrome_address} on attempt {attempt}")
+                break
+            except Exception as e:
+                last_error = e
+                print(f"[WAIT] Attempt {attempt}/{max_retries}: Chrome not ready yet, retrying in 2s...")
+                time.sleep(2)
+
+        if driver is None:
+            print(f"[ERROR] Could not connect to Chrome after {max_retries} attempts. Last error: {last_error}")
+            raise HTTPException(
+                status_code=500,
+                detail="Cannot connect to Chrome. Make sure Chrome is opened with remote debugging enabled (port 9222). Please restart Chrome using 'start_agent_and_chrome.bat'."
+            )
         
         # Get all window handles (tabs)
         windows = driver.window_handles
