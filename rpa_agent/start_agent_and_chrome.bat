@@ -47,8 +47,9 @@ timeout /t 2 >nul
 :: Start Chrome in background with debugging port and dedicated profile
 :: --no-first-run prevents the welcome screen
 :: --no-default-browser-check prevents annoying popups
+:: --disable-features=BlockInsecurePrivateNetworkRequests disables PNA CORS checks so the frontend can talk to 127.0.0.1
 echo Launching Chrome with dedicated RPA profile...
-start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir=%CHROME_USER_DATA% --no-first-run --no-default-browser-check
+start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir=%CHROME_USER_DATA% --no-first-run --no-default-browser-check --disable-features=BlockInsecurePrivateNetworkRequests
 echo [OK] Chrome started on port 9222
 
 :: Give Chrome a moment to open
