@@ -27,6 +27,7 @@ from branch import router as branch_router
 from credit_router import router as credit_router
 from chrome_debug_router import router as chrome_debug_router
 from promotion_router import router as promotion_router
+from project_price_router import router as project_price_router
 
 from config.config_external_api import CUSTOMER_API_KEY
 # from logging_config import setup_logging
@@ -143,6 +144,7 @@ app.include_router(branch_router)
 app.include_router(credit_router)
 app.include_router(chrome_debug_router)  # Chrome debug mode starter
 app.include_router(promotion_router)  # Promotion management
+app.include_router(project_price_router)  # Project price management
 
 
 

@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 import ShippingModal from "../../components/wizard/ShippingModal.jsx";
 import CustomerSearchSection from "../../components/wizard/CustomerSearchSection.jsx";
+import CustomerPromotionBanner from "../../components/wizard/CustomerPromotionBanner.jsx";
 import TaxDeliverySection from "../../components/wizard/TaxDeliverySection.jsx";
 import ItemPickerModal from "../../components/wizard/ItemPickerModal.jsx";
 import GlassPickerModal from "../../components/wizard/GlassPickerModal.jsx";
@@ -1458,9 +1459,28 @@ function Step6_Summary({ state, dispatch }) {
             <CustomerSearchSection
               customer={state.customer}
               onCustomerChange={(cust) => {
+                console.log('👤 [STEP6] Customer changed:', cust);
                 dispatch({ type: "SET_CUSTOMER", payload: cust });
               }}
             />
+            
+            {/* แสดงโปรโมชั่นของลูกค้า */}
+            {(() => {
+              console.log('🔍 [STEP6] Checking customer for promotion banner:', state.customer);
+              console.log('🔍 [STEP6] Customer id:', state.customer?.id);
+              console.log('🔍 [STEP6] Customer code:', state.customer?.code);
+              const custCode = state.customer?.id || state.customer?.code;
+              return custCode ? (
+                <div className="mt-3">
+                  <CustomerPromotionBanner customerCode={custCode} />
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-gray-500">
+                  (ยังไม่ได้เลือกลูกค้า - ไม่มีโปรโมชั่นพิเศษ)
+                </div>
+              );
+            })()}
+            
             {/* แสดงสถานะลูกค้า / anonymous */}
             <div className="mt-2 text-sm text-gray-600">
                   หากไม่เลือกหรือไม่ระบุลูกค้า ระบบจะบันทึกเป็น{" "}

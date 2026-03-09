@@ -1,7 +1,9 @@
 // src/components/wizard/CartItemRow.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useItemPriceHistory } from "../../hooks/useItemPriceHistory";
 import PriceEditModal from "./PriceEditModal";
+import api from "../../services/api";
+import { Megaphone } from "lucide-react";
 
 function formatThaiDate(dt) {
   if (!dt) return "";
@@ -59,6 +61,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
   const [descDraft, setDescDraft] = useState(item.name || "");
   const [openPriceHistory, setOpenPriceHistory] = useState(false);
   const [showPriceModal, setShowPriceModal] = useState(false);
+  const [promotions, setPromotions] = useState([]);
 
 
   const { prices, loading } = useItemPriceHistory({
@@ -66,6 +69,24 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
     customerCode,
     enabled: openPriceHistory,
   });
+
+  // ดึงโปรโมชั่นที่ active สำหรับ SKU นี้
+  useEffect(() => {
+    const fetchPromotions = async () => {
+      try {
+        const response = await api.get(`/api/promotions/active-by-skus?skus=${item.sku}`);
+        const promoData = response.data?.[item.sku] || [];
+        setPromotions(promoData);
+      } catch (error) {
+        console.error('Error fetching promotions:', error);
+        setPromotions([]);
+      }
+    };
+
+    if (item.sku) {
+      fetchPromotions();
+    }
+  }, [item.sku]);
 
 
   const handleQtyChange = (e) => {
@@ -145,15 +166,41 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                       className="w-full rounded border px-2 py-1 text-xs"
                     />
                   ) : (
-                    <p
-                      className="font-semibold text-xs cursor-pointer hover:underline"
-                      onDoubleClick={() => setEditingDesc(true)}
-                      title="ดับเบิลคลิกเพื่อแก้ไขชื่อสินค้า"
-                    >
-                      {item.name}
-                    </p>
+                    <div>
+                      <p
+                        className="font-semibold text-xs cursor-pointer hover:underline"
+                        onDoubleClick={() => setEditingDesc(true)}
+                        title="ดับเบิลคลิกเพื่อแก้ไขชื่อสินค้า"
+                      >
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-gray-500">{item.sku}</p>
+                      
+                      {/* แสดงโปรโมชั่น */}
+                      {promotions.length > 0 && (
+                        <div className="mt-1 space-y-1">
+                          {promotions.map((promo, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-start gap-1 bg-red-50 border border-red-200 rounded px-2 py-1"
+                            >
+                              <Megaphone className="w-3 h-3 text-red-600 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-semibold text-red-700 truncate">
+                                  {promo.promotion_name}
+                                </p>
+                                {promo.promotion_text && (
+                                  <p className="text-[9px] text-red-600">
+                                    {promo.promotion_text}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <p className="text-xs text-gray-500">{item.sku}</p>
                 </td>
 
                 <td className="px-2 py-3 w-[100px] ">
@@ -178,11 +225,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                 {Number(displayUnitPrice).toLocaleString("th-TH")}
               </span>
 
-              {calculatedItem?.price_source === "history" && (
-                <span className="text-[10px] text-orange-600 font-medium mt-0.5">
-                  ราคาครั้งก่อน
-                </span>
-              )}
+
             </div>
 
             {/* ปุ่มดูประวัติ ชิดขวา */}
