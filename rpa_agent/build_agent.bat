@@ -3,6 +3,21 @@ setlocal enabledelayedexpansion
 
 title Build Local RPA Agent
 
+REM ตรวจสอบว่าอยู่ในโฟลเดอร์ rpa_agent หรือไม่
+if exist "rpa_agent.py" (
+    echo [INFO] Running from rpa_agent directory
+    set "SCRIPT_DIR=%cd%"
+) else if exist "rpa_agent\rpa_agent.py" (
+    echo [INFO] Running from parent directory, changing to rpa_agent
+    cd rpa_agent
+    set "SCRIPT_DIR=%cd%"
+) else (
+    echo [ERROR] Cannot find rpa_agent.py
+    echo Please run this script from the rpa_agent directory or its parent directory
+    pause
+    exit /b 1
+)
+
 echo.
 echo ==============================================
 echo 1) Checking for Python Installation...

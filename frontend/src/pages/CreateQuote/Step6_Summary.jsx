@@ -1190,6 +1190,44 @@ function Step6_Summary({ state, dispatch }) {
       const payload = buildQuotationPayload("complete");
 
       // ⭐ เตรียมข้อมูลสำหรับ RPA Local Agent
+      const rpaItems = payload.cart.map((it) => {
+        const isGlass = (it.category || "").toUpperCase() === "G";
+        
+        if (isGlass) {
+          // สำหรับกระจก: ต้องคำนวณราคาต่อ sqft จาก price_per_sheet
+          const sqft = Number(it.sqft_sheet || 0);
+          const pricePerSheet = Number(it.price_per_sheet || it.price || 0);
+          const pricePerSqft = sqft > 0 ? (pricePerSheet / sqft).toFixed(2) : "0";
+          
+          return {
+            sku: it.sku,
+            description: it.name,
+            quantity: String(it.qty || 0),
+            price_per_sqft: String(pricePerSqft),
+            price_per_sheet: String(pricePerSheet),
+          };
+        } else {
+          // สำหรับสินค้าอื่น
+          return {
+            sku: it.sku,
+            description: it.name,
+            quantity: String(it.qty || 0),
+            unit_price: String(it.price || 0),
+          };
+        }
+      });
+
+      // ⭐ เพิ่มค่าขนส่งเป็นรายการสุดท้าย (ถ้ามี)
+      const shippingCost = Number(state.shippingCustomerPay || 0);
+      if (shippingCost > 0) {
+        rpaItems.push({
+          sku: "OT01-014",
+          description: "ค่าขนส่ง",
+          quantity: "1",
+          unit_price: String(shippingCost),
+        });
+      }
+
       const rpaPayload = {
         quote_code: payload.quoteNo?.substring(0, 4) || "TRQT", // เอา 4 ตัวแรกของเลขที่ใบเสนอราคา
         customer_no: payload.customer.code,
@@ -1197,32 +1235,7 @@ function Step6_Summary({ state, dispatch }) {
         your_reference: payload.quoteNo || "", // ใส่เลขที่ใบเสนอราคาในระบบเรา
         // ไม่ต้องใช้ remote_chrome_address อีกต่อไปเพราะ Local Agent รันที่เครื่องเดียวกัน (127.0.0.1) เสมอ
         remote_chrome_address: "127.0.0.1:9222",
-        items: payload.cart.map((it) => {
-          const isGlass = (it.category || "").toUpperCase() === "G";
-          
-          if (isGlass) {
-            // สำหรับกระจก: ต้องคำนวณราคาต่อ sqft จาก price_per_sheet
-            const sqft = Number(it.sqft_sheet || 0);
-            const pricePerSheet = Number(it.price_per_sheet || it.price || 0);
-            const pricePerSqft = sqft > 0 ? (pricePerSheet / sqft).toFixed(2) : "0";
-            
-            return {
-              sku: it.sku,
-              description: it.name,
-              quantity: String(it.qty || 0),
-              price_per_sqft: String(pricePerSqft),
-              price_per_sheet: String(pricePerSheet),
-            };
-          } else {
-            // สำหรับสินค้าอื่น
-            return {
-              sku: it.sku,
-              description: it.name,
-              quantity: String(it.qty || 0),
-              unit_price: String(it.price || 0),
-            };
-          }
-        }),
+        items: rpaItems,
       };
 
       // ⭐ เรียก Local RPA Agent ที่พอร์ต 8001 (Client-Side Agent)

@@ -454,12 +454,86 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
 
     df_price["UnitPrice_temp"] = df_price.apply(_compute_unit_price_temp, axis=1)
     
-    # ⭐ เพิ่ม: ตรวจสอบประวัติราคาและใช้ราคาครั้งก่อนถ้าสูงกว่าราคาระบบ
+    # ⭐ เพิ่ม: ตรวจสอบราคาโครงการก่อน (มีลำดับความสำคัญสูงสุด)
+    print(f"\n{'='*80}")
+    print(f"🏗️ เริ่มตรวจสอบราคาโครงการสำหรับลูกค้า: {customer_code}")
+    print(f"{'='*80}")
+    
+    for idx, row in df_price.iterrows():
+        sku = row["sku"]
+        category = str(row.get("category", "")).upper()
+        
+        try:
+            # ดึงราคาโครงการที่ active
+            conn = get_mssql_conn()
+            cursor = conn.cursor()
+            
+            today = datetime.today().date().isoformat()
+            
+            sql = """
+            SELECT TOP (1)
+                ph.project_code,
+                ph.project_name,
+                ph.price_start_date,
+                ph.price_end_date,
+                pl.price,
+                pl.unit
+            FROM Project_Price_Header ph
+            JOIN Project_Price_Line pl ON ph.project_id = pl.project_id
+            WHERE ph.status = 'active'
+                AND ph.price_start_date <= ?
+                AND ph.price_end_date >= ?
+                AND ph.customer_code = ?
+                AND pl.sku = ?
+            ORDER BY ph.created_at DESC
+            """
+            
+            cursor.execute(sql, [today, today, customer_code, sku])
+            result = cursor.fetchone()
+            
+            cursor.close()
+            conn.close()
+            
+            if result:
+                project_code = result[0]
+                project_name = result[1] or ""
+                start_date = result[2].isoformat() if result[2] else "N/A"
+                end_date = result[3].isoformat() if result[3] else "N/A"
+                project_price = float(result[4]) if result[4] else 0
+                project_unit = result[5] or ""
+                
+                print(f"\n🏗️ SKU: {sku}")
+                print(f"   ✅ พบราคาโครงการ: {project_code} - {project_name}")
+                print(f"   💰 ราคา: {project_price:.2f} บาท/{project_unit}")
+                print(f"   📅 ระยะเวลา: {start_date} ถึง {end_date}")
+                
+                # ใช้ราคาโครงการทันที (ไม่ต้องเปรียบเทียบ)
+                df_price.at[idx, "NewPrice"] = project_price
+                df_price.at[idx, "price_source"] = "project"
+                df_price.at[idx, "project_code"] = project_code
+                df_price.at[idx, "project_name"] = project_name
+                df_price.at[idx, "project_valid_until"] = end_date
+            else:
+                print(f"\n📦 SKU: {sku}")
+                print(f"   ℹ️ ไม่พบราคาโครงการ → ตรวจสอบประวัติราคาต่อ")
+                
+        except Exception as e:
+            print(f"⚠️ ไม่สามารถตรวจสอบราคาโครงการสำหรับ SKU {sku}: {e}")
+    
+    print(f"{'='*80}")
+    print(f"✅ ตรวจสอบราคาโครงการเสร็จสิ้น")
+    print(f"{'='*80}\n")
+    
+    # ⭐ เพิ่ม: ตรวจสอบประวัติราคาและใช้ราคาครั้งก่อนถ้าสูงกว่าราคาระบบ (เฉพาะที่ไม่มีราคาโครงการ)
     print(f"\n{'='*80}")
     print(f"🔍 เริ่มตรวจสอบประวัติราคาสำหรับลูกค้า: {customer_code}")
     print(f"{'='*80}")
     
     for idx, row in df_price.iterrows():
+        # ถ้ามีราคาโครงการแล้ว ข้ามไป
+        if row.get("price_source") == "project":
+            continue
+            
         sku = row["sku"]
         category = str(row.get("category", "")).upper()
         system_price_base = float(row["NewPrice"])  # ราคาต่อหน่วยพื้นฐาน (กก./ตร.ฟุต/ชิ้น)
