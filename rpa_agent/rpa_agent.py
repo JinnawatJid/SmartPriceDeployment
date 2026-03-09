@@ -16,6 +16,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
 
 # Fix encoding for Windows console
 if sys.platform == "win32":
@@ -25,7 +26,29 @@ if sys.platform == "win32":
 
 app = FastAPI(title="Local RPA Agent for Dynamics 365 BC")
 
-# Allow all origins for the local agent
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+# 1. First Middleware: Handle Chrome's Private Network Access (PNA) preflight requests.
+# Chrome blocks HTTP sites (e.g. 192.168.x.x) from calling localhost (127.0.0.1)
+# unless the server explicitly allows it via this specific header.
+class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.method == "OPTIONS" and "Access-Control-Request-Private-Network" in request.headers:
+            response = Response()
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            return response
+
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+
+app.add_middleware(PrivateNetworkAccessMiddleware)
+
+# 2. Standard CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -78,42 +101,61 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
     # Convert the quote code
     target_series = convert_quote_code(quote_code)
     
-    # ⭐️ Try multiple Chrome addresses
-    chrome_addresses = [
-        "127.0.0.1:9222",           # localhost (เครื่องเดียวกัน)
-        "192.192.0.37:9222",        # เครื่อง Server
-        "192.168.1.185:9222",       # เครื่อง Dev (สำหรับทดสอบ)
-        "192.192.99.1:9222"         # SonicWall IP
-    ]
+    # ⭐️ Use hardcoded localhost address since this runs locally
+    chrome_address = "127.0.0.1:9222"
     
-    driver = None
-    last_error = None
+    print(f"[INFO] Connecting to Chrome at: {chrome_address}")
     
-    for chrome_address in chrome_addresses:
-        try:
-            print(f"[INFO] Trying to connect to Chrome at: {chrome_address}")
-            
-            # Chrome options to connect to existing browser
-            chrome_options = Options()
-            chrome_options.debugger_address = chrome_address
-            
-            print("🔌 Connecting to existing Chrome browser...")
-            driver = webdriver.Chrome(options=chrome_options)
-            
-            print(f"[OK] Connected to Chrome at {chrome_address}")
-            break  # Success! Exit loop
-            
-        except Exception as e:
-            last_error = str(e)
-            print(f"[WARNING] Failed to connect to {chrome_address}: {last_error}")
-            continue
-    
-    if not driver:
-        error_msg = f"Cannot connect to Chrome at any address. Last error: {last_error}"
-        print(f"[ERROR] {error_msg}")
-        raise Exception(error_msg)
+    # Chrome options to connect to existing browser
+    chrome_options = Options()
+    chrome_options.debugger_address = chrome_address
     
     try:
+        print("🔌 Connecting to existing Chrome browser...")
+        
+        # For offline branch machines, we use a local bundled chromedriver.exe to prevent
+        # Selenium Manager from attempting to download drivers from the internet (which fails in restricted networks).
+        # We look for chromedriver.exe in the same folder as this running script/executable.
+        if getattr(sys, 'frozen', False):
+            # Running as compiled PyInstaller executable
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # Running as standard Python script
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        driver_path = os.path.join(base_dir, "chromedriver.exe")
+        service = None
+        if os.path.exists(driver_path):
+            print(f"[INFO] Found local offline driver at: {driver_path}")
+            service = Service(executable_path=driver_path)
+        else:
+            print("[WARN] Local chromedriver.exe not found! Attempting to use default Selenium Manager (requires internet)...")
+
+        # Retry logic: Try to connect up to 5 times, waiting 2 seconds between each
+        max_retries = 5
+        driver = None
+        last_error = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                if service:
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                else:
+                    driver = webdriver.Chrome(options=chrome_options)
+                print(f"[OK] Connected to Chrome at {chrome_address} on attempt {attempt}")
+                break
+            except Exception as e:
+                last_error = e
+                print(f"[WAIT] Attempt {attempt}/{max_retries}: Chrome not ready yet, retrying in 2s...")
+                time.sleep(2)
+
+        if driver is None:
+            print(f"[ERROR] Could not connect to Chrome after {max_retries} attempts. Last error: {last_error}")
+            raise HTTPException(
+                status_code=500,
+                detail="Cannot connect to Chrome. Make sure Chrome is opened with remote debugging enabled (port 9222). Please restart Chrome using 'start_agent_and_chrome.bat'."
+            )
+        
         # Get all window handles (tabs)
         windows = driver.window_handles
         print(f"[OK] Found {len(windows)} open tabs")

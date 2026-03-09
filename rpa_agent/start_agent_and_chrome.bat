@@ -1,5 +1,4 @@
 @echo off
-setlocal enabledelayedexpansion
 title Start Smart Pricing RPA Agent ^& Chrome
 chcp 65001 > nul
 
@@ -9,27 +8,24 @@ echo ============================================================
 echo We will launch Google Chrome to listen on port 9222.
 echo Please leave this command window open while working!
 
-:: Set common paths for Chrome installation
-set CHROME_EXE=
+set CHROME_EXE=""
 
-:: Try common Chrome installation paths
+:: Find Chrome without complex FOR loops that break batch scripts
 if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" (
-    set CHROME_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe
+    set CHROME_EXE="%ProgramFiles%\Google\Chrome\Application\chrome.exe"
     goto :FOUND_CHROME
 )
-
 if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" (
-    set CHROME_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe
+    set CHROME_EXE="%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
     goto :FOUND_CHROME
 )
-
 if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" (
-    set CHROME_EXE=%LocalAppData%\Google\Chrome\Application\chrome.exe
+    set CHROME_EXE="%LocalAppData%\Google\Chrome\Application\chrome.exe"
     goto :FOUND_CHROME
 )
 
 :FOUND_CHROME
-if "%CHROME_EXE%"=="" (
+if %CHROME_EXE%=="" (
     echo [ERROR] Google Chrome was not found on this system!
     echo Please install Chrome or check the installation path.
     pause
@@ -39,36 +35,25 @@ if "%CHROME_EXE%"=="" (
 echo [OK] Found Chrome at: %CHROME_EXE%
 echo Launching...
 
-:: Close all existing Chrome instances first
+:: Create a dedicated User Data Directory for RPA Chrome to avoid profile locks
+set CHROME_USER_DATA="%TEMP%\chrome_rpa_profile"
+if not exist %CHROME_USER_DATA% mkdir %CHROME_USER_DATA%
+
+:: Close any existing Chrome processes to ensure the debugging port binds correctly
 echo Closing existing Chrome instances...
-taskkill /F /IM chrome.exe >nul 2>&1
+taskkill /F /IM chrome.exe /T >nul 2>&1
 timeout /t 2 >nul
 
-:: Start Chrome in background with debugging port and open required tabs
-start "" "%CHROME_EXE%" --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir="%TEMP%\chrome_rpa_profile" "http://192.192.0.36:8080/BCTNG" "http://192.192.0.37:8000/create?step=6"
-echo [OK] Chrome started on port 9222 with BC and Smart Pricing tabs
+:: Start Chrome in background with debugging port and dedicated profile
+:: --no-first-run prevents the welcome screen
+:: --no-default-browser-check prevents annoying popups
+:: --disable-features=BlockInsecurePrivateNetworkRequests disables PNA CORS checks so the frontend can talk to 127.0.0.1
+echo Launching Chrome with dedicated RPA profile...
+start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir=%CHROME_USER_DATA% --no-first-run --no-default-browser-check --disable-features=BlockInsecurePrivateNetworkRequests
+echo [OK] Chrome started on port 9222
 
-:: Give Chrome more time to fully start
-echo Waiting for Chrome to initialize...
-timeout /t 10 >nul
-
-:: Verify Chrome debugging port is listening
-echo Verifying Chrome debugging port...
-netstat -ano | findstr :9222 >nul 2>&1
-if errorlevel 1 (
-    echo [WARNING] Chrome debugging port 9222 is not listening yet!
-    echo [INFO] Waiting a bit more...
-    timeout /t 5 >nul
-    netstat -ano | findstr :9222 >nul 2>&1
-    if errorlevel 1 (
-        echo [ERROR] Chrome debugging port still not accessible!
-        echo [INFO] This might cause RPA to fail. Please check Chrome is running.
-    ) else (
-        echo [OK] Chrome debugging port is now listening!
-    )
-) else (
-    echo [OK] Chrome debugging port is listening!
-)
+:: Give Chrome a moment to open
+timeout /t 2 >nul
 
 echo.
 echo ============================================================
@@ -79,14 +64,14 @@ echo We will start the background Agent to listen for web requests.
 :: Look for the PyInstaller compiled EXE
 if exist "rpa_agent.exe" (
     echo [OK] Found compiled rpa_agent.exe
-    start "RPA Agent" cmd /c "rpa_agent.exe & pause"
+    start "RPA Agent" cmd /k "rpa_agent.exe"
     goto :AGENT_STARTED
 )
 
 :: Look for the PyInstaller compiled EXE inside dist directory
 if exist "dist\rpa_agent.exe" (
     echo [OK] Found compiled rpa_agent.exe in dist folder
-    start "RPA Agent" cmd /c "dist\rpa_agent.exe & pause"
+    start "RPA Agent" cmd /k "dist\rpa_agent.exe"
     goto :AGENT_STARTED
 )
 
@@ -95,7 +80,7 @@ python --version >nul 2>&1
 if not errorlevel 1 (
     if exist "rpa_agent.py" (
         echo [INFO] No .exe found, but Python is installed. Running raw script...
-        start "RPA Agent" cmd /c "python rpa_agent.py & pause"
+        start "RPA Agent" cmd /k "python rpa_agent.py"
         goto :AGENT_STARTED
     )
 )
