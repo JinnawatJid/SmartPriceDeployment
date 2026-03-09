@@ -1,0 +1,39 @@
+# ไฟล์ที่ไม่ต้อง deploy ไป production
+
+# Testing files
+test_*.py
+check_*.py
+quick_test_*.py
+
+# Documentation files
+*.md
+!README.md
+
+# Development files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files (ควรใช้ environment variables แทน)
+.env.local
+.env.development
+
+# Logs (ควร mount volume แทน)
+logs/*.log
+logs/*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db

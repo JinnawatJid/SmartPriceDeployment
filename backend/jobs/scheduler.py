@@ -1,0 +1,190 @@
+# jobs/scheduler.py
+"""
+Background Job Scheduler
+รัน invoice cache refresh และ customer cache refresh ตามลำดับ
+- Invoice Cache: ทุกวันเวลา 13:00 น. (1 ทุ่ม)
+- Customer Cache: ทุกวันเวลา 15:00 น. (3 ทุ่ม) - รันหลัง invoice เสร็จ
+"""
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from datetime import datetime
+import logging
+
+from jobs.invoice_cache_refresh import run_invoice_cache_refresh
+from jobs.customer_cache_refresh import run_customer_cache_refresh
+from jobs.cache_logger import cache_logger
+
+logger = logging.getLogger(__name__)
+
+# สร้าง scheduler instance
+scheduler = BackgroundScheduler(
+    timezone="Asia/Bangkok",  # ตั้งเวลาตาม timezone ไทย
+    job_defaults={
+        'coalesce': True,  # รวม job ที่พลาดไว้เป็น 1 job
+        'max_instances': 1,  # รัน job ได้ครั้งละ 1 instance
+        'misfire_grace_time': 3600  # ถ้าพลาดไป ยังรันได้ภายใน 1 ชั่วโมง
+    }
+)
+
+
+def scheduled_invoice_cache_refresh():
+    """
+    Wrapper function สำหรับรัน invoice cache refresh job
+    รันก่อน customer cache refresh
+    """
+    try:
+        cache_logger.info("=" * 80)
+        cache_logger.info("🕐 Scheduled Invoice Cache Refresh Started")
+        cache_logger.info(f"   Triggered at: {datetime.now()}")
+        cache_logger.info("=" * 80)
+        
+        result = run_invoice_cache_refresh(months=6)
+        
+        cache_logger.info("=" * 80)
+        cache_logger.info("✅ Scheduled Invoice Cache Refresh Completed")
+        cache_logger.info(f"   Duration: {result.duration_seconds:.2f} seconds")
+        cache_logger.info(f"   Processed: {result.invoices_processed}")
+        cache_logger.info(f"   Inserted: {result.invoices_inserted}")
+        cache_logger.info(f"   Failed: {result.invoices_failed}")
+        cache_logger.info("=" * 80)
+        
+    except Exception as e:
+        cache_logger.error(f"❌ Scheduled invoice job failed: {e}", exc_info=True)
+        logger.error(f"Scheduled invoice cache refresh failed: {e}", exc_info=True)
+
+
+def scheduled_customer_cache_refresh():
+    """
+    Wrapper function สำหรับรัน customer cache refresh job
+    รันหลัง invoice cache refresh เสร็จแล้ว
+    """
+    try:
+        cache_logger.info("=" * 80)
+        cache_logger.info("🕐 Scheduled Customer Cache Refresh Started")
+        cache_logger.info(f"   Triggered at: {datetime.now()}")
+        cache_logger.info("=" * 80)
+        
+        result = run_customer_cache_refresh()
+        
+        cache_logger.info("=" * 80)
+        cache_logger.info("✅ Scheduled Customer Cache Refresh Completed")
+        cache_logger.info(f"   Duration: {result.duration_seconds:.2f} seconds")
+        cache_logger.info(f"   Processed: {result.customers_processed}")
+        cache_logger.info(f"   Updated: {result.customers_updated}")
+        cache_logger.info(f"   Failed: {result.customers_failed}")
+        cache_logger.info("=" * 80)
+        
+    except Exception as e:
+        cache_logger.error(f"❌ Scheduled customer job failed: {e}", exc_info=True)
+        logger.error(f"Scheduled customer cache refresh failed: {e}", exc_info=True)
+
+
+def start_scheduler():
+    """
+    เริ่มต้น scheduler และเพิ่ม jobs
+    """
+    try:
+        # Job 1: Invoice Cache Refresh - รันเวลา 13:00 น. (1 ทุ่ม)
+        scheduler.add_job(
+            func=scheduled_invoice_cache_refresh,
+            trigger=CronTrigger(hour=13, minute=0),
+            id='invoice_cache_refresh',
+            name='Invoice Cache Refresh (Daily 13:00)',
+            replace_existing=True
+        )
+        
+        # Job 2: Customer Cache Refresh - รันเวลา 15:00 น. (3 ทุ่ม)
+        # รันหลัง invoice job 2 ชั่วโมง เพื่อให้ invoice เสร็จก่อน
+        scheduler.add_job(
+            func=scheduled_customer_cache_refresh,
+            trigger=CronTrigger(hour=15, minute=0),
+            id='customer_cache_refresh',
+            name='Customer Cache Refresh (Daily 15:00)',
+            replace_existing=True
+        )
+        
+        # เริ่มต้น scheduler
+        scheduler.start()
+        
+        logger.info("=" * 80)
+        logger.info("✅ Background Scheduler Started")
+        logger.info("   Scheduled Jobs:")
+        for job in scheduler.get_jobs():
+            logger.info(f"   - {job.name} (ID: {job.id})")
+            logger.info(f"     Next run: {job.next_run_time}")
+        logger.info("=" * 80)
+        
+        cache_logger.info("✅ Scheduler started successfully")
+        cache_logger.info(f"   Job 1: Invoice Cache - 13:00 (1 ทุ่ม) daily")
+        cache_logger.info(f"   Job 2: Customer Cache - 15:00 (3 ทุ่ม) daily")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to start scheduler: {e}", exc_info=True)
+        cache_logger.error(f"Failed to start scheduler: {e}", exc_info=True)
+
+
+def stop_scheduler():
+    """
+    หยุด scheduler (เรียกตอน shutdown)
+    """
+    try:
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
+            logger.info("✅ Background Scheduler Stopped")
+            cache_logger.info("Scheduler stopped")
+    except Exception as e:
+        logger.error(f"❌ Error stopping scheduler: {e}", exc_info=True)
+
+
+def trigger_manual_refresh():
+    """
+    รัน jobs ทันทีแบบ manual (สำหรับ API endpoint)
+    รัน invoice job ก่อน แล้วค่อยรัน customer job
+    """
+    try:
+        cache_logger.info("🔧 Manual refresh triggered")
+        
+        # 1. รัน invoice cache refresh ก่อน
+        cache_logger.info("Step 1: Running invoice cache refresh...")
+        invoice_result = run_invoice_cache_refresh(months=6)
+        cache_logger.info(f"Invoice refresh completed: {invoice_result.invoices_processed} invoices")
+        
+        # 2. รัน customer cache refresh
+        cache_logger.info("Step 2: Running customer cache refresh...")
+        customer_result = run_customer_cache_refresh()
+        cache_logger.info(f"Customer refresh completed: {customer_result.customers_processed} customers")
+        
+        return {
+            "invoice": invoice_result,
+            "customer": customer_result
+        }
+    except Exception as e:
+        cache_logger.error(f"Manual refresh failed: {e}", exc_info=True)
+        raise
+
+
+# ฟังก์ชันสำหรับดูสถานะ scheduler
+def get_scheduler_status():
+    """
+    ดูสถานะของ scheduler และ jobs ที่กำลังรัน
+    """
+    if not scheduler.running:
+        return {
+            "status": "stopped",
+            "jobs": []
+        }
+    
+    jobs = []
+    for job in scheduler.get_jobs():
+        jobs.append({
+            "id": job.id,
+            "name": job.name,
+            "next_run_time": str(job.next_run_time) if job.next_run_time else None,
+            "trigger": str(job.trigger)
+        })
+    
+    return {
+        "status": "running",
+        "timezone": "Asia/Bangkok",
+        "jobs": jobs
+    }

@@ -91,3 +91,21 @@ def trigger_customer_cache_refresh(background_tasks: BackgroundTasks):
         "note": "This may take 30-60 minutes. Use /api/cache/refresh-status to check progress.",
         "started_at": datetime.now().isoformat(),
     }
+
+
+@router.get("/scheduler-status")
+def get_scheduler_status():
+    """
+    Get status of background scheduler and scheduled jobs
+    
+    Returns:
+        Scheduler status including next run times for all jobs
+    """
+    try:
+        from jobs.scheduler import get_scheduler_status
+        return get_scheduler_status()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get scheduler status: {str(e)}"
+        )

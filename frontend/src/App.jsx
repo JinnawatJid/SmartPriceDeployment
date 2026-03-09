@@ -70,7 +70,7 @@ function App() {
         </Route>
       </Route>
     </Routes>
-  );
+   );
 }
 
 export default App;
