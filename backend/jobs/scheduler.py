@@ -1,9 +1,10 @@
 # jobs/scheduler.py
 """
 Background Job Scheduler
-รัน invoice cache refresh และ customer cache refresh ตามลำดับ
+รัน invoice cache refresh, customer cache refresh, และ item master cache refresh ตามลำดับ
 - Invoice Cache: ทุกวันเวลา 13:00 น. (1 ทุ่ม)
 - Customer Cache: ทุกวันเวลา 15:00 น. (3 ทุ่ม) - รันหลัง invoice เสร็จ
+- Item Master Cache: ทุกวันเวลา 17:00 น. (5 ทุ่ม) - รันหลัง customer เสร็จ
 """
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -12,6 +13,7 @@ import logging
 
 from jobs.invoice_cache_refresh import run_invoice_cache_refresh
 from jobs.customer_cache_refresh import run_customer_cache_refresh
+from jobs.item_master_cache_refresh import run_item_master_cache_refresh
 from jobs.cache_logger import cache_logger
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,35 @@ def scheduled_customer_cache_refresh():
         logger.error(f"Scheduled customer cache refresh failed: {e}", exc_info=True)
 
 
+def scheduled_item_master_cache_refresh():
+    """
+    Wrapper function สำหรับรัน item master cache refresh job
+    รันหลัง customer cache refresh เสร็จแล้ว
+    """
+    try:
+        cache_logger.info("=" * 80)
+        cache_logger.info("🕐 Scheduled Item Master Cache Refresh Started")
+        cache_logger.info(f"   Triggered at: {datetime.now()}")
+        cache_logger.info("=" * 80)
+        
+        result = run_item_master_cache_refresh()
+        
+        cache_logger.info("=" * 80)
+        cache_logger.info("✅ Scheduled Item Master Cache Refresh Completed")
+        cache_logger.info(f"   Duration: {result.duration_seconds:.2f} seconds")
+        cache_logger.info(f"   Processed: {result.items_processed}")
+        cache_logger.info(f"   Inserted: {result.items_inserted}")
+        cache_logger.info(f"   Updated: {result.items_updated}")
+        cache_logger.info(f"   Failed: {result.items_failed}")
+        if result.errors:
+            cache_logger.info(f"   Errors: {len(result.errors)}")
+        cache_logger.info("=" * 80)
+        
+    except Exception as e:
+        cache_logger.error(f"❌ Scheduled item master job failed: {e}", exc_info=True)
+        logger.error(f"Scheduled item master cache refresh failed: {e}", exc_info=True)
+
+
 def start_scheduler():
     """
     เริ่มต้น scheduler และเพิ่ม jobs
@@ -103,6 +134,16 @@ def start_scheduler():
             replace_existing=True
         )
         
+        # Job 3: Item Master Cache Refresh - รันเวลา 17:00 น. (5 ทุ่ม)
+        # รันหลัง customer job 2 ชั่วโมง เพื่อให้ customer เสร็จก่อน
+        scheduler.add_job(
+            func=scheduled_item_master_cache_refresh,
+            trigger=CronTrigger(hour=17, minute=0),
+            id='item_master_cache_refresh',
+            name='Item Master Cache Refresh (Daily 17:00)',
+            replace_existing=True
+        )
+        
         # เริ่มต้น scheduler
         scheduler.start()
         
@@ -117,6 +158,7 @@ def start_scheduler():
         cache_logger.info("✅ Scheduler started successfully")
         cache_logger.info(f"   Job 1: Invoice Cache - 13:00 (1 ทุ่ม) daily")
         cache_logger.info(f"   Job 2: Customer Cache - 15:00 (3 ทุ่ม) daily")
+        cache_logger.info(f"   Job 3: Item Master Cache - 17:00 (5 ทุ่ม) daily")
         
     except Exception as e:
         logger.error(f"❌ Failed to start scheduler: {e}", exc_info=True)
@@ -139,7 +181,7 @@ def stop_scheduler():
 def trigger_manual_refresh():
     """
     รัน jobs ทันทีแบบ manual (สำหรับ API endpoint)
-    รัน invoice job ก่อน แล้วค่อยรัน customer job
+    รัน invoice job ก่อน แล้วค่อยรัน customer job แล้ว item master job
     """
     try:
         cache_logger.info("🔧 Manual refresh triggered")
@@ -154,9 +196,15 @@ def trigger_manual_refresh():
         customer_result = run_customer_cache_refresh()
         cache_logger.info(f"Customer refresh completed: {customer_result.customers_processed} customers")
         
+        # 3. รัน item master cache refresh
+        cache_logger.info("Step 3: Running item master cache refresh...")
+        item_result = run_item_master_cache_refresh()
+        cache_logger.info(f"Item master refresh completed: {item_result.items_processed} items")
+        
         return {
             "invoice": invoice_result,
-            "customer": customer_result
+            "customer": customer_result,
+            "item_master": item_result
         }
     except Exception as e:
         cache_logger.error(f"Manual refresh failed: {e}", exc_info=True)
