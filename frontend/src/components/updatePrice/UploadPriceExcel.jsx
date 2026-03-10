@@ -5,7 +5,7 @@ export default function UploadPriceExcel({ onUploaded }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [branches, setBranches] = useState([]);
-  const [selectedBranch, setSelectedBranch] = useState("");
+  const [selectedBranches, setSelectedBranches] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
 
   // Fetch branches on component mount
@@ -17,11 +17,6 @@ export default function UploadPriceExcel({ onUploaded }) {
         console.log("Branches response:", res.data);
         
         setBranches(res.data.branches || []);
-        
-        // Auto-select first branch if available
-        if (res.data.branches && res.data.branches.length > 0) {
-          setSelectedBranch(res.data.branches[0].Code);
-        }
       } catch (error) {
         console.error("Failed to fetch branches:", error);
         console.error("Error response:", error.response?.data);
@@ -33,16 +28,25 @@ export default function UploadPriceExcel({ onUploaded }) {
     fetchBranches();
   }, []);
 
+  const handleBranchToggle = (branchCode) => {
+    setSelectedBranches((prev) =>
+      prev.includes(branchCode)
+        ? prev.filter((code) => code !== branchCode)
+        : [...prev, branchCode]
+    );
+  };
+
   const handleUpload = async () => {
-    if (!file || !selectedBranch) return;
+    if (!file || selectedBranches.length === 0) return;
 
     setLoading(true);
     try {
       const form = new FormData();
       form.append("file", file);
 
-      // Send branch_code as query parameter
-      const res = await api.post(`/api/admin/prices/upload?branch_code=${selectedBranch}`, form);
+      // Send branch_codes as query parameter (comma-separated)
+      const branchCodes = selectedBranches.join(",");
+      const res = await api.post(`/api/admin/prices/upload?branch_code=${branchCodes}`, form);
       onUploaded(res.data);
     } finally {
       setLoading(false);
@@ -56,32 +60,39 @@ export default function UploadPriceExcel({ onUploaded }) {
   return (
     <div className="mt-4 p-6 border rounded-xl bg-white shadow-sm">
       <div className="flex flex-col gap-4">
-        {/* Branch Selection */}
+        {/* Branch Selection - Multi Select */}
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-gray-700">
             เลือกสาขา <span className="text-red-500">*</span>
           </label>
-          <select
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            disabled={loadingBranches}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
+          <div className="border border-gray-300 rounded-lg p-3 bg-white max-h-48 overflow-y-auto">
             {loadingBranches ? (
-              <option>กำลังโหลดสาขา...</option>
+              <div className="text-sm text-gray-500">กำลังโหลดสาขา...</div>
             ) : branches.length === 0 ? (
-              <option>ไม่พบข้อมูลสาขา</option>
+              <div className="text-sm text-gray-500">ไม่พบข้อมูลสาขา</div>
             ) : (
-              <>
-                <option value="">-- เลือกสาขา --</option>
+              <div className="space-y-2">
                 {branches.map((branch) => (
-                  <option key={branch.Code} value={branch.Code}>
-                    {branch.Code} - {branch.Name}
-                  </option>
+                  <label key={branch.Code} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedBranches.includes(branch.Code)}
+                      onChange={() => handleBranchToggle(branch.Code)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {branch.Code} - {branch.Name}
+                    </span>
+                  </label>
                 ))}
-              </>
+              </div>
             )}
-          </select>
+          </div>
+          {selectedBranches.length > 0 && (
+            <div className="text-xs text-blue-600">
+              เลือกแล้ว {selectedBranches.length} สาขา
+            </div>
+          )}
         </div>
 
         {/* File Upload Section */}
@@ -119,12 +130,12 @@ export default function UploadPriceExcel({ onUploaded }) {
           {/* Upload Button */}
           <button
             onClick={handleUpload}
-            disabled={!file || !selectedBranch || loading}
+            disabled={!file || selectedBranches.length === 0 || loading}
             className={`
               px-6 py-2 rounded-lg text-sm font-semibold text-white
               transition-all
               ${
-                loading || !file || !selectedBranch
+                loading || !file || selectedBranches.length === 0
                   ? "bg-gray-300 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700 active:scale-95"
               }
@@ -136,7 +147,7 @@ export default function UploadPriceExcel({ onUploaded }) {
 
         {/* Hint */}
         <div className="mt-1 text-xs text-gray-400">
-          รองรับเฉพาะไฟล์ .xlsx • กรุณาเลือกสาขาก่อนอัปโหลด
+          รองรับเฉพาะไฟล์ .xlsx • เลือกสาขาได้หลายสาขา • กรุณาเลือกสาขาอย่างน้อย 1 สาขาก่อนอัปโหลด
         </div>
       </div>
     </div>
