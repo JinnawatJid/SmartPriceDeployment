@@ -203,11 +203,31 @@ def calculate_analytics(invoices: List[Dict], calculation_date: date) -> Dict[st
             "sales_e_cust": 0.0,
         }
     
-    accum_6m = float(inv6["Amount Including VAT"].fillna(0).sum())
-    frequency = int(inv6["Document No."].nunique())
+    # Handle missing amount column - try different column names
+    amount_col = None
+    for col_name in ["Line_Amount_Include_VAT", "Amount Including VAT", "Amount", "Total Amount"]:
+        if col_name in inv6.columns:
+            amount_col = col_name
+            break
     
-    inv6["group"] = inv6["No."].apply(classify_group)
-    grp = inv6.groupby("group")["Amount Including VAT"].sum().to_dict()
+    if not amount_col:
+        # If no amount column found, return zeros
+        return {
+            "accum_6m": 0.0,
+            "frequency": int(inv6["Document No."].nunique()) if "Document No." in inv6.columns else 0,
+            "sales_g_cust": 0.0,
+            "sales_a_cust": 0.0,
+            "sales_s_cust": 0.0,
+            "sales_y_cust": 0.0,
+            "sales_c_cust": 0.0,
+            "sales_e_cust": 0.0,
+        }
+    
+    accum_6m = float(inv6[amount_col].fillna(0).sum())
+    frequency = int(inv6["Document No."].nunique()) if "Document No." in inv6.columns else 0
+    
+    inv6["group"] = inv6["No."].apply(classify_group) if "No." in inv6.columns else "U"
+    grp = inv6.groupby("group")[amount_col].sum().to_dict()
     
     return {
         "accum_6m": accum_6m,

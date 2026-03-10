@@ -1,10 +1,10 @@
 # jobs/scheduler.py
 """
 Background Job Scheduler
-รัน invoice cache refresh, customer cache refresh, และ item master cache refresh ตามลำดับ
-- Invoice Cache: ทุกวันเวลา 13:00 น. (1 ทุ่ม)
-- Customer Cache: ทุกวันเวลา 15:00 น. (3 ทุ่ม) - รันหลัง invoice เสร็จ
-- Item Master Cache: ทุกวันเวลา 17:00 น. (5 ทุ่ม) - รันหลัง customer เสร็จ
+รัน invoice cache refresh, customer cache refresh, และ item master cache refresh
+- Invoice Cache: ทุกวันเวลา 19:00 น. (7 ทุ่ม)
+- Item Master Cache: ทุกวันเวลา 19:00 น. (7 ทุ่ม) - รันพร้อมกับ invoice
+- Customer Cache: รันหลัง invoice เสร็จแล้ว (ไม่ตั้งเวลา)
 """
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -32,7 +32,7 @@ scheduler = BackgroundScheduler(
 def scheduled_invoice_cache_refresh():
     """
     Wrapper function สำหรับรัน invoice cache refresh job
-    รันก่อน customer cache refresh
+    เมื่อ invoice เสร็จ จะเรียก customer cache refresh โดยอัตโนมัติ
     """
     try:
         cache_logger.info("=" * 80)
@@ -49,6 +49,10 @@ def scheduled_invoice_cache_refresh():
         cache_logger.info(f"   Inserted: {result.invoices_inserted}")
         cache_logger.info(f"   Failed: {result.invoices_failed}")
         cache_logger.info("=" * 80)
+        
+        # เรียก customer cache refresh หลัง invoice เสร็จ
+        cache_logger.info("🔄 Triggering Customer Cache Refresh (after invoice completed)...")
+        scheduled_customer_cache_refresh()
         
     except Exception as e:
         cache_logger.error(f"❌ Scheduled invoice job failed: {e}", exc_info=True)
@@ -115,34 +119,26 @@ def start_scheduler():
     เริ่มต้น scheduler และเพิ่ม jobs
     """
     try:
-        # Job 1: Invoice Cache Refresh - รันเวลา 13:00 น. (1 ทุ่ม)
+        # Job 1: Invoice Cache Refresh - รันเวลา 19:00 น. (7 ทุ่ม)
         scheduler.add_job(
             func=scheduled_invoice_cache_refresh,
-            trigger=CronTrigger(hour=13, minute=0),
+            trigger=CronTrigger(hour=19, minute=0),
             id='invoice_cache_refresh',
-            name='Invoice Cache Refresh (Daily 13:00)',
+            name='Invoice Cache Refresh (Daily 19:00)',
             replace_existing=True
         )
         
-        # Job 2: Customer Cache Refresh - รันเวลา 15:00 น. (3 ทุ่ม)
-        # รันหลัง invoice job 2 ชั่วโมง เพื่อให้ invoice เสร็จก่อน
-        scheduler.add_job(
-            func=scheduled_customer_cache_refresh,
-            trigger=CronTrigger(hour=15, minute=0),
-            id='customer_cache_refresh',
-            name='Customer Cache Refresh (Daily 15:00)',
-            replace_existing=True
-        )
-        
-        # Job 3: Item Master Cache Refresh - รันเวลา 17:00 น. (5 ทุ่ม)
-        # รันหลัง customer job 2 ชั่วโมง เพื่อให้ customer เสร็จก่อน
+        # Job 2: Item Master Cache Refresh - รันเวลา 19:00 น. (7 ทุ่ม) พร้อมกับ invoice
         scheduler.add_job(
             func=scheduled_item_master_cache_refresh,
-            trigger=CronTrigger(hour=17, minute=0),
+            trigger=CronTrigger(hour=19, minute=0),
             id='item_master_cache_refresh',
-            name='Item Master Cache Refresh (Daily 17:00)',
+            name='Item Master Cache Refresh (Daily 19:00)',
             replace_existing=True
         )
+        
+        # Job 3: Customer Cache Refresh - รันหลัง invoice เสร็จ (ไม่ตั้งเวลา)
+        # จะถูกเรียกจาก scheduled_invoice_cache_refresh เมื่อ invoice เสร็จ
         
         # เริ่มต้น scheduler
         scheduler.start()
@@ -156,9 +152,9 @@ def start_scheduler():
         logger.info("=" * 80)
         
         cache_logger.info("✅ Scheduler started successfully")
-        cache_logger.info(f"   Job 1: Invoice Cache - 13:00 (1 ทุ่ม) daily")
-        cache_logger.info(f"   Job 2: Customer Cache - 15:00 (3 ทุ่ม) daily")
-        cache_logger.info(f"   Job 3: Item Master Cache - 17:00 (5 ทุ่ม) daily")
+        cache_logger.info(f"   Job 1: Invoice Cache - 19:00 (7 ทุ่ม) daily")
+        cache_logger.info(f"   Job 2: Item Master Cache - 19:00 (7 ทุ่ม) daily (parallel with invoice)")
+        cache_logger.info(f"   Job 3: Customer Cache - runs after invoice completes")
         
     except Exception as e:
         logger.error(f"❌ Failed to start scheduler: {e}", exc_info=True)
@@ -181,25 +177,23 @@ def stop_scheduler():
 def trigger_manual_refresh():
     """
     รัน jobs ทันทีแบบ manual (สำหรับ API endpoint)
-    รัน invoice job ก่อน แล้วค่อยรัน customer job แล้ว item master job
+    - Invoice และ Item Master รันพร้อมกัน
+    - Customer รันหลัง invoice เสร็จ
     """
     try:
         cache_logger.info("🔧 Manual refresh triggered")
         
-        # 1. รัน invoice cache refresh ก่อน
-        cache_logger.info("Step 1: Running invoice cache refresh...")
+        # 1. รัน invoice cache refresh และ item master cache refresh พร้อมกัน
+        cache_logger.info("Step 1: Running invoice cache refresh and item master cache refresh (parallel)...")
         invoice_result = run_invoice_cache_refresh(months=6)
+        item_result = run_item_master_cache_refresh()
         cache_logger.info(f"Invoice refresh completed: {invoice_result.invoices_processed} invoices")
+        cache_logger.info(f"Item master refresh completed: {item_result.items_processed} items")
         
-        # 2. รัน customer cache refresh
-        cache_logger.info("Step 2: Running customer cache refresh...")
+        # 2. รัน customer cache refresh หลัง invoice เสร็จ
+        cache_logger.info("Step 2: Running customer cache refresh (after invoice completed)...")
         customer_result = run_customer_cache_refresh()
         cache_logger.info(f"Customer refresh completed: {customer_result.customers_processed} customers")
-        
-        # 3. รัน item master cache refresh
-        cache_logger.info("Step 3: Running item master cache refresh...")
-        item_result = run_item_master_cache_refresh()
-        cache_logger.info(f"Item master refresh completed: {item_result.items_processed} items")
         
         return {
             "invoice": invoice_result,

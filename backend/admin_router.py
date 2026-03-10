@@ -41,7 +41,7 @@ class UploadResponse(BaseModel):
 @router.post("/prices/upload", response_model=UploadResponse)
 async def upload_prices(
     file: UploadFile = File(...),
-    branch_code: str = QueryParam(..., description="Branch code for price data")
+    branch_code: str = QueryParam(..., description="Branch code(s) for price data (comma-separated)")
 ):
     """
     Upload price file (CSV or Excel) and update Item_Price table.
@@ -49,15 +49,16 @@ async def upload_prices(
     Process:
     1. Validate file format (CSV, XLSX, XLS)
     2. Validate required columns (SKU, SDM, R2, R1, W2, W1)
-    3. For each row:
-       - Validate SKU exists in Item_Master
-       - Upsert to Item_Price table (update if exists, insert if not)
-       - Set UpdatedAt timestamp
+    3. For each branch code:
+       - For each row:
+         - Validate SKU exists in Item_Master
+         - Upsert to Item_Price table (update if exists, insert if not)
+         - Set UpdatedAt timestamp
     4. Return summary with total_rows, successful_updates, errors
     
     Args:
         file: Uploaded file (CSV or Excel)
-        branch_code: Branch code for price data (e.g., "00TR", "05AY")
+        branch_code: Branch code(s) for price data (comma-separated, e.g., "00TR,05AY")
     
     Returns:
         UploadResponse with statistics and error details
@@ -66,7 +67,14 @@ async def upload_prices(
         HTTPException 400: When file format is invalid or required columns missing
         HTTPException 500: When database operation fails
     """
-    logger.info(f"Received price upload request for branch: {branch_code}")
+    logger.info(f"Received price upload request for branches: {branch_code}")
+    
+    # Parse branch codes
+    branch_codes = [b.strip() for b in branch_code.split(",") if b.strip()]
+    if not branch_codes:
+        raise HTTPException(status_code=400, detail="No valid branch codes provided")
+    
+    logger.info(f"Processing upload for {len(branch_codes)} branch(es): {branch_codes}")
     
     # Validate file extension
     if not file.filename:
@@ -92,36 +100,52 @@ async def upload_prices(
         logger.error(f"Failed to save uploaded file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
     
-    # Process upload using PriceUploadService
+    # Process upload for each branch
     try:
         conn = get_mssql_conn()
         service = PriceUploadService(conn)
         
-        result = service.process_upload(temp_path, branch_code)
+        total_rows = 0
+        total_successful = 0
+        total_errors = 0
+        all_error_details = []
+        
+        for branch in branch_codes:
+            logger.info(f"Processing upload for branch: {branch}")
+            result = service.process_upload(temp_path, branch)
+            
+            total_rows += result.total_rows
+            total_successful += result.successful_updates
+            total_errors += result.errors
+            all_error_details.extend(result.error_details)
+            
+            logger.info(
+                f"Branch {branch}: successful={result.successful_updates}, errors={result.errors}"
+            )
         
         conn.close()
         
         # Build response
-        success = result.errors == 0
+        success = total_errors == 0
         message = (
-            f"Successfully uploaded {result.successful_updates} prices"
+            f"Successfully uploaded {total_successful} prices across {len(branch_codes)} branch(es)"
             if success
-            else f"Uploaded {result.successful_updates} prices with {result.errors} errors"
+            else f"Uploaded {total_successful} prices with {total_errors} errors across {len(branch_codes)} branch(es)"
         )
         
         logger.info(
             f"Price upload completed: success={success}, "
-            f"total={result.total_rows}, successful={result.successful_updates}, "
-            f"errors={result.errors}"
+            f"total={total_rows}, successful={total_successful}, "
+            f"errors={total_errors}, branches={len(branch_codes)}"
         )
         
         return UploadResponse(
             success=success,
             message=message,
-            total_rows=result.total_rows,
-            successful_updates=result.successful_updates,
-            errors=result.errors,
-            error_details=result.error_details
+            total_rows=total_rows,
+            successful_updates=total_successful,
+            errors=total_errors,
+            error_details=all_error_details
         )
     
     except ValidationError as e:
