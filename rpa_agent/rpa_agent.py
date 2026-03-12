@@ -115,7 +115,7 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
         
         # For offline branch machines, we use a local bundled chromedriver.exe to prevent
         # Selenium Manager from attempting to download drivers from the internet (which fails in restricted networks).
-        # We look for chromedriver.exe in the same folder as this running script/executable.
+        # We look for chromedriver.exe in the 'browser' folder relative to this running script/executable.
         if getattr(sys, 'frozen', False):
             # Running as compiled PyInstaller executable
             base_dir = os.path.dirname(sys.executable)
@@ -123,13 +123,13 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
             # Running as standard Python script
             base_dir = os.path.dirname(os.path.abspath(__file__))
 
-        driver_path = os.path.join(base_dir, "chromedriver.exe")
+        driver_path = os.path.join(base_dir, "browser", "chromedriver.exe")
         service = None
         if os.path.exists(driver_path):
             print(f"[INFO] Found local offline driver at: {driver_path}")
             service = Service(executable_path=driver_path)
         else:
-            print("[WARN] Local chromedriver.exe not found! Attempting to use default Selenium Manager (requires internet)...")
+            print("[WARN] Local browser/chromedriver.exe not found! Attempting to use default Selenium Manager (requires internet)...")
 
         # Retry logic: Try to connect up to 5 times, waiting 2 seconds between each
         max_retries = 5
