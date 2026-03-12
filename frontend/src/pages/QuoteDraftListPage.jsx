@@ -1,7 +1,6 @@
 // src/pages/QuoteDraftListPage.jsx
 import React, { useState, useEffect } from "react";
 import QuoteDraftCard from "../components/quotes/QuoteDraftCard.jsx";
-import SpecialPriceRequestModal from "../components/special_price_request/SpecialPriceRequestModal_v2.jsx";
 import api from "../services/api.js";
 import { useNavigate } from "react-router-dom";
 import { useQuote } from "../context/QuoteContext";
@@ -13,10 +12,6 @@ export default function QuoteDraftListPage() {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  
-  // ⭐ เพิ่ม state สำหรับ Special Price Request Modal
-  const [specialPriceModalOpen, setSpecialPriceModalOpen] = useState(false);
-  const [selectedQuote, setSelectedQuote] = useState(null);
 
   useEffect(() => {
     const fetchDrafts = async () => {
@@ -137,60 +132,6 @@ export default function QuoteDraftListPage() {
       alert("ลบไม่ได้");
     }
   };
-  
-  // ⭐ เปิด modal ขอราคาพิเศษ
-  const handleRequestSpecialPrice = async (quote) => {
-    // ⭐ ดึงข้อมูลลูกค้าแบบเต็มจาก API เพื่อให้ได้ gen_bus
-    try {
-      const customerCode = quote.customer?.id || quote.customer?.code;
-      if (customerCode) {
-        const response = await api.get("/api/customer/search", {
-          params: { code: customerCode }
-        });
-        
-        // อัปเดต customer object ให้มี gen_bus
-        const enrichedQuote = {
-          ...quote,
-          customer: {
-            ...quote.customer,
-            gen_bus: response.data.gen_bus
-          }
-        };
-        
-        console.log("🔍 Enriched customer data:", enrichedQuote.customer);
-        setSelectedQuote(enrichedQuote);
-      } else {
-        setSelectedQuote(quote);
-      }
-    } catch (error) {
-      console.error("⚠️ Failed to fetch customer data:", error);
-      // ถ้าดึงไม่ได้ ให้ใช้ข้อมูลเดิม
-      setSelectedQuote(quote);
-    }
-    
-    setSpecialPriceModalOpen(true);
-  };
-  
-  // ⭐ หลังส่งคำขอสำเร็จ
-  const handleSpecialPriceSuccess = async (result) => {
-    // Reload drafts เพื่อดึงสถานะใหม่
-    try {
-      const [openRes, pendingRes, draftRes] = await Promise.all([
-        api.get("/api/quotation", { params: { status: "open" } }),
-        api.get("/api/quotation", { params: { status: "pending_approval" } }),
-        api.get("/api/quotation", { params: { status: "draft" } })
-      ]);
-      
-      const allDrafts = [
-        ...(openRes.data || []), 
-        ...(pendingRes.data || []),
-        ...(draftRes.data || [])
-      ];
-      setDrafts(allDrafts);
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -275,34 +216,13 @@ export default function QuoteDraftListPage() {
                 dueDateText={q.createdAt ? new Date(q.createdAt).toLocaleString("th-TH") : "-"}
                 totalAmount={totalAmount || 0}
                 items={q.cart || []}
-                cart={q.cart || []} // ⭐ ส่ง cart
-                customer={q.customer || {}} // ⭐ ส่ง customer
-                specialPriceStatus={q.specialPriceStatus || null}
-                specialPriceRequestNumber={q.specialPriceRequestId || null} // ⭐ ส่ง request number
                 onEdit={() => handleEditDraft(q)}
                 onDelete={() => handleDeleteDraft(q.quoteNo)}
-                onRequestSpecialPrice={() => handleRequestSpecialPrice(q)} // ⭐ ส่ง callback
               />
             );
           })}
         </div>
       </div>
-      
-      {/* ⭐ Special Price Request Modal */}
-      {selectedQuote && (
-        <SpecialPriceRequestModal
-          isOpen={specialPriceModalOpen}
-          onClose={() => {
-            setSpecialPriceModalOpen(false);
-            setSelectedQuote(null);
-          }}
-          cart={selectedQuote.cart || []}
-          totals={selectedQuote.totals || {}}
-          customer={selectedQuote.customer || {}}
-          quoteNo={selectedQuote.quoteNo || selectedQuote.id}
-          onSubmitSuccess={handleSpecialPriceSuccess}
-        />
-      )}
     </div>
   );
 }

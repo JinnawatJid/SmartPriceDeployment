@@ -13,8 +13,6 @@ import GlassPickerModal from "../../components/wizard/GlassPickerModal.jsx";
 import CategoryCard from "../../components/wizard/CategoryCard.jsx";
 import CartItemRow from "../../components/wizard/CartItemRow.jsx";
 import OrderHistoryCard from "../../components/wizard/OrderHistoryCard.jsx";
-import SpecialPriceRequestButton from "../../components/special_price_request/SpecialPriceRequestButton.jsx";
-import SpecialPriceRequestModal from "../../components/special_price_request/SpecialPriceRequestModal_v2.jsx";
 import DynamicsImportConfirmModal from "../../components/wizard/DynamicsImportConfirmModal.jsx";
 
 import ProductList from "../../components/products/ProductList.jsx";
@@ -94,7 +92,6 @@ function Step6_Summary({ state, dispatch }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [shippingOpen, setShippingOpen] = useState(false);
   const [glassOpen, setGlassOpen] = useState(false);
-  const [specialPriceModalOpen, setSpecialPriceModalOpen] = useState(false);
 
   // Product browser state
   const [productFilters, setProductFilters] = useState({});
@@ -111,6 +108,11 @@ function Step6_Summary({ state, dispatch }) {
 
   // Promotions state
   const [promotions, setPromotions] = useState([]);
+
+  // Project price state
+  const [customerProjects, setCustomerProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projectPrices, setProjectPrices] = useState({});
 
   // Category list
   const [categories, setCategories] = useState([]);
@@ -432,7 +434,7 @@ function Step6_Summary({ state, dispatch }) {
     };
 
     calc();
-  }, [state.status, state.cart, state.customer, state.deliveryType, state.shippingCustomerPay]);
+  }, [state.status, state.cart, state.customer, state.deliveryType, state.shippingCustomerPay, selectedProject, projectPrices]);
 
   // ===============================
   // AUTO RECALC SHIPPING (AFTER PRICING)
@@ -544,6 +546,67 @@ function Step6_Summary({ state, dispatch }) {
     fetchHistory();
   }, [state.customer, state.cart]);
 
+
+  // โหลดรายการโครงการของลูกค้า
+  useEffect(() => {
+    const custCode = getCustomerCode(state.customer);
+    
+    if (!custCode || custCode.toUpperCase() === "N/A") {
+      setCustomerProjects([]);
+      setSelectedProject(null);
+      setProjectPrices({});
+      return;
+    }
+
+    const fetchProjects = async () => {
+      try {
+        console.log('🏗️ Loading projects for customer:', custCode);
+        const res = await api.get('/api/project-prices/by-customer', {
+          params: { customerCode: custCode }
+        });
+        
+        const projects = res.data || [];
+        console.log('📦 Found projects:', projects);
+        setCustomerProjects(projects);
+      } catch (err) {
+        console.error('❌ Error loading projects:', err);
+        setCustomerProjects([]);
+      }
+    };
+
+    fetchProjects();
+  }, [state.customer]);
+
+  // โหลดราคาโครงการเมื่อเลือกโครงการ
+  useEffect(() => {
+    if (!selectedProject) {
+      setProjectPrices({});
+      return;
+    }
+
+    const fetchProjectPrices = async () => {
+      try {
+        console.log('🏗️ Loading prices for project:', selectedProject);
+        const res = await api.get(`/api/project-prices/project-prices/${selectedProject}`);
+        
+        const prices = res.data || [];
+        console.log('📦 Found project prices:', prices);
+        
+        // แปลงเป็น object { sku: price }
+        const priceMap = {};
+        prices.forEach(item => {
+          priceMap[item.sku] = item.price;
+        });
+        
+        setProjectPrices(priceMap);
+      } catch (err) {
+        console.error('❌ Error loading project prices:', err);
+        setProjectPrices({});
+      }
+    };
+
+    fetchProjectPrices();
+  }, [selectedProject]);
 
   // โหลด Promotion ตาม SKU ที่เลือก
   useEffect(() => {
@@ -716,10 +779,56 @@ function Step6_Summary({ state, dispatch }) {
 
 
   // sku -> item (ราคาที่คำนวณใหม่)
-  const calcMap = useMemo(
-    () => Object.fromEntries((calculation.cart || []).map((it) => [pricingKeyOf(it), it])),
-    [calculation.cart]
-  );
+  const calcMap = useMemo(() => {
+    const map = Object.fromEntries((calculation.cart || []).map((it) => [pricingKeyOf(it), it]));
+    
+    // ⭐ ถ้ามีการเลือกโครงการ ให้ override ราคาด้วยราคาโครงการ
+    if (selectedProject && Object.keys(projectPrices).length > 0) {
+      console.log('🏗️ Applying project prices:', projectPrices);
+      
+      // สร้าง map ใหม่ที่มีราคาโครงการ
+      const updatedMap = { ...map };
+      
+      state.cart.forEach((item) => {
+        const key = pricingKeyOf(item);
+        const projectPrice = projectPrices[item.sku];
+        
+        if (projectPrice !== undefined) {
+          console.log(`🏗️ Using project price for ${item.sku}: ${projectPrice}`);
+          
+          // สร้าง calculated item ใหม่ที่มีราคาโครงการ
+          const isGlass = (item.category || "").toUpperCase() === "G";
+          const sqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
+          const qty = Number(item.qty || 0);
+          
+          let unitPrice = projectPrice;
+          let lineTotal = projectPrice * qty;
+          
+          // สำหรับกระจก ราคาโครงการอาจเป็นต่อแผ่นหรือต่อตารางฟุต
+          if (isGlass && sqft > 0) {
+            // สมมติว่าราคาโครงการเป็นต่อแผ่น
+            unitPrice = projectPrice;
+            lineTotal = projectPrice * qty;
+          }
+          
+          updatedMap[key] = {
+            ...(map[key] || item),
+            sku: item.sku,
+            qty: qty,
+            UnitPrice: unitPrice,
+            price_per_sheet: isGlass ? unitPrice : undefined,
+            lineTotal: lineTotal,
+            _LineTotal: lineTotal,
+            priceSource: 'project', // ⭐ ระบุว่ามาจากโครงการ
+          };
+        }
+      });
+      
+      return updatedMap;
+    }
+    
+    return map;
+  }, [calculation.cart, selectedProject, projectPrices, state.cart]);
 
   const _round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
@@ -780,7 +889,7 @@ function Step6_Summary({ state, dispatch }) {
     };
   };
 
-  // ⭐ ทำให้ Summary + payload totals เปลี่ยนตามเมื่อ user แก้ราคา/qty
+  // ⭐ ทำให้ Summary + payload totals เปลี่ยนตามเมื่อ user แก้ราคา/qty หรือเลือกโครงการ
   useEffect(() => {
     const next = computeEffectiveTotals(state.cart, calcMap);
     setCalculation((prev) => ({
@@ -1698,6 +1807,36 @@ function Step6_Summary({ state, dispatch }) {
               {/* แสดง Promotion Banner */}
               <PromotionBanner promotions={promotions} />
               
+              {/* Dropdown เลือกโครงการ */}
+              {customerProjects.length > 0 && (
+                <div className="border-b border-gray-200 pb-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    เลือกโครงการ (ถ้ามี)
+                  </label>
+                  <select
+                    value={selectedProject || ''}
+                    onChange={(e) => {
+                      const projectId = e.target.value ? parseInt(e.target.value) : null;
+                      setSelectedProject(projectId);
+                      console.log('🏗️ Selected project:', projectId);
+                    }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value="">ใช้ราคาระบบ (ไม่เลือกโครงการ)</option>
+                    {customerProjects.map((proj) => (
+                      <option key={proj.project_id} value={proj.project_id}>
+                        {proj.project_name || proj.project_code}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedProject && (
+                    <p className="mt-1 text-xs text-green-600">
+                      ✓ ใช้ราคาโครงการ
+                    </p>
+                  )}
+                </div>
+              )}
+              
               <div>
                 <h4 className="mb-2 text-lg font-semibold text-gray-800">ข้อมูลใบเสนอราคา</h4>
               </div>
@@ -1899,21 +2038,6 @@ function Step6_Summary({ state, dispatch }) {
         onConfirm={(payload) => {
           dispatch({ type: "ADD_ITEM", payload });
           setGlassOpen(false);
-        }}
-      />
-
-      {/* Special Price Request Modal */}
-      <SpecialPriceRequestModal
-        isOpen={specialPriceModalOpen}
-        onClose={() => setSpecialPriceModalOpen(false)}
-        cart={state.cart}
-        totals={calculation.totals}
-        customer={state.customer}
-        quoteNo={state.quoteNo || "DRAFT"}
-        onSubmitSuccess={(result) => {
-          console.log("Special price request submitted:", result);
-          // อัปเดตสถานะใบเสนอราคาเป็น pending_approval
-          alert("ส่งคำขอราคาพิเศษสำเร็จ! ใบเสนอราคานี้จะรอการอนุมัติก่อนยืนยัน");
         }}
       />
 

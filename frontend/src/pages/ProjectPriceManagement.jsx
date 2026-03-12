@@ -623,55 +623,57 @@ const ProjectPriceManagement = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                {items.map((item, index) => (
-                  <div key={index} className="grid grid-cols-6 gap-2 items-end bg-gray-50 p-2 rounded">
-                    <input
-                      type="text"
-                      placeholder="SKU"
-                      value={item.sku}
-                      onChange={(e) => updateItem(index, 'sku', e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                    <input
-                      type="text"
-                      placeholder="ชื่อสินค้า"
-                      value={item.product_name}
-                      onChange={(e) => updateItem(index, 'product_name', e.target.value)}
-                      className="border rounded px-2 py-1 text-sm col-span-2"
-                    />
-                    <input
-                      type="text"
-                      placeholder="หน่วย"
-                      value={item.unit}
-                      onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="ราคา"
-                      value={item.price}
-                      onChange={(e) => updateItem(index, 'price', e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="จำนวน"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+              <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+                <div className="space-y-2 p-2">
+                  {items.map((item, index) => (
+                    <div key={index} className="grid grid-cols-6 gap-2 items-end bg-gray-50 p-2 rounded">
+                      <input
+                        type="text"
+                        placeholder="SKU"
+                        value={item.sku}
+                        onChange={(e) => updateItem(index, 'sku', e.target.value)}
+                        className="border rounded px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="ชื่อสินค้า"
+                        value={item.product_name}
+                        onChange={(e) => updateItem(index, 'product_name', e.target.value)}
+                        className="border rounded px-2 py-1 text-sm col-span-2"
+                      />
+                      <input
+                        type="text"
+                        placeholder="หน่วย"
+                        value={item.unit}
+                        onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                        className="border rounded px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="ราคา"
+                        value={item.price}
+                        onChange={(e) => updateItem(index, 'price', e.target.value)}
+                        className="border rounded px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="จำนวน"
+                        value={item.quantity}
+                        onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                        className="border rounded px-2 py-1 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 

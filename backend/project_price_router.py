@@ -214,6 +214,90 @@ async def get_active_project_price(customerCode: str, sku: str):
         if conn:
             conn.close()
 
+@router.get("/by-customer")
+async def get_projects_by_customer(customerCode: str):
+    """ดึงรายการโครงการทั้งหมดของลูกค้า (active เท่านั้น)"""
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        today = datetime.now().date().isoformat()
+        
+        print(f"🏗️ [PROJECT LIST API] Customer: {customerCode}")
+        
+        query = """
+            SELECT 
+                project_id, project_code, project_name,
+                price_start_date, price_end_date
+            FROM Project_Price_Header
+            WHERE status = 'active'
+            AND price_start_date <= ?
+            AND price_end_date >= ?
+            AND customer_code = ?
+            ORDER BY project_name
+        """
+        
+        cursor.execute(query, [today, today, customerCode])
+        
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        # แปลง date เป็น string
+        for r in results:
+            if r.get('price_start_date'):
+                r['price_start_date'] = str(r['price_start_date'])
+            if r.get('price_end_date'):
+                r['price_end_date'] = str(r['price_end_date'])
+        
+        print(f"📦 [PROJECT LIST API] Found {len(results)} projects")
+        
+        return results
+    
+    except Exception as e:
+        print(f"❌ [PROJECT LIST API] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if conn:
+            conn.close()
+
+@router.get("/project-prices/{project_id}")
+async def get_project_prices_by_id(project_id: int):
+    """ดึงราคาสินค้าทั้งหมดในโครงการ"""
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        print(f"🏗️ [PROJECT PRICES API] Project ID: {project_id}")
+        
+        query = """
+            SELECT 
+                sku, product_name, unit, price, quantity
+            FROM Project_Price_Line
+            WHERE project_id = ?
+        """
+        
+        cursor.execute(query, [project_id])
+        
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        print(f"📦 [PROJECT PRICES API] Found {len(results)} items")
+        
+        return results
+    
+    except Exception as e:
+        print(f"❌ [PROJECT PRICES API] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if conn:
+            conn.close()
+
 @router.put("/{project_id}/status")
 async def update_project_status(
     project_id: int, 

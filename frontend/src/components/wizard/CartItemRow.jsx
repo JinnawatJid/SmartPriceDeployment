@@ -26,6 +26,9 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
   const cat = (item.category || String(item.sku || "").slice(0, 1)).toUpperCase();
   const isGlass = cat === "G";
 
+  // ⭐ ตรวจสอบว่าใช้ราคาโครงการหรือไม่
+  const isProjectPrice = calculatedItem?.priceSource === 'project';
+
   // ✅ unit price to display
   // - glass: show บาท/แผ่น (price_per_sheet)
   // - others: show บาท/หน่วย (UnitPrice/price)
@@ -224,8 +227,13 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
               >
                 {Number(displayUnitPrice).toLocaleString("th-TH")}
               </span>
-
-
+              
+              {/* ⭐ แสดงว่าใช้ราคาโครงการ */}
+              {isProjectPrice && (
+                <span className="text-[9px] text-green-600 font-semibold">
+                  🏗️ ราคาโครงการ
+                </span>
+              )}
             </div>
 
             {/* ปุ่มดูประวัติ ชิดขวา */}

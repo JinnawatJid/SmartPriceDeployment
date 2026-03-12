@@ -36,6 +36,16 @@ export default function UploadPriceExcel({ onUploaded }) {
     );
   };
 
+  const handleSelectAll = () => {
+    if (selectedBranches.length === branches.length) {
+      // Deselect all
+      setSelectedBranches([]);
+    } else {
+      // Select all
+      setSelectedBranches(branches.map((b) => b.Code));
+    }
+  };
+
   const handleUpload = async () => {
     if (!file || selectedBranches.length === 0) return;
 
@@ -72,6 +82,20 @@ export default function UploadPriceExcel({ onUploaded }) {
               <div className="text-sm text-gray-500">ไม่พบข้อมูลสาขา</div>
             ) : (
               <div className="space-y-2">
+                {/* Select All Checkbox */}
+                <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded border-b border-gray-200 pb-3 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedBranches.length === branches.length && branches.length > 0}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-semibold text-gray-800">
+                    เลือกทั้งหมด
+                  </span>
+                </label>
+
+                {/* Individual Branch Checkboxes */}
                 {branches.map((branch) => (
                   <label key={branch.Code} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
                     <input
