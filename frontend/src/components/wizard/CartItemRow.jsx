@@ -179,6 +179,24 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                       </p>
                       <p className="text-xs text-gray-500">{item.sku}</p>
                       
+                      {/* แสดงสต๊อก */}
+                      {item.stock && (
+                        <div className="mt-1 text-xs">
+                          <p className="text-green-700 font-semibold">
+                            สต๊อก: {item.stock.total_quantity}
+                          </p>
+                          {item.stock.branches && item.stock.branches.length > 0 && (
+                            <div className="text-gray-600 text-[10px] space-y-0.5">
+                              {item.stock.branches.map((branch) => (
+                                <div key={branch.branch_code}>
+                                  {branch.branch_code}: {branch.quantity}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
                       {/* แสดงโปรโมชั่น */}
                       {promotions.length > 0 && (
                         <div className="mt-1 space-y-1">

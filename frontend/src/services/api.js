@@ -34,4 +34,15 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Helper function สำหรับดึงข้อมูล stock
+export const getItemStock = async (sku) => {
+  try {
+    const response = await api.get(`/api/items/${sku}/stock`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching stock:", error);
+    return null;
+  }
+};
+
 export default api;

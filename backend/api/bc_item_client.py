@@ -150,12 +150,13 @@ class BCAPIClient:
             logger.warning(f"Unexpected response format: {type(response_data)}")
             return []
     
-    def fetch_inventory(self, item_no: str) -> List[Dict]:
+    def fetch_inventory(self, item_no: str, branch_code: str = None) -> List[Dict]:
         """
-        Fetch inventory ledger entries for specific item.
+        Fetch inventory ledger entries for specific item using POST.
         
         Args:
             item_no: Item number (SKU) to query
+            branch_code: Optional branch code to filter by
         
         Returns:
             List of ledger entries with Item_No_, Quantity, Branch_Code
@@ -166,26 +167,36 @@ class BCAPIClient:
             ServerError: When API returns 5xx error after retries
             NetworkError: When network request fails after retries
         """
-        params = {
-            "$filter": f"Item_No_ eq '{item_no}'"
+        # ⭐ ส่ง pagination และ filter แบบเดียวกับ Invoice/Customer API
+        payload = {
+            "page": 1,
+            "size": 1000,
+            "Item No_": {"$eq": item_no}
         }
         
+        # เพิ่ม filter สาขาถ้ามี
+        if branch_code:
+            payload["Branch_Code"] = {"$eq": branch_code}
+        
         url = self.itemledger_api_url
-        response_data = self._make_request(
+        response_data = self._make_request_post(
             url=url,
             api_key=self.itemledger_api_key,
-            params=params,
+            payload=payload,
             timeout=self.ledger_timeout
         )
         
-        # Extract entries from OData response
-        if isinstance(response_data, dict) and "value" in response_data:
-            return response_data["value"]
+        # Extract entries from response (check both "data" and "value" keys)
+        if isinstance(response_data, dict):
+            if "data" in response_data:
+                return response_data["data"] if response_data["data"] else []
+            elif "value" in response_data:
+                return response_data["value"]
         elif isinstance(response_data, list):
             return response_data
-        else:
-            logger.warning(f"Unexpected response format: {type(response_data)}")
-            return []
+        
+        logger.warning(f"Unexpected response format: {type(response_data)}")
+        return []
     
     def _make_request(
         self,
@@ -304,7 +315,23 @@ class BCAPIClient:
         """Handle HTTP response with appropriate error handling and retries."""
         # Handle different status codes
         if response.status_code == 200:
-            return response.json()
+            try:
+                # ⭐ Log response headers เพื่อ debug
+                logger.debug(f"Response headers: {response.headers}")
+                logger.debug(f"Response encoding: {response.encoding}")
+                
+                return response.json()
+            except Exception as e:
+                # ⭐ ถ้า json() fail อาจเป็นเพราะ gzip error
+                logger.warning(f"JSON parsing failed: {str(e)}, trying raw content")
+                try:
+                    # ลองใช้ raw content
+                    import json
+                    logger.debug(f"Raw response text (first 500 chars): {response.text[:500]}")
+                    return json.loads(response.text)
+                except Exception as e2:
+                    logger.error(f"Failed to parse response: {str(e2)}")
+                    raise ClientError(f"Invalid JSON response: {str(e2)}") from e2
         
         # Authentication errors - no retry
         elif response.status_code in (401, 403):

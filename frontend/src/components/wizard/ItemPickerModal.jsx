@@ -218,7 +218,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
   try {
     const sku = item.sku || item.SKU;
 
-    // 🔥 โหลด detail + enrich
+  // ⭐ โหลด detail + enrich
     const res = await api.get(`/api/items/${sku}`);
     const fullItem = res.data;
 
@@ -238,6 +238,7 @@ function ItemPickerModal({ open, category, onClose, onConfirm }) {
       product_weight: fullItem.product_weight ?? 0,
       product_group: fullItem.product_group ?? null,
       product_sub_group: fullItem.product_sub_group ?? null,
+      stock: fullItem.stock || null, // ⭐ เพิ่มข้อมูล stock
     };
 
     setSelectedItems((prev) => {

@@ -1,14 +1,17 @@
 // components/products/ProductDetail.jsx
 import { useEffect, useState } from "react";
-import api from "../../services/api";
+import api, { getItemStock } from "../../services/api";
 
 export default function ProductDetail({ item }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [stock, setStock] = useState(null);
+  const [loadingStock, setLoadingStock] = useState(false);
 
   useEffect(() => {
     if (!item) {
       setDetail(null);
+      setStock(null);
       return;
     }
 
@@ -32,7 +35,22 @@ export default function ProductDetail({ item }) {
       }
     };
 
+    const loadStock = async () => {
+      try {
+        setLoadingStock(true);
+        const sku = item.sku || item.SKU;
+        const stockData = await getItemStock(sku);
+        setStock(stockData);
+      } catch (err) {
+        console.error("Load stock error:", err);
+        setStock(null);
+      } finally {
+        setLoadingStock(false);
+      }
+    };
+
     loadDetail();
+    loadStock();
   }, [item]);
 
   if (!item) {
@@ -106,9 +124,21 @@ export default function ProductDetail({ item }) {
               <span className="font-semibold">Unit:</span> {displayItem.unit}
             </p>
           )}
-          {displayItem.inventory !== undefined && (
-            <p className="text-green-600 font-semibold">
-              คงเหลือในสต๊อก: {displayItem.inventory}
+          
+          {/* แสดง Stock */}
+          {loadingStock ? (
+            <p className="text-gray-500">
+              <span className="font-semibold">Stock:</span> กำลังโหลด...
+            </p>
+          ) : stock && stock.quantity !== undefined ? (
+            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+              <p className="text-green-700 font-semibold">
+                คงเหลือในสต๊อก (สาขา {stock.branch_code}): {stock.quantity.toLocaleString()} {displayItem.unit || 'หน่วย'}
+              </p>
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              <span className="font-semibold">Stock:</span> ไม่มีข้อมูล
             </p>
           )}
         </div>
