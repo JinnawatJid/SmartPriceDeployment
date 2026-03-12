@@ -112,6 +112,78 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
         if conn:
             conn.close()
 
+@router.get("/next-code/{mode}")
+async def get_next_project_code(mode: str, branch_code: Optional[str] = None, customer_code: Optional[str] = None):
+    """ดึงรหัสโครงการถัดไปตามโหมด"""
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        from datetime import datetime
+        now = datetime.now()
+        buddhist_year = str(now.year + 543)[-2:]  # YY (พ.ศ.)
+        month = str(now.month).zfill(2)  # MM
+        
+        if mode == 'project':
+            # หา running number ถัดไปสำหรับ PJ
+            prefix = f"PJ{buddhist_year}{month}"
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM Project_Price_Header
+                WHERE project_code LIKE ?
+            """, (f"{prefix}%",))
+            result = cursor.fetchone()
+            count = (result[0] if result else 0) + 1
+            run_num = str(count).zfill(2)
+            next_code = f"{prefix}{run_num}"
+            return {"next_code": next_code}
+        
+        elif mode == 'branch':
+            if not branch_code:
+                raise HTTPException(status_code=400, detail="branch_code required for branch mode")
+            
+            # เอาตัวอักษรสองตัวหลังสุดของ Code เช่น "03TS" → "TS"
+            branch_prefix = branch_code[-2:].upper()
+            
+            # หา running number ถัดไปสำหรับ BR
+            prefix = f"{branch_prefix}{buddhist_year}{month}"
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM Project_Price_Header
+                WHERE project_code LIKE ?
+            """, (f"{prefix}%",))
+            result = cursor.fetchone()
+            count = (result[0] if result else 0) + 1
+            run_num = str(count).zfill(2)
+            next_code = f"{prefix}{run_num}"
+            return {"next_code": next_code}
+        
+        elif mode == 'customer':
+            if not customer_code:
+                raise HTTPException(status_code=400, detail="customer_code required for customer mode")
+            
+            # หา running number ถัดไปสำหรับ CUSTOMER
+            prefix = f"{buddhist_year}{month}{customer_code}"
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM Project_Price_Header
+                WHERE project_code LIKE ?
+            """, (f"{prefix}%",))
+            result = cursor.fetchone()
+            count = (result[0] if result else 0) + 1
+            next_code = prefix
+            return {"next_code": next_code}
+        
+        else:
+            raise HTTPException(status_code=400, detail="Invalid mode")
+    
+    except Exception as e:
+        print(f"❌ [NEXT CODE API] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if conn:
+            conn.close()
+
 @router.get("/")
 async def get_project_prices(status: Optional[str] = None, branch: Optional[str] = None):
     """ดึงรายการราคาโครงการทั้งหมด"""
@@ -225,8 +297,23 @@ async def get_projects_by_customer(customerCode: str):
         
         today = datetime.now().date().isoformat()
         
-        print(f"🏗️ [PROJECT LIST API] Customer: {customerCode}")
+        print(f"🏗️ [PROJECT LIST API] Customer: {customerCode}, Today: {today}")
         
+        # ดึงโครงการทั้งหมดของลูกค้าก่อน (ไม่กรองวันที่)
+        query_all = """
+            SELECT 
+                project_id, project_code, project_name, customer_code,
+                price_start_date, price_end_date, status
+            FROM Project_Price_Header
+            WHERE customer_code = ?
+        """
+        cursor.execute(query_all, [customerCode])
+        all_projects = cursor.fetchall()
+        print(f"📋 [PROJECT LIST API] All projects for {customerCode}: {len(all_projects)}")
+        for p in all_projects:
+            print(f"  - {p[1]}: status={p[6]}, dates={p[4]} to {p[5]}")
+        
+        # ดึงโครงการที่ active และอยู่ในช่วงเวลา
         query = """
             SELECT 
                 project_id, project_code, project_name,
@@ -251,7 +338,7 @@ async def get_projects_by_customer(customerCode: str):
             if r.get('price_end_date'):
                 r['price_end_date'] = str(r['price_end_date'])
         
-        print(f"📦 [PROJECT LIST API] Found {len(results)} projects")
+        print(f"📦 [PROJECT LIST API] Found {len(results)} active projects in date range")
         
         return results
     

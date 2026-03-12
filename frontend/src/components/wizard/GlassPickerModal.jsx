@@ -4,7 +4,7 @@ import CustomDropdown from "../common/CustomDropdown";
 import { useSelectedStatus } from "../../hooks/useSelectedStatus";
 
 // Component สำหรับแสดงแถวของกระจกในตาราง
-function GlassTableRow({ item, isActive, onClick }) {
+function GlassTableRow({ item, isActive, onClick, stockData = {} }) {
   const sku = item.sku;
   const variantCode = item.variantCode || null;
   const sqft = 0; // กระจกใน list ยังไม่มีขนาดเฉพาะ
@@ -31,7 +31,7 @@ function GlassTableRow({ item, isActive, onClick }) {
         {item.width} × {item.height}
       </td>
       <td className="col-span-1 p-2 text-center">{item.thickness}</td>
-      <td className="col-span-1 p-2 text-center font-semibold">{item.inventory}</td>
+      <td className="col-span-1 p-2 text-center font-semibold">{item.inventory || stockData[item.sku] || 0}</td>
     </tr>
   );
 }
@@ -72,6 +72,9 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
   // ⭐ MULTI-SELECT STATE
   const [selectedItems, setSelectedItems] = useState([]);
+
+  // STOCK DATA
+  const [stockData, setStockData] = useState({});
 
   // FILTER OPTIONS
   const [filterOptions, setFilterOptions] = useState({
@@ -159,6 +162,21 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       const newOffset = currentOffset + newItems.length;
       setOffset(newOffset);
       setHasMore(newOffset < totalCount);
+
+      // ⭐ ดึง stock สำหรับ items ใหม่
+      if (reset) {
+        const newStockData = {};
+        for (const item of newItems) {
+          try {
+            const stockRes = await api.get(`/api/glass/${item.sku}/stock`);
+            newStockData[item.sku] = stockRes.data.quantity || 0;
+          } catch (err) {
+            console.error(`Error fetching stock for ${item.sku}:`, err);
+            newStockData[item.sku] = 0;
+          }
+        }
+        setStockData(newStockData);
+      }
 
       if (reset) {
         const loadTime = performance.now();
@@ -593,6 +611,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
                       item={item}
                       isActive={selectedItem?.sku === item.sku}
                       onClick={() => setSelectedItem(item)}
+                      stockData={stockData}
                     />
                   ))}
                 </tbody>

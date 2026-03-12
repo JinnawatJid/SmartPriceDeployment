@@ -17,6 +17,15 @@ const ProjectPriceManagement = () => {
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState(null);
   
+  // Customer search state
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  
+  // Mode selection
+  const [priceMode, setPriceMode] = useState(null); // 'project' | 'branch' | 'customer'
+  
+  // Edit mode
+  const [editingProjectId, setEditingProjectId] = useState(null);
+  
   // Form state
   const [formData, setFormData] = useState({
     project_code: '',
@@ -106,6 +115,74 @@ const ProjectPriceManagement = () => {
       setBranches([]); // Set empty array on error
     }
   };
+
+  // Generate project code based on mode
+  const generateProjectCode = () => {
+    const now = new Date();
+    const buddhistYear = String(now.getFullYear() + 543).slice(-2); // YY (พ.ศ.)
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // MM
+
+    if (priceMode === 'project') {
+      return `PJ${buddhistYear}${month}`;
+    } else if (priceMode === 'branch') {
+      const branchCode = formData.branch_code || 'XX';
+      return `${branchCode}${buddhistYear}${month}`;
+    } else if (priceMode === 'customer') {
+      const custCode = formData.customer_code || '';
+      return `${buddhistYear}${month}${custCode}`;
+    }
+    return '';
+  };
+
+  // Handle mode change
+  const handleModeChange = (mode) => {
+    setPriceMode(mode);
+    setFormData({
+      project_code: '',
+      project_name: '',
+      customer_code: '',
+      customer_name: '',
+      branch_code: '',
+      price_start_date: '',
+      price_end_date: '',
+      request_by: '',
+      request_date: new Date().toISOString().split('T')[0],
+      remark: '',
+    });
+    setItems([]);
+    
+    // Auto-fetch next code for project mode
+    if (mode === 'project') {
+      fetchNextCode('project');
+    }
+  };
+
+  // Fetch next code from backend
+  const fetchNextCode = async (mode, branchCode = null, customerCode = null) => {
+    try {
+      let url = `/api/project-prices/next-code/${mode}`;
+      const params = [];
+      if (branchCode) params.push(`branch_code=${branchCode}`);
+      if (customerCode) params.push(`customer_code=${customerCode}`);
+      if (params.length > 0) url += '?' + params.join('&');
+      
+      const res = await api.get(url);
+      setFormData(prev => ({...prev, project_code: res.data.next_code}));
+    } catch (err) {
+      console.error('Error fetching next code:', err);
+    }
+  };
+
+  // Auto-generate code when inputs change
+  useEffect(() => {
+    if (!priceMode) return;
+    
+    if (priceMode === 'branch' && formData.branch_code) {
+      fetchNextCode('branch', formData.branch_code);
+    } else if (priceMode === 'customer' && formData.customer_code) {
+      fetchNextCode('customer', null, formData.customer_code);
+    }
+  }, [priceMode, formData.branch_code, formData.customer_code]);
 
   const loadFilterOptions = async () => {
     try {
@@ -299,22 +376,20 @@ const ProjectPriceManagement = () => {
       return;
     }
 
-    // ตรวจสอบว่ากรอกราคาและหน่วยแล้ว
+    // ตรวจสอบว่ากรอกราคาแล้ว
     if (!globalPrice || parseFloat(globalPrice) <= 0) {
       alert('กรุณากรอกราคา');
       return;
     }
 
-    if (!globalUnit || globalUnit.trim() === '') {
-      alert('กรุณากรอกหน่วย');
-      return;
-    }
-
     // เพิ่มสินค้าทั้งหมดด้วยราคาและจำนวนเดียวกัน
+    // ดึง brand, thickness จาก SKU ที่เลือก, unit ใช้ที่กรอกมา
     const newItems = matchedSkus.map(sku => ({
       sku: sku.sku,
       product_name: sku.description || '',
-      unit: globalUnit,
+      brand: sku.brand || '',
+      thickness: sku.thickness || '',
+      unit: globalUnit || sku.unit || '',
       price: globalPrice,
       quantity: globalQuantity || '',
     }));
@@ -354,6 +429,8 @@ const ProjectPriceManagement = () => {
         items: items.map(item => ({
           sku: item.sku,
           product_name: item.product_name,
+          brand: item.brand,
+          thickness: item.thickness,
           unit: item.unit,
           price: parseFloat(item.price),
           quantity: item.quantity ? parseFloat(item.quantity) : null,
@@ -389,6 +466,8 @@ const ProjectPriceManagement = () => {
     setItems([...items, {
       sku: '',
       product_name: '',
+      brand: '',
+      thickness: '',
       unit: '',
       price: '',
       quantity: '',
@@ -429,12 +508,56 @@ const ProjectPriceManagement = () => {
     }
   };
 
+  // Check if project is within date range
+  const isProjectActive = (project) => {
+    const today = new Date().toISOString().split('T')[0];
+    return project.price_start_date <= today && today <= project.price_end_date;
+  };
+
+  // Start editing project
+  const startEditProject = (project) => {
+    setEditingProjectId(project.project_id);
+    setFormData({
+      project_code: project.project_code,
+      project_name: project.project_name || '',
+      customer_code: project.customer_code || '',
+      customer_name: project.customer_name || '',
+      branch_code: project.branch_code || '',
+      price_start_date: project.price_start_date || '',
+      price_end_date: project.price_end_date || '',
+      request_by: project.request_by || '',
+      request_date: project.request_date || new Date().toISOString().split('T')[0],
+      remark: project.remark || '',
+    });
+    setItems(project.items || []);
+    setShowForm(true);
+  };
+
+  // Filter projects by customer search term
+  const filteredProjects = projects.filter(project => {
+    if (!customerSearchTerm.trim()) return true;
+    
+    const searchLower = customerSearchTerm.toLowerCase();
+    const customerCode = (project.customer_code || '').toLowerCase();
+    const customerName = (project.customer_name || '').toLowerCase();
+    const projectCode = (project.project_code || '').toLowerCase();
+    const projectName = (project.project_name || '').toLowerCase();
+    
+    return customerCode.includes(searchLower) || 
+           customerName.includes(searchLower) ||
+           projectCode.includes(searchLower) ||
+           projectName.includes(searchLower);
+  });
+
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">จัดการราคาโครงการ</h1>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            setPriceMode(null);
+            setShowForm(!showForm);
+          }}
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
         >
           <Plus className="w-5 h-5" />
@@ -453,6 +576,69 @@ const ProjectPriceManagement = () => {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-xl font-bold mb-4">เพิ่มราคาโครงการใหม่</h2>
           
+          {/* Mode Selection */}
+          {!priceMode && !editingProjectId ? (
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-sm font-medium text-gray-700 mb-3">เลือกประเภทราคาโครงการ:</p>
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('project')}
+                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+                >
+                  <div className="font-semibold text-gray-800">โครงการ</div>
+                  <div className="text-xs text-gray-600 mt-1">รหัส: PJYYMMXX</div>
+                  <div className="text-xs text-gray-500 mt-1">ต้องใส่ชื่อโครงการ</div>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('branch')}
+                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+                >
+                  <div className="font-semibold text-gray-800">สาขา</div>
+                  <div className="text-xs text-gray-600 mt-1">รหัส: BRYYMMXX</div>
+                  <div className="text-xs text-gray-500 mt-1">เลือกสาขาก่อน</div>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('customer')}
+                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+                >
+                  <div className="font-semibold text-gray-800">ลูกค้าพิเศษ</div>
+                  <div className="text-xs text-gray-600 mt-1">รหัส: YYMMCUSTCODE</div>
+                  <div className="text-xs text-gray-500 mt-1">ไม่ต้องใส่ชื่อโครงการ</div>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-4 flex items-center gap-2">
+              {!editingProjectId && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPriceMode(null)}
+                    className="text-sm px-3 py-1 border rounded hover:bg-gray-50"
+                  >
+                    ← เปลี่ยนประเภท
+                  </button>
+                  <span className="text-sm font-medium text-gray-600">
+                    {priceMode === 'project' && 'โหมด: โครงการ (PJYYMMXX)'}
+                    {priceMode === 'branch' && 'โหมด: สาขา (BRYYMMXX)'}
+                    {priceMode === 'customer' && 'โหมด: ลูกค้าพิเศษ (YYMMCUSTCODE)'}
+                  </span>
+                </>
+              )}
+              {editingProjectId && (
+                <span className="text-sm font-medium text-blue-600">
+                  🔧 กำลังแก้ไขโครงการ
+                </span>
+              )}
+            </div>
+          )}
+          
+          {(priceMode || editingProjectId) && (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Row 1: Project Info */}
             <div className="grid grid-cols-3 gap-4">
@@ -460,31 +646,36 @@ const ProjectPriceManagement = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   รหัสโครงการ *
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.project_code}
-                  onChange={(e) => setFormData({...formData, project_code: e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="เช่น PROJ-2026-001"
-                />
+                {editingProjectId ? (
+                  <div className="border rounded-lg px-3 py-2 bg-gray-100 text-gray-800 font-mono font-semibold">
+                    {formData.project_code}
+                  </div>
+                ) : (
+                  <div className="border rounded-lg px-3 py-2 bg-gray-50 text-gray-800 font-mono font-semibold">
+                    {formData.project_code || 'กำลังสร้าง...'}
+                  </div>
+                )}
               </div>
               
+              {(priceMode === 'project' || editingProjectId) && (
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ชื่อโครงการ
+                  ชื่อโครงการ *
                 </label>
                 <input
                   type="text"
+                  required
                   value={formData.project_name}
                   onChange={(e) => setFormData({...formData, project_name: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2"
                   placeholder="เช่น โครงการคอนโดXXX"
                 />
               </div>
+              )}
             </div>
 
             {/* Row 2: Customer Info */}
+            {(priceMode !== 'customer' || editingProjectId) && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -512,9 +703,61 @@ const ProjectPriceManagement = () => {
                 />
               </div>
             </div>
+            )}
+
+            {(priceMode === 'customer' && !editingProjectId) && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  รหัสลูกค้า *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.customer_code}
+                  onChange={(e) => setFormData({...formData, customer_code: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="เช่น 08015AY"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ชื่อลูกค้า
+                </label>
+                <input
+                  type="text"
+                  value={formData.customer_name}
+                  onChange={(e) => setFormData({...formData, customer_name: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="ชื่อลูกค้า"
+                />
+              </div>
+            </div>
+            )}
 
             {/* Row 3: Branch & Dates */}
             <div className="grid grid-cols-4 gap-4">
+              {(priceMode === 'branch' || (editingProjectId && formData.branch_code)) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  สาขา *
+                </label>
+                <select
+                  required
+                  value={formData.branch_code}
+                  onChange={(e) => setFormData({...formData, branch_code: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2"
+                >
+                  <option value="">เลือกสาขา</option>
+                  {Array.isArray(branches) && branches.map(b => (
+                    <option key={b.Code} value={b.Code}>{b.Name} ({b.Code})</option>
+                  ))}
+                </select>
+              </div>
+              )}
+              
+              {(priceMode === 'project' || (editingProjectId && !formData.branch_code)) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   สาขา
@@ -530,6 +773,7 @@ const ProjectPriceManagement = () => {
                   ))}
                 </select>
               </div>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -626,7 +870,7 @@ const ProjectPriceManagement = () => {
               <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
                 <div className="space-y-2 p-2">
                   {items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-6 gap-2 items-end bg-gray-50 p-2 rounded">
+                    <div key={index} className="grid grid-cols-8 gap-2 items-end bg-gray-50 p-2 rounded">
                       <input
                         type="text"
                         placeholder="SKU"
@@ -640,6 +884,20 @@ const ProjectPriceManagement = () => {
                         value={item.product_name}
                         onChange={(e) => updateItem(index, 'product_name', e.target.value)}
                         className="border rounded px-2 py-1 text-sm col-span-2"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Brand"
+                        value={item.brand}
+                        onChange={(e) => updateItem(index, 'brand', e.target.value)}
+                        className="border rounded px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="ความหนา"
+                        value={item.thickness}
+                        onChange={(e) => updateItem(index, 'thickness', e.target.value)}
+                        className="border rounded px-2 py-1 text-sm"
                       />
                       <input
                         type="text"
@@ -681,7 +939,11 @@ const ProjectPriceManagement = () => {
             <div className="flex gap-2 justify-end pt-4 border-t">
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setPriceMode(null);
+                  setEditingProjectId(null);
+                }}
                 className="px-4 py-2 border rounded-lg hover:bg-gray-50"
               >
                 ยกเลิก
@@ -690,10 +952,11 @@ const ProjectPriceManagement = () => {
                 type="submit"
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
-                บันทึก
+                {editingProjectId ? 'อัพเดท' : 'บันทึก'}
               </button>
             </div>
           </form>
+          )}
         </div>
       )}
 
@@ -870,7 +1133,7 @@ const ProjectPriceManagement = () => {
                     </div>
 
                     <p className="text-xs text-gray-500 mt-2">
-                      💡 ใช้กับสินค้าทั้งหมด {matchedSkus.length} รายการ
+                      💡 ใช้กับสินค้าทั้งหมด {matchedSkus.length} รายการ (Brand, ความหนา ดึงจาก SKU)
                     </p>
                   </div>
                 </div>
@@ -913,7 +1176,7 @@ const ProjectPriceManagement = () => {
               <button
                 type="button"
                 onClick={addItemsFromFilter}
-                disabled={matchedSkus.length === 0 || !globalPrice || parseFloat(globalPrice) <= 0 || !globalUnit}
+                disabled={matchedSkus.length === 0 || !globalPrice || parseFloat(globalPrice) <= 0}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 เพิ่มสินค้า {matchedSkus.length > 0 && `(${matchedSkus.length} รายการ)`}
@@ -931,11 +1194,13 @@ const ProjectPriceManagement = () => {
         
         {loading ? (
           <div className="p-8 text-center text-gray-500">กำลังโหลด...</div>
-        ) : projects.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">ยังไม่มีข้อมูลราคาโครงการ</div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            {customerSearchTerm ? 'ไม่พบโครงการที่ตรงกับคำค้นหา' : 'ยังไม่มีข้อมูลราคาโครงการ'}
+          </div>
         ) : (
           <div className="divide-y max-h-[600px] overflow-y-auto">
-            {projects.map((project) => (
+            {filteredProjects.map((project) => (
               <div key={project.project_id} className="p-4 hover:bg-gray-50">
                 <div className="flex justify-between items-start mb-2">
                   <div>
@@ -945,6 +1210,14 @@ const ProjectPriceManagement = () => {
                     )}
                   </div>
                   <div className="flex gap-2">
+                    {isProjectActive(project) && (
+                      <button
+                        onClick={() => startEditProject(project)}
+                        className="text-blue-600 hover:text-blue-800 px-2 py-1 border rounded"
+                      >
+                        แก้ไข
+                      </button>
+                    )}
                     <select
                       value={project.status}
                       onChange={(e) => updateStatus(project.project_id, e.target.value)}
@@ -992,7 +1265,9 @@ const ProjectPriceManagement = () => {
                       {project.items.map((item, idx) => (
                         <div key={idx} className="text-sm text-gray-700 flex justify-between gap-2">
                           <span className="truncate">
-                            {item.sku} - {item.product_name || '-'}
+                            {item.sku} - {item.product_name || '-'} 
+                            {item.brand && ` (${item.brand})`}
+                            {item.thickness && ` ${item.thickness}`}
                           </span>
                           <span className="font-medium whitespace-nowrap">
                             {item.price} {item.unit}
