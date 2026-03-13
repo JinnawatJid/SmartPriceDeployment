@@ -37,6 +37,16 @@ Thumbs.db
 logs/
 
 # ========================
+# Excel files
+# ========================
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+~$*.xlsx
+~$*.xls
+
+# ========================
 # Test / coverage
 # ========================
 .coverage

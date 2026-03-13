@@ -86,6 +86,14 @@ build/
 *.rar
 *.7z
 
+# Excel files
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+~$*.xlsx
+~$*.xls
+
 # Temporary files
 *.tmp
 *.temp
