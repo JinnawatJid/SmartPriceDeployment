@@ -103,7 +103,7 @@ if exist "dist\rpa_agent.exe" (
 
     echo.
     echo [SUCCESS] Package complete!
-    echo Your ready-to-deploy zip file is located at: %cd%\rpa_agent_release.zip
+    echo Your ready-to-deploy zip file is located at: "%cd%\rpa_agent_release.zip"
     echo.
     echo You can distribute this single zip file to branch users.
 ) else (
