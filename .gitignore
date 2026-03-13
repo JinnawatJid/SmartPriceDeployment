@@ -122,3 +122,4 @@ backend/config/data/*.xlsx
 backend/config/data/*.csv
 backend/config/data/*.db
 18feb.zip
+rpa_agent/browser/

@@ -3,11 +3,7 @@ import sys
 import json
 import time
 import logging
-from typing import List, Optional
-
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -23,57 +19,6 @@ if sys.platform == "win32":
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-
-app = FastAPI(title="Local RPA Agent for Dynamics 365 BC")
-
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
-
-# 1. First Middleware: Handle Chrome's Private Network Access (PNA) preflight requests.
-# Chrome blocks HTTP sites (e.g. 192.168.x.x) from calling localhost (127.0.0.1)
-# unless the server explicitly allows it via this specific header.
-class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        if request.method == "OPTIONS" and "Access-Control-Request-Private-Network" in request.headers:
-            response = Response()
-            response.headers["Access-Control-Allow-Private-Network"] = "true"
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Methods"] = "*"
-            response.headers["Access-Control-Allow-Headers"] = "*"
-            return response
-
-        response = await call_next(request)
-        response.headers["Access-Control-Allow-Private-Network"] = "true"
-        return response
-
-app.add_middleware(PrivateNetworkAccessMiddleware)
-
-# 2. Standard CORS Middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-class RPAItem(BaseModel):
-    sku: str
-    description: str
-    quantity: str
-    unit_price: Optional[str] = None
-    price_per_sqft: Optional[str] = None
-    price_per_sheet: Optional[str] = None
-
-
-class RPAQuoteRequest(BaseModel):
-    quote_code: str
-    customer_no: str
-    sales_admin: str
-    your_reference: str
-    remote_chrome_address: Optional[str] = "127.0.0.1:9222"
-    items: List[RPAItem]
-
 
 def convert_quote_code(input_code):
     """
@@ -115,7 +60,7 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
         
         # For offline branch machines, we use a local bundled chromedriver.exe to prevent
         # Selenium Manager from attempting to download drivers from the internet (which fails in restricted networks).
-        # We look for chromedriver.exe in the same folder as this running script/executable.
+        # We look for chromedriver.exe in the 'browser' folder relative to this running script/executable.
         if getattr(sys, 'frozen', False):
             # Running as compiled PyInstaller executable
             base_dir = os.path.dirname(sys.executable)
@@ -123,13 +68,13 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
             # Running as standard Python script
             base_dir = os.path.dirname(os.path.abspath(__file__))
 
-        driver_path = os.path.join(base_dir, "chromedriver.exe")
+        driver_path = os.path.join(base_dir, "browser", "chromedriver.exe")
         service = None
         if os.path.exists(driver_path):
             print(f"[INFO] Found local offline driver at: {driver_path}")
             service = Service(executable_path=driver_path)
         else:
-            print("[WARN] Local chromedriver.exe not found! Attempting to use default Selenium Manager (requires internet)...")
+            print("[WARN] Local browser/chromedriver.exe not found! Attempting to use default Selenium Manager (requires internet)...")
 
         # Retry logic: Try to connect up to 5 times, waiting 2 seconds between each
         max_retries = 5
@@ -151,10 +96,7 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
 
         if driver is None:
             print(f"[ERROR] Could not connect to Chrome after {max_retries} attempts. Last error: {last_error}")
-            raise HTTPException(
-                status_code=500,
-                detail="Cannot connect to Chrome. Make sure Chrome is opened with remote debugging enabled (port 9222). Please restart Chrome using 'start_agent_and_chrome.bat'."
-            )
+            raise Exception("Cannot connect to Chrome. Make sure Chrome is opened with remote debugging enabled (port 9222). Please restart Chrome using 'start_agent_and_chrome.bat'.")
         
         # Get all window handles (tabs)
         windows = driver.window_handles
@@ -1170,62 +1112,88 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
         
     except Exception as e:
         print(f"[ERROR] Error occurred: {str(e)}")
-        print("\n[TIP] Make sure Chrome is running with remote debugging:")
-        print('   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222')
+        print("\n[TIP] Make sure Chrome is running with remote debugging.")
         raise
 
-@app.post("/api/rpa/create-quote")
-async def create_quote_via_rpa(request: RPAQuoteRequest):
-    """
-    Trigger RPA script to create Sales Quote in D365 BC (runs locally)
-    """
-    logger = logging.getLogger(__name__)
-    
-    try:
-        print("\n" + "="*60)
-        print("LOCAL RPA REQUEST RECEIVED")
-        print(f"Quote Code: {request.quote_code}")
-        print(f"Customer: {request.customer_no}")
-        print(f"Items Count: {len(request.items)}")
-        print("="*60 + "\n")
+class RPAHandler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        # Handle CORS and Private Network Access (PNA) preflight requests
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
+        self.end_headers()
 
-        rpa_data = {
-            "quote_code": request.quote_code,
-            "customer_no": request.customer_no,
-            "sales_admin": request.sales_admin,
-            "your_reference": request.your_reference,
-            # We ignore request.remote_chrome_address because we always use localhost
-            "items": [
-                {
-                    "item_code": item.sku,
-                    "description": item.description,
-                    "quantity": item.quantity,
-                    "unit_price": item.unit_price,
-                    "price_per_sqft": item.price_per_sqft,
-                    "price_per_sheet": item.price_per_sheet,
+    def do_POST(self):
+        if self.path == "/api/rpa/create-quote":
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Private-Network', 'true')
+            self.end_headers()
+
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+
+            try:
+                request_data = json.loads(post_data.decode('utf-8'))
+
+                print("\n" + "="*60)
+                print("LOCAL RPA REQUEST RECEIVED")
+                print(f"Quote Code: {request_data.get('quote_code', '')}")
+                print(f"Customer: {request_data.get('customer_no', '')}")
+                print(f"Items Count: {len(request_data.get('items', []))}")
+                print("="*60 + "\n")
+
+                rpa_data = {
+                    "quote_code": request_data.get('quote_code', ''),
+                    "customer_no": request_data.get('customer_no', ''),
+                    "sales_admin": request_data.get('sales_admin', ''),
+                    "your_reference": request_data.get('your_reference', ''),
+                    "items": [
+                        {
+                            "item_code": item.get('sku', ''),
+                            "description": item.get('description', ''),
+                            "quantity": item.get('quantity', ''),
+                            "unit_price": item.get('unit_price', ''),
+                            "price_per_sqft": item.get('price_per_sqft', ''),
+                            "price_per_sheet": item.get('price_per_sheet', ''),
+                        }
+                        for item in request_data.get('items', [])
+                    ],
                 }
-                for item in request.items
-            ],
-        }
 
-        execute_create_sales_quote(request.quote_code, rpa_data)
+                execute_create_sales_quote(request_data.get('quote_code', ''), rpa_data)
 
-        return {
-            "success": True,
-            "message": "Local RPA executed successfully",
-            "output": "Sales Quote created in D365 BC"
-        }
+                response = {
+                    "success": True,
+                    "message": "Local RPA executed successfully",
+                    "output": "Sales Quote created in D365 BC"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
 
-    except Exception as e:
-        error_msg = str(e)
-        print(f"[ERROR] Failed to execute RPA: {error_msg}")
-        logger.error(f"Failed to execute RPA: {error_msg}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to execute RPA script: {error_msg}",
-        )
+            except Exception as e:
+                error_msg = str(e)
+                print(f"[ERROR] Failed to execute RPA: {error_msg}")
+                response = {
+                    "success": False,
+                    "message": f"Failed to execute RPA script: {error_msg}"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+        else:
+            self.send_error(404, "Not Found")
+
+def run_server(port=8001):
+    server_address = ('0.0.0.0', port)
+    httpd = HTTPServer(server_address, RPAHandler)
+    print(f"Starting Local RPA Agent on port {port}...")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    httpd.server_close()
+    print("Server stopped.")
 
 if __name__ == "__main__":
-    import uvicorn
-    print("Starting Local RPA Agent on port 8001...")
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    run_server()
