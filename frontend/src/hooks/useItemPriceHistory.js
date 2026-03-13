@@ -17,7 +17,7 @@ export function useItemPriceHistory({ sku, customerCode, enabled }) {
           params: {
             sku,
             customerCode,
-            limit: 10,
+            limit: 50,
           },
         });
 
