@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Calendar, User, Building2, Filter, ChevronDown, Check } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 const CATEGORY_OPTIONS = [
   { value: 'Glass', label: 'Glass' },
@@ -12,6 +13,7 @@ const CATEGORY_OPTIONS = [
 ];
 
 const ProjectPriceManagement = () => {
+  const { employee } = useAuth();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -71,9 +73,11 @@ const ProjectPriceManagement = () => {
   const [globalUnit, setGlobalUnit] = useState('');
 
   useEffect(() => {
-    loadProjects();
+    if (employee?.id) {
+      loadProjects();
+    }
     loadBranches();
-  }, []);
+  }, [employee?.id]);
 
   // โหลด filter options เมื่อ categories เปลี่ยน
   useEffect(() => {
@@ -93,7 +97,12 @@ const ProjectPriceManagement = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await api.get('/api/project-prices/');
+      const res = await api.get('/api/project-prices/', {
+        params: {
+          employee_code: employee?.id
+        }
+      });
+      // ข้อมูลจาก backend ถูกกรองแล้ว ไม่ต้องกรองอีก
       setProjects(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Error loading projects:', err);

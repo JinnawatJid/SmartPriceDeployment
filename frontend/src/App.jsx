@@ -9,6 +9,7 @@ import QuoteDraftListPage from "./pages/QuoteDraftListPage.jsx";
 import ConfirmedQuotesPage from "./pages/ConfirmedQuotesPage";
 import OrderDetailPage from "./pages/OrderDetailPage.jsx";
 import UpdatePrice from "./pages/UpdatePrice";
+import ProjectPrice from "./pages/ProjectPrice";
 import CustomerPerDay from "./pages/CustomerPerDay.jsx";
 import CustomerDetail from "./pages/CustomerDetail.jsx";
 import CustomerSearch from "./pages/CustomerSearch.jsx";
@@ -49,6 +50,7 @@ function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/update-price" element={<UpdatePrice />} />
+          <Route path="/project-price" element={<ProjectPrice />} />
           <Route path="/quote-drafts" element={<QuoteDraftListPage />} />
           <Route path="/confirmed-quotes" element={<ConfirmedQuotesPage />} />
           <Route path="/order/:id" element={<OrderDetailPage />} />

@@ -7,6 +7,12 @@ import Navbar from "../components/Navbar";
 import GlassSemiSizeModal from "../components/wizard/GlassSemiSizeModal.jsx";
 import api from "../services/api";
 
+// รหัสพนักงานที่มีสิทธิ์เข้าถึงหน้า "เพิ่ม/อัปเดตราคา"
+const ALLOWED_PRICE_UPDATE_EMPLOYEES = ['90038', '20061', '11186', '21702', '21367'];
+
+// รหัสพนักงานที่มีสิทธิ์เข้าถึงหน้า "ราคาโครงการ"
+const ALLOWED_PROJECT_PRICE_EMPLOYEES = ['90038', '20061', '11186', '21702', '21367'];
+
 // --- คอมโพเนนต์หลัก ---
 function Dashboard() {
   const { employee } = useAuth();
@@ -187,15 +193,29 @@ function Dashboard() {
           </div>
         </div>
         <div className="mt-6 ">
-          {/* Update Price Card */}
-          <div
-            className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg"
-            onClick={() => navigate("/update-price")}
-          >
-            <img src="/assets/refresh.png" className="w-16 h-16 mb-4" />
-            <h2 className="text-4xl font-bold">เพิ่ม / อัปเดตราคา</h2>
-            <p className="mt-2 text-lg text-white/70">สำหรับผู้จัดการ</p>
-          </div>
+          {/* Update Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
+          {ALLOWED_PRICE_UPDATE_EMPLOYEES.includes(employee?.id) && (
+            <div
+              className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg"
+              onClick={() => navigate("/update-price")}
+            >
+              <img src="/assets/refresh.png" className="w-16 h-16 mb-4" />
+              <h2 className="text-4xl font-bold">เพิ่ม / อัปเดตราคา</h2>
+              <p className="mt-2 text-lg text-white/70">สำหรับผู้จัดการ</p>
+            </div>
+          )}
+
+          {/* Project Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
+          {ALLOWED_PROJECT_PRICE_EMPLOYEES.includes(employee?.id) && (
+            <div
+              className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#dd8901] hover:bg-[#cd7905] p-8 text-white shadow-lg mt-6"
+              onClick={() => navigate("/project-price")}
+            >
+              <img src="/assets/project.png" className="w-16 h-16 mb-4" />
+              <h2 className="text-4xl font-bold">ราคาโครงการ</h2>
+              <p className="mt-2 text-lg text-white/70">จัดการราคาโครงการ</p>
+            </div>
+          )}
         </div>
 
     
