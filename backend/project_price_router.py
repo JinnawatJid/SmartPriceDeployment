@@ -419,6 +419,75 @@ async def update_project_status(
         if conn:
             conn.close()
 
+@router.put("/{project_id}")
+async def update_project_price(project_id: int, project: ProjectPriceCreate, authorization: str = Header(None)):
+    """อัพเดทราคาโครงการ (Manager เท่านั้น)"""
+    current_user = get_current_user_from_token(authorization)
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        print(f"🔧 [UPDATE PROJECT PRICE] Project ID: {project_id}, Code: {project.project_code}")
+        
+        # อัพเดท Project Price Header
+        cursor.execute("""
+            UPDATE Project_Price_Header 
+            SET project_name = ?, customer_code = ?, customer_name = ?, branch_code = ?,
+                price_start_date = ?, price_end_date = ?, request_by = ?, request_date = ?, 
+                remark = ?, updated_at = GETDATE()
+            WHERE project_id = ?
+        """, (
+            project.project_name,
+            project.customer_code,
+            project.customer_name,
+            project.branch_code,
+            project.price_start_date,
+            project.price_end_date,
+            project.request_by,
+            project.request_date or datetime.now().strftime('%Y-%m-%d'),
+            project.remark,
+            project_id
+        ))
+        
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        print(f"✅ [UPDATE PROJECT PRICE] Updated header for project ID: {project_id}")
+        
+        # ลบ Project Price Lines เดิม
+        cursor.execute("DELETE FROM Project_Price_Line WHERE project_id = ?", (project_id,))
+        print(f"🗑️ [UPDATE PROJECT PRICE] Deleted old items")
+        
+        # สร้าง Project Price Lines ใหม่
+        for item in project.items:
+            cursor.execute("""
+                INSERT INTO Project_Price_Line 
+                (project_id, sku, product_name, unit, price, quantity)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                project_id,
+                item.sku,
+                item.product_name,
+                item.unit,
+                item.price,
+                item.quantity
+            ))
+            print(f"  ➕ Added item: {item.sku} - {item.price} {item.unit}")
+        
+        conn.commit()
+        return {"success": True, "project_id": project_id}
+    
+    except Exception as e:
+        print(f"❌ [UPDATE PROJECT PRICE] Error: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 @router.delete("/{project_id}")
 async def delete_project_price(project_id: int, authorization: str = Header(None)):
     """ลบราคาโครงการ"""

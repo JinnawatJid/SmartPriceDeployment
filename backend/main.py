@@ -76,14 +76,6 @@ async def lifespan(app: FastAPI):
     logger.info("Application startup initiated")
     logger.info("="*60)
     
-    # เริ่มต้น background scheduler
-    try:
-        from jobs.scheduler import start_scheduler
-        start_scheduler()
-        logger.info("✅ Background scheduler initialized")
-    except Exception as e:
-        logger.error(f"❌ Failed to start background scheduler: {e}", exc_info=True)
-    
     logger.info("Application startup completed")
     
     yield  # Application is running
@@ -92,14 +84,6 @@ async def lifespan(app: FastAPI):
     logger.info("="*60)
     logger.info("Application shutdown initiated")
     logger.info("="*60)
-    
-    # หยุด scheduler
-    try:
-        from jobs.scheduler import stop_scheduler
-        stop_scheduler()
-        logger.info("✅ Background scheduler stopped")
-    except Exception as e:
-        logger.error(f"❌ Error stopping scheduler: {e}", exc_info=True)
     
     logger.info("Application shutdown completed")
 
@@ -208,11 +192,6 @@ if os.path.exists(dist_path):
 
         # Fallback to index.html for SPA routing
         return FileResponse(os.path.join(dist_path, "index.html"))
-    # except Exception as e:
-    #     logger.error(f"Error stopping sync job scheduler: {e}", exc_info=True)
-    #     print(f"⚠️  Error stopping sync job scheduler: {e}")
-    
-    logger.info("Application shutdown completed")
 
 if __name__ == "__main__":
     # ⭐ ตรวจสอบว่าอยู่ใน RPA mode หรือไม่

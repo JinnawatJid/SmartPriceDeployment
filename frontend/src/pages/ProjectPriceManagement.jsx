@@ -437,8 +437,16 @@ const ProjectPriceManagement = () => {
         }))
       };
 
-      await api.post('/api/project-prices/', payload);
-      alert('บันทึกราคาโครงการเรียบร้อยแล้ว');
+      if (editingProjectId) {
+        // Update existing project
+        await api.put(`/api/project-prices/${editingProjectId}`, payload);
+        alert('อัพเดทราคาโครงการเรียบร้อยแล้ว');
+        setEditingProjectId(null);
+      } else {
+        // Create new project
+        await api.post('/api/project-prices/', payload);
+        alert('บันทึกราคาโครงการเรียบร้อยแล้ว');
+      }
       
       // Reset form
       setFormData({
@@ -454,10 +462,11 @@ const ProjectPriceManagement = () => {
         remark: '',
       });
       setItems([]);
+      setPriceMode(null);
       setShowForm(false);
       loadProjects();
     } catch (err) {
-      console.error('Error creating project:', err);
+      console.error('Error saving project:', err);
       alert('เกิดข้อผิดพลาดในการบันทึก');
     }
   };
@@ -1213,7 +1222,7 @@ const ProjectPriceManagement = () => {
                     {isProjectActive(project) && (
                       <button
                         onClick={() => startEditProject(project)}
-                        className="text-blue-600 hover:text-blue-800 px-2 py-1 border rounded"
+                        className="text-blue-600 hover:text-blue-800 px-2 py-1 border rounded-md font-bold"
                       >
                         แก้ไข
                       </button>
@@ -1258,26 +1267,7 @@ const ProjectPriceManagement = () => {
                   </div>
                 </div>
 
-                {project.items && project.items.length > 0 && (
-                  <div className="bg-gray-50 rounded p-3">
-                    <p className="text-sm font-medium mb-2">รายการสินค้า ({project.items.length} รายการ)</p>
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
-                      {project.items.map((item, idx) => (
-                        <div key={idx} className="text-sm text-gray-700 flex justify-between gap-2">
-                          <span className="truncate">
-                            {item.sku} - {item.product_name || '-'} 
-                            {item.brand && ` (${item.brand})`}
-                            {item.thickness && ` ${item.thickness}`}
-                          </span>
-                          <span className="font-medium whitespace-nowrap">
-                            {item.price} {item.unit}
-                            {item.quantity && ` × ${item.quantity}`}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+
               </div>
             ))}
           </div>
