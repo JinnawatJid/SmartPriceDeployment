@@ -84,31 +84,34 @@ if exist "rpa_agent_release.zip" del /Q "rpa_agent_release.zip"
 echo Compiling rpa_agent.py to standalone executable...
 pyinstaller --onefile --noconfirm rpa_agent.py
 
-if exist "dist\rpa_agent.exe" (
-    echo.
-    echo [SUCCESS] Build complete!
+if not exist "dist\rpa_agent.exe" goto BUILD_FAILED
 
-    echo.
-    echo ==============================================
-    echo 6) Packaging Release Zip...
-    echo ==============================================
-    echo Copying files to release folder...
-    mkdir dist\rpa_agent_release
-    copy dist\rpa_agent.exe dist\rpa_agent_release\
-    copy start_agent_and_chrome.bat dist\rpa_agent_release\
-    xcopy /E /I /Q browser dist\rpa_agent_release\browser
+echo.
+echo [SUCCESS] Build complete!
 
-    echo Creating zip archive...
-    powershell -Command "Compress-Archive -Path dist\rpa_agent_release\* -DestinationPath rpa_agent_release.zip -Force"
+echo.
+echo ==============================================
+echo 6) Packaging Release Zip...
+echo ==============================================
+echo Copying files to release folder...
+mkdir "dist\rpa_agent_release"
+copy "dist\rpa_agent.exe" "dist\rpa_agent_release\"
+copy "start_agent_and_chrome.bat" "dist\rpa_agent_release\"
+xcopy /E /I /Q "browser" "dist\rpa_agent_release\browser"
 
-    echo.
-    echo [SUCCESS] Package complete!
-    echo Your ready-to-deploy zip file is located at: "%cd%\rpa_agent_release.zip"
-    echo.
-    echo You can distribute this single zip file to branch users.
-) else (
-    echo.
-    echo [ERROR] Build failed! Check the output above.
-)
+echo Creating zip archive...
+powershell -Command "Compress-Archive -Path dist\rpa_agent_release\* -DestinationPath rpa_agent_release.zip -Force"
 
+echo.
+echo [SUCCESS] Package complete!
+echo Your ready-to-deploy zip file is located at: "%cd%\rpa_agent_release.zip"
+echo.
+echo You can distribute this single zip file to branch users.
 pause
+exit /b 0
+
+:BUILD_FAILED
+echo.
+echo [ERROR] Build failed! Check the output above.
+pause
+exit /b 1
