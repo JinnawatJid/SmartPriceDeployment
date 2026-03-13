@@ -58,7 +58,19 @@ echo 3) Installing Dependencies...
 echo ==============================================
 echo Using verbose output to show build progress (compiling packages may take several minutes)...
 pip install -v -r requirements.txt
+if errorlevel 1 (
+    echo [ERROR] Failed to install dependencies!
+    echo Please check the error logs above.
+    pause
+    exit /b 1
+)
+
 pip install pyinstaller
+if errorlevel 1 (
+    echo [ERROR] Failed to install PyInstaller!
+    pause
+    exit /b 1
+)
 
 echo.
 echo ==============================================
