@@ -453,18 +453,6 @@ def list_quotations(
 
         cursor.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
         lines = [normalize_keys(row_to_dict(cursor, r)) for r in cursor.fetchall()]
-        
-        # ⭐ ดึง request_number ถ้ามี special_price_request_id
-        request_number = None
-        if h.get("special_price_request_id"):
-            cursor.execute("""
-                SELECT request_number 
-                FROM special_price_requests 
-                WHERE id = ?
-            """, (h["special_price_request_id"],))
-            req_row = cursor.fetchone()
-            if req_row:
-                request_number = req_row[0]  # ⭐ MSSQL: ใช้ index
 
         cart_items = [
             {
@@ -504,8 +492,6 @@ def list_quotations(
                 "exVat": h["SubtotalAmount"],
                 "shippingRaw": h["ShippingCost"],
             },
-            "specialPriceRequestId": request_number,  # ⭐ ส่ง request_number แทน id
-            "specialPriceStatus": h.get("special_price_status"),
             "cart": cart_items,
             "items": cart_items,  # ⭐ alias สำหรับ frontend
         })
@@ -531,24 +517,11 @@ def get_quotation(quote_no: str):
 
     cursor.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
     lines = [normalize_keys(row_to_dict(cursor, r)) for r in cursor.fetchall()]
-    
-    # ดึงข้อมูล special price request ถ้ามี
-    special_price_request = None
-    if header.get("special_price_request_id"):
-        cursor.execute("""
-            SELECT request_number, status, approved_by, approved_at, rejection_reason
-            FROM special_price_requests
-            WHERE id = ?
-        """, (header["special_price_request_id"],))
-        spr = cursor.fetchone()
-        if spr:
-            special_price_request = normalize_keys(row_to_dict(cursor, spr))  # ⭐ MSSQL: แปลง row เป็น dict
 
     conn.close()
 
     return {
         "header": header,
-        "specialPriceRequest": special_price_request,
         "lines": [
             {
                 **ln,

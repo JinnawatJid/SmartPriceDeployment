@@ -16,10 +16,21 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
 
   // สำหรับกระจก
   const currentSqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
+  const isProjectPrice = calculatedItem?.priceSource === "project";
+  
+  // ⭐ เมื่อเป็นราคาโครงการ UnitPrice เป็นราคาต่อตารางฟุตแล้ว ไม่ต้องคูณ sqft
   const currentPricePerSheet =
     item.priceSource === "manual"
       ? Number(item.price_per_sheet ?? Number(item.UnitPrice ?? 0) * currentSqft)
+      : isProjectPrice
+      ? Number(calculatedItem?.UnitPrice ?? 0)  // ⭐ ราคาโครงการเป็นราคาต่อตารางฟุตแล้ว
       : Number(calculatedItem?.price_per_sheet ?? item.price_per_sheet ?? 0);
+
+  console.log('🔧 [PRICE EDIT MODAL] isProjectPrice:', isProjectPrice);
+  console.log('🔧 [PRICE EDIT MODAL] calculatedItem?.priceSource:', calculatedItem?.priceSource);
+  console.log('🔧 [PRICE EDIT MODAL] calculatedItem?.UnitPrice:', calculatedItem?.UnitPrice);
+  console.log('🔧 [PRICE EDIT MODAL] currentPricePerSheet:', currentPricePerSheet);
+  console.log('🔧 [PRICE EDIT MODAL] item.priceSource:', item.priceSource);
 
   // ⭐ ดึงราคาปกติ (ราคาอ้างอิงจากระบบ) - แยกตามประเภทสินค้า
   let normalPrice = 0;
@@ -47,12 +58,13 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
   const currentPricePerSqft =
     item.priceSource === "manual" && item.pricePerSqft
       ? Number(item.pricePerSqft)
+      : isProjectPrice
+      ? currentPricePerSheet  // ⭐ ราคาโครงการเป็นราคาต่อตารางฟุตแล้ว ไม่ต้องหาร
       : currentSqft > 0 
         ? currentPricePerSheet / currentSqft 
         : 0;
 
   const [pricePerSqft, setPricePerSqft] = useState(currentPricePerSqft);
-  const [showW1Warning, setShowW1Warning] = useState(false); // ⭐ สถานะแสดงคำเตือน
 
   // สำหรับอลูมิเนียม
   const currentUnitPrice =
@@ -86,30 +98,7 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
   const calculatedPricePerSheet = roundUp050(pricePerSqft * currentSqft);
   const calculatedPricePerLine = roundUp050(pricePerKg * weight);
 
-  // ⭐ ตรวจสอบว่าราคาที่แก้ต่ำกว่า W1 หรือไม่
-  const checkBelowW1 = () => {
-    let newPrice = 0;
-    
-    if (isGlass) {
-      newPrice = calculatedPricePerSheet;
-    } else if (isAluminium) {
-      newPrice = calculatedPricePerLine;
-    } else {
-      newPrice = otherPrice;
-    }
-
-    console.log('🔍 Checking price - New:', newPrice, 'Normal:', normalPrice, 'Below Normal:', newPrice < normalPrice);
-    
-    return newPrice < normalPrice;
-  };
-
   const handleSave = () => {
-    // ⭐ ตรวจสอบก่อนบันทึก
-    if (checkBelowW1()) {
-      setShowW1Warning(true);
-      return;
-    }
-
     if (isGlass) {
       // บันทึกราคาต่อแผ่น (จากการคำนวณ)
       onSave({
@@ -131,61 +120,8 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
     }
   };
 
-  // ⭐ ยืนยันบันทึกแม้ราคาต่ำกว่า W1
-  const handleConfirmBelowW1 = () => {
-    setShowW1Warning(false);
-    
-    if (isGlass) {
-      onSave({
-        unitPrice: calculatedPricePerSheet,
-        pricePerSqft: pricePerSqft,
-      });
-    } else if (isAluminium) {
-      onSave({
-        unitPrice: calculatedPricePerLine,
-        pricePerKg: pricePerKg,
-        weight: weight,
-      });
-    } else {
-      onSave({
-        unitPrice: otherPrice,
-      });
-    }
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      {/* ⭐ Modal คำเตือนราคาต่ำกว่า W1 */}
-      {showW1Warning && (
-        <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-10">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-            <div className="text-center">
-              <div className="text-5xl mb-4">⚠️</div>
-              <h3 className="text-xl font-bold text-red-600 mb-2">
-                กรุณาขอราคาพิเศษจากผู้อนุมัติ
-              </h3>
-              <p className="text-gray-600 mb-6">
-                เลือกสินค้าและแก้ไขราคาที่ต้องการให้เรียบร้อย จากนั้นกด Save Draft และขอราคา
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowW1Warning(false)}
-                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                >
-                  แก้ไขราคา
-                </button>
-                <button
-                  onClick={handleConfirmBelowW1}
-                  className="flex-1 px-4 py-2 text-white bg-yellow-500 rounded-lg hover:bg-yellow-600"
-                >
-                  ดำเนินการต่อ 
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
         {/* Header */}
         <div className="px-6 py-4 border-b">

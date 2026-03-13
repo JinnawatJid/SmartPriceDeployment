@@ -114,9 +114,26 @@ const ItemCard = ({ item, onAdd }) => {
                 </p>
               </div>
 
-              <p className="text-green-600 mt-1 font-semibold">
-                สต๊อก: {detail.inventory} {detail.unit || ""}
-              </p>
+              {/* Stock by branch */}
+              {detail.stock && (
+                <div className="mt-2 p-2 bg-white rounded border ">
+                  <p className="font-semibold text-green-700 text-xs mb-1">
+                    สต๊อก 
+                  </p>
+                  {detail.stock.branches && detail.stock.branches.length > 0 ? (
+                    <div className="space-y-1">
+                      {detail.stock.branches.map((branch) => (
+                        <div key={branch['Location_Code']} className="flex justify-between text-xs">
+                          <span className="text-gray-600">{branch['Location_Code']}:</span>
+                          <span className="font-bold text-lg">{branch.quantity} {detail.unit || ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">ไม่มีข้อมูลสต๊อก</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

@@ -1486,6 +1486,53 @@ def clear_glass_cache():
     return {"message": "Glass cache cleared successfully"}
 
 
+@glass_router.get("/{sku}/stock")
+def get_glass_stock(sku: str, branch_code: str = Depends(get_branch_code)):
+    """
+    ดึงข้อมูล stock สำหรับกระจกเฉพาะสาขาของพนักงาน
+    
+    Response:
+    {
+        "sku": "G00080010000000000",
+        "branch_code": "BKK",
+        "quantity": 100
+    }
+    """
+    try:
+        from api.bc_item_client import BCAPIClient
+        
+        # สร้าง client
+        client = BCAPIClient()
+        
+        # ดึงข้อมูล inventory ledger entries สำหรับ item และ branch นี้
+        ledger_entries = client.fetch_inventory(sku, branch_code)
+        
+        # บวก Quantity จากทุก records
+        total_quantity = 0
+        for entry in ledger_entries:
+            qty = entry.get("Quantity", 0)
+            total_quantity += qty
+        
+        return {
+            "sku": sku,
+            "branch_code": branch_code,
+            "quantity": float(total_quantity)
+        }
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error fetching stock for SKU {sku} at branch {branch_code}: {str(e)}")
+        
+        # Return default response ถ้า API error
+        return {
+            "sku": sku,
+            "branch_code": branch_code,
+            "quantity": 0,
+            "error": str(e)
+        }
+
+
 # ==========================================================
 # INCLUDE ALL SUB-ROUTERS INTO api_router
 # ==========================================================

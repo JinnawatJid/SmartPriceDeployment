@@ -19,7 +19,6 @@ from item_update import router as item_update_router
 from customer_analytics import router as customer_analytics_router
 from api.router_sq import router as sq_router
 from products_router import api_router
-from special_price_request.router import router as special_price_request_router
 from cache_refresh_router import router as cache_refresh_router
 from item_master_router import router as item_master_router
 from admin_router import router as admin_router
@@ -77,14 +76,6 @@ async def lifespan(app: FastAPI):
     logger.info("Application startup initiated")
     logger.info("="*60)
     
-    # เริ่มต้น background scheduler
-    try:
-        from jobs.scheduler import start_scheduler
-        start_scheduler()
-        logger.info("✅ Background scheduler initialized")
-    except Exception as e:
-        logger.error(f"❌ Failed to start background scheduler: {e}", exc_info=True)
-    
     logger.info("Application startup completed")
     
     yield  # Application is running
@@ -93,14 +84,6 @@ async def lifespan(app: FastAPI):
     logger.info("="*60)
     logger.info("Application shutdown initiated")
     logger.info("="*60)
-    
-    # หยุด scheduler
-    try:
-        from jobs.scheduler import stop_scheduler
-        stop_scheduler()
-        logger.info("✅ Background scheduler stopped")
-    except Exception as e:
-        logger.error(f"❌ Error stopping scheduler: {e}", exc_info=True)
     
     logger.info("Application shutdown completed")
 
@@ -136,7 +119,6 @@ app.include_router(item_update_router, prefix="/api")
 app.include_router(customer_analytics_router)
 app.include_router(sq_router, prefix="/api")
 app.include_router(api_router, prefix="/api")
-app.include_router(special_price_request_router, prefix="/api")
 app.include_router(cache_refresh_router)
 app.include_router(item_master_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
@@ -210,11 +192,6 @@ if os.path.exists(dist_path):
 
         # Fallback to index.html for SPA routing
         return FileResponse(os.path.join(dist_path, "index.html"))
-    # except Exception as e:
-    #     logger.error(f"Error stopping sync job scheduler: {e}", exc_info=True)
-    #     print(f"⚠️  Error stopping sync job scheduler: {e}")
-    
-    logger.info("Application shutdown completed")
 
 if __name__ == "__main__":
     # ⭐ ตรวจสอบว่าอยู่ใน RPA mode หรือไม่

@@ -186,25 +186,15 @@ function Dashboard() {
             </div>
           </div>
         </div>
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="mt-6 ">
           {/* Update Price Card */}
           <div
-            className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg"
+            className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg"
             onClick={() => navigate("/update-price")}
           >
             <img src="/assets/refresh.png" className="w-16 h-16 mb-4" />
             <h2 className="text-4xl font-bold">เพิ่ม / อัปเดตราคา</h2>
             <p className="mt-2 text-lg text-white/70">สำหรับผู้จัดการ</p>
-          </div>
-
-          {/* Approval Requests Card */}
-          <div
-            className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#f59e0b] hover:bg-[#d97706] p-8 text-white shadow-lg"
-            onClick={() => navigate("/approval-requests")}
-          >
-            <img src="/assets/document-text-svgrepo-com.svg" className="w-16 h-16 mb-4 opacity-55" />
-            <h2 className="text-4xl font-bold">ขออนุมัติราคา</h2>
-            <p className="mt-2 text-lg text-white/70">จัดการคำขออนุมัติราคาพิเศษ</p>
           </div>
         </div>
 

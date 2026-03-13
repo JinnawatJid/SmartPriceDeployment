@@ -86,6 +86,19 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
         
         # สร้าง Project Price Lines
         for item in project.items:
+            # ตัดสินใจว่าใช้ field ไหนตามประเภทสินค้า
+            category = item.sku[0].upper() if item.sku else ""
+            
+            if category == "G":  # Glass
+                price_value = item.price_per_sqft or item.price
+                price_type = "price_per_sqft"
+            elif category == "A":  # Aluminum
+                price_value = item.price_per_kg or item.price
+                price_type = "price_per_kg"
+            else:
+                price_value = item.price
+                price_type = "price"
+            
             cursor.execute("""
                 INSERT INTO Project_Price_Line 
                 (project_id, sku, product_name, unit, price, quantity)
@@ -95,10 +108,10 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
                 item.sku,
                 item.product_name,
                 item.unit,
-                item.price,
+                price_value,
                 item.quantity
             ))
-            print(f"  ➕ Added item: {item.sku} - {item.price} {item.unit}")
+            print(f"  ➕ Added item: {item.sku} - {price_value} ({price_type})")
         
         conn.commit()
         return {"success": True, "project_id": int(project_id)}
@@ -108,6 +121,78 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
         if conn:
             conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@router.get("/next-code/{mode}")
+async def get_next_project_code(mode: str, branch_code: Optional[str] = None, customer_code: Optional[str] = None):
+    """ดึงรหัสโครงการถัดไปตามโหมด"""
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        from datetime import datetime
+        now = datetime.now()
+        buddhist_year = str(now.year + 543)[-2:]  # YY (พ.ศ.)
+        month = str(now.month).zfill(2)  # MM
+        
+        if mode == 'project':
+            # หา running number ถัดไปสำหรับ PJ
+            prefix = f"PJ{buddhist_year}{month}"
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM Project_Price_Header
+                WHERE project_code LIKE ?
+            """, (f"{prefix}%",))
+            result = cursor.fetchone()
+            count = (result[0] if result else 0) + 1
+            run_num = str(count).zfill(2)
+            next_code = f"{prefix}{run_num}"
+            return {"next_code": next_code}
+        
+        elif mode == 'branch':
+            if not branch_code:
+                raise HTTPException(status_code=400, detail="branch_code required for branch mode")
+            
+            # เอาตัวอักษรสองตัวหลังสุดของ Code เช่น "03TS" → "TS"
+            branch_prefix = branch_code[-2:].upper()
+            
+            # หา running number ถัดไปสำหรับ BR
+            prefix = f"{branch_prefix}{buddhist_year}{month}"
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM Project_Price_Header
+                WHERE project_code LIKE ?
+            """, (f"{prefix}%",))
+            result = cursor.fetchone()
+            count = (result[0] if result else 0) + 1
+            run_num = str(count).zfill(2)
+            next_code = f"{prefix}{run_num}"
+            return {"next_code": next_code}
+        
+        elif mode == 'customer':
+            if not customer_code:
+                raise HTTPException(status_code=400, detail="customer_code required for customer mode")
+            
+            # หา running number ถัดไปสำหรับ CUSTOMER
+            prefix = f"{buddhist_year}{month}{customer_code}"
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM Project_Price_Header
+                WHERE project_code LIKE ?
+            """, (f"{prefix}%",))
+            result = cursor.fetchone()
+            count = (result[0] if result else 0) + 1
+            next_code = prefix
+            return {"next_code": next_code}
+        
+        else:
+            raise HTTPException(status_code=400, detail="Invalid mode")
+    
+    except Exception as e:
+        print(f"❌ [NEXT CODE API] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
     finally:
         if conn:
             conn.close()
@@ -214,6 +299,105 @@ async def get_active_project_price(customerCode: str, sku: str):
         if conn:
             conn.close()
 
+@router.get("/by-customer")
+async def get_projects_by_customer(customerCode: str):
+    """ดึงรายการโครงการทั้งหมดของลูกค้า (active เท่านั้น)"""
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        today = datetime.now().date().isoformat()
+        
+        print(f"🏗️ [PROJECT LIST API] Customer: {customerCode}, Today: {today}")
+        
+        # ดึงโครงการทั้งหมดของลูกค้าก่อน (ไม่กรองวันที่)
+        query_all = """
+            SELECT 
+                project_id, project_code, project_name, customer_code,
+                price_start_date, price_end_date, status
+            FROM Project_Price_Header
+            WHERE customer_code = ?
+        """
+        cursor.execute(query_all, [customerCode])
+        all_projects = cursor.fetchall()
+        print(f"📋 [PROJECT LIST API] All projects for {customerCode}: {len(all_projects)}")
+        for p in all_projects:
+            print(f"  - {p[1]}: status={p[6]}, dates={p[4]} to {p[5]}")
+        
+        # ดึงโครงการที่ active และอยู่ในช่วงเวลา
+        query = """
+            SELECT 
+                project_id, project_code, project_name,
+                price_start_date, price_end_date
+            FROM Project_Price_Header
+            WHERE status = 'active'
+            AND price_start_date <= ?
+            AND price_end_date >= ?
+            AND customer_code = ?
+            ORDER BY project_name
+        """
+        
+        cursor.execute(query, [today, today, customerCode])
+        
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        # แปลง date เป็น string
+        for r in results:
+            if r.get('price_start_date'):
+                r['price_start_date'] = str(r['price_start_date'])
+            if r.get('price_end_date'):
+                r['price_end_date'] = str(r['price_end_date'])
+        
+        print(f"📦 [PROJECT LIST API] Found {len(results)} active projects in date range")
+        
+        return results
+    
+    except Exception as e:
+        print(f"❌ [PROJECT LIST API] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if conn:
+            conn.close()
+
+@router.get("/project-prices/{project_id}")
+async def get_project_prices_by_id(project_id: int):
+    """ดึงราคาสินค้าทั้งหมดในโครงการ"""
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        print(f"🏗️ [PROJECT PRICES API] Project ID: {project_id}")
+        
+        query = """
+            SELECT 
+                sku, product_name, unit, price, quantity
+            FROM Project_Price_Line
+            WHERE project_id = ?
+        """
+        
+        cursor.execute(query, [project_id])
+        
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        print(f"📦 [PROJECT PRICES API] Found {len(results)} items")
+        
+        return results
+    
+    except Exception as e:
+        print(f"❌ [PROJECT PRICES API] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if conn:
+            conn.close()
+
 @router.put("/{project_id}/status")
 async def update_project_status(
     project_id: int, 
@@ -244,6 +428,88 @@ async def update_project_status(
         
         return {"success": True}
     
+    finally:
+        if conn:
+            conn.close()
+
+@router.put("/{project_id}")
+async def update_project_price(project_id: int, project: ProjectPriceCreate, authorization: str = Header(None)):
+    """อัพเดทราคาโครงการ (Manager เท่านั้น)"""
+    current_user = get_current_user_from_token(authorization)
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        print(f"🔧 [UPDATE PROJECT PRICE] Project ID: {project_id}, Code: {project.project_code}")
+        
+        # อัพเดท Project Price Header
+        cursor.execute("""
+            UPDATE Project_Price_Header 
+            SET project_name = ?, customer_code = ?, customer_name = ?, branch_code = ?,
+                price_start_date = ?, price_end_date = ?, request_by = ?, request_date = ?, 
+                remark = ?, updated_at = GETDATE()
+            WHERE project_id = ?
+        """, (
+            project.project_name,
+            project.customer_code,
+            project.customer_name,
+            project.branch_code,
+            project.price_start_date,
+            project.price_end_date,
+            project.request_by,
+            project.request_date or datetime.now().strftime('%Y-%m-%d'),
+            project.remark,
+            project_id
+        ))
+        
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        print(f"✅ [UPDATE PROJECT PRICE] Updated header for project ID: {project_id}")
+        
+        # ลบ Project Price Lines เดิม
+        cursor.execute("DELETE FROM Project_Price_Line WHERE project_id = ?", (project_id,))
+        print(f"🗑️ [UPDATE PROJECT PRICE] Deleted old items")
+        
+        # สร้าง Project Price Lines ใหม่
+        for item in project.items:
+            # ตัดสินใจว่าใช้ field ไหนตามประเภทสินค้า
+            category = item.sku[0].upper() if item.sku else ""
+            
+            if category == "G":  # Glass
+                price_value = item.price_per_sqft or item.price
+                price_type = "price_per_sqft"
+            elif category == "A":  # Aluminum
+                price_value = item.price_per_kg or item.price
+                price_type = "price_per_kg"
+            else:
+                price_value = item.price
+                price_type = "price"
+            
+            cursor.execute("""
+                INSERT INTO Project_Price_Line 
+                (project_id, sku, product_name, unit, price, quantity)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                project_id,
+                item.sku,
+                item.product_name,
+                item.unit,
+                price_value,
+                item.quantity
+            ))
+            print(f"  ➕ Added item: {item.sku} - {price_value} ({price_type})")
+        
+        conn.commit()
+        return {"success": True, "project_id": project_id}
+    
+    except Exception as e:
+        print(f"❌ [UPDATE PROJECT PRICE] Error: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
             conn.close()

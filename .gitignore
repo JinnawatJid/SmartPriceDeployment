@@ -117,7 +117,6 @@ dmypy.json
 .pyre/
 
 # Specific to your project
-backend/data/special_price_pdfs/*.pdf
 backend/logs/*.log
 backend/config/data/*.xlsx
 backend/config/data/*.csv

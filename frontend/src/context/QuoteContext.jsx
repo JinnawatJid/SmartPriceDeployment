@@ -127,6 +127,9 @@ function quoteReducer(state, action) {
         
         // ✅ เก็บ priceSource ถ้ามี (สำหรับราคาพิเศษ)
         priceSource: newItem.priceSource ?? (newItem.source === "db" ? "manual" : undefined),
+        
+        // ⭐ เก็บข้อมูล stock
+        stock: newItem.stock ?? null,
       };
 
       // 2) หา item ซ้ำ “ต้อง match ด้วย sku + variantCode + sqft”
@@ -182,6 +185,7 @@ function quoteReducer(state, action) {
             needsPricing: it.source === "ui" ? true : false,
             product_weight: it.product_weight ?? normalizedItem.product_weight ?? 0,
             variantCode: it.variantCode ?? normalizedItem.variantCode ?? null,
+            stock: it.stock ?? normalizedItem.stock ?? null, // ⭐ preserve stock
           };
         }),
       };
