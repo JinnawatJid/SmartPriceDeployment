@@ -188,8 +188,8 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                           {item.stock.branches && item.stock.branches.length > 0 && (
                             <div className="text-gray-600 text-[10px] space-y-0.5">
                               {item.stock.branches.map((branch) => (
-                                <div key={branch.branch_code}>
-                                  {branch.branch_code}: {branch.quantity}
+                                <div key={branch['Location_Code']}>
+                                  {branch['Location_Code']}: {branch.quantity}
                                 </div>
                               ))}
                             </div>

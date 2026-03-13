@@ -123,8 +123,8 @@ const ItemCard = ({ item, onAdd }) => {
                   {detail.stock.branches && detail.stock.branches.length > 0 ? (
                     <div className="space-y-1">
                       {detail.stock.branches.map((branch) => (
-                        <div key={branch.branch_code} className="flex justify-between text-xs">
-                          <span className="text-gray-600">{branch.branch_code}:</span>
+                        <div key={branch['Location_Code']} className="flex justify-between text-xs">
+                          <span className="text-gray-600">{branch['Location_Code']}:</span>
                           <span className="font-bold text-lg">{branch.quantity} {detail.unit || ""}</span>
                         </div>
                       ))}

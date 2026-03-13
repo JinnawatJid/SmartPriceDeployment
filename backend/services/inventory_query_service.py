@@ -133,7 +133,7 @@ class InventoryQueryService:
             # Aggregate quantities by branch
             branch_quantities = defaultdict(float)
             for entry in ledger_entries:
-                branch_code = entry.get("Branch_Code", "")
+                location_code = entry.get("Location_Code", "")
                 quantity = entry.get("Quantity", 0)
                 
                 # Convert quantity to float if it's not already
@@ -142,11 +142,11 @@ class InventoryQueryService:
                 except (ValueError, TypeError):
                     logger.warning(
                         f"Invalid quantity value for SKU {sku}, "
-                        f"Branch {branch_code}: {quantity}"
+                        f"Location {location_code}: {quantity}"
                     )
                     quantity = 0
                 
-                branch_quantities[branch_code] += quantity
+                branch_quantities[location_code] += quantity
             
             # Convert to list of InventoryByBranch objects
             inventory_list = [

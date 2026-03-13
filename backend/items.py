@@ -604,7 +604,7 @@ def get_item_detail(sku: str, branch_code: str = Depends(get_branch_code)):
         item["stock"] = {
             "branches": [
                 {
-                    "branch_code": branch_code,
+                    "Location_Code": branch_code,
                     "quantity": branch_qty
                 }
             ],
@@ -881,7 +881,7 @@ def get_item_stock(sku: str, branch_code: str = Depends(get_branch_code)):
     Response:
     {
         "sku": "A01010101010101",
-        "branch_code": "BKK",
+        "Location Code": "BKK",
         "quantity": 100
     }
     """
@@ -902,7 +902,7 @@ def get_item_stock(sku: str, branch_code: str = Depends(get_branch_code)):
         
         return {
             "sku": sku,
-            "branch_code": branch_code,
+            "Location_Code": branch_code,
             "quantity": float(total_quantity)
         }
         
@@ -914,7 +914,7 @@ def get_item_stock(sku: str, branch_code: str = Depends(get_branch_code)):
         # Return default response ถ้า API error
         return {
             "sku": sku,
-            "branch_code": branch_code,
+            "Location_Code": branch_code,
             "quantity": 0,
             "error": str(e)
         }

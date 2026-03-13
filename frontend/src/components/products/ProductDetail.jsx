@@ -133,7 +133,7 @@ export default function ProductDetail({ item }) {
           ) : stock && stock.quantity !== undefined ? (
             <div className="p-3 bg-green-50 rounded-lg border border-green-200">
               <p className="text-green-700 font-semibold">
-                คงเหลือในสต๊อก (สาขา {stock.branch_code}): {stock.quantity.toLocaleString()} {displayItem.unit || 'หน่วย'}
+                คงเหลือในสต๊อก (สาขา {stock['Location_Code']}): {stock.quantity.toLocaleString()} {displayItem.unit || 'หน่วย'}
               </p>
             </div>
           ) : (

@@ -159,7 +159,7 @@ class BCAPIClient:
             branch_code: Optional branch code to filter by
         
         Returns:
-            List of ledger entries with Item_No_, Quantity, Branch_Code
+            List of ledger entries with Item_No_, Quantity, Location_Code
         
         Raises:
             AuthenticationError: When API key is invalid
@@ -167,16 +167,15 @@ class BCAPIClient:
             ServerError: When API returns 5xx error after retries
             NetworkError: When network request fails after retries
         """
-        # ⭐ ส่ง pagination และ filter แบบเดียวกับ Invoice/Customer API
+      
         payload = {
-            "page": 1,
-            "size": 1000,
-            "Item No_": {"$eq": item_no}
+            
+            "Item_No": {"$eq": item_no}
         }
         
-        # เพิ่ม filter สาขาถ้ามี
+        # เพิ่ม filter สาขาถ้ามี (ใช้ Location_Code แทน Branch_Code)
         if branch_code:
-            payload["Branch_Code"] = {"$eq": branch_code}
+            payload["Location_Code"] = {"$eq": branch_code}
         
         url = self.itemledger_api_url
         response_data = self._make_request_post(
