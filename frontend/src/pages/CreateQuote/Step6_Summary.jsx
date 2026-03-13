@@ -434,7 +434,7 @@ function Step6_Summary({ state, dispatch }) {
     };
 
     calc();
-  }, [state.status, state.cart, state.customer, state.deliveryType, state.shippingCustomerPay, selectedProject, projectPrices]);
+  }, [state.status, state.cart, state.customer, state.deliveryType, state.shippingCustomerPay]);
 
   // ===============================
   // AUTO RECALC SHIPPING (AFTER PRICING)
@@ -577,36 +577,109 @@ function Step6_Summary({ state, dispatch }) {
     fetchProjects();
   }, [state.customer]);
 
-  // โหลดราคาโครงการเมื่อเลือกโครงการ
+  // โหลดราคาโครงการเมื่อเลือกโครงการ และคำนวณราคาใหม่
   useEffect(() => {
-    if (!selectedProject) {
-      setProjectPrices({});
+    console.log('🔄 [PROJECT CHANGE] useEffect triggered, selectedProject:', selectedProject);
+    
+    // ถ้าไม่มีสินค้าในตะกร้า ไม่ต้องคำนวณ
+    if (!state.cart || state.cart.length === 0) {
+      console.log('❌ [PROJECT CHANGE] No cart items, skipping calculation');
       return;
     }
 
-    const fetchProjectPrices = async () => {
+    // ถ้าไม่มีลูกค้า ไม่ต้องคำนวณ
+    const customerCode = getCustomerCode(state.customer);
+    if (!customerCode || customerCode.toUpperCase() === "N/A") {
+      console.log('❌ [PROJECT CHANGE] No customer, skipping calculation');
+      return;
+    }
+
+    const recalculateWithProject = async () => {
       try {
-        console.log('🏗️ Loading prices for project:', selectedProject);
-        const res = await api.get(`/api/project-prices/project-prices/${selectedProject}`);
+        console.log('🔄 [PROJECT CHANGE] Recalculating prices with project_id:', selectedProject);
         
-        const prices = res.data || [];
-        console.log('📦 Found project prices:', prices);
+        // ตั้งค่า loading
+        setCalculation((prev) => ({ ...prev, loading: true }));
         
-        // แปลงเป็น object { sku: price }
-        const priceMap = {};
-        prices.forEach(item => {
-          priceMap[item.sku] = item.price;
+        const calcRes = await api.post("/api/pricing/calculate", {
+          customerData: {
+            customerCode,
+            customerName: state.customer?.name || "",
+            paymentTerm:
+              state.customer?.paymentTerm ??
+              state.customer?.creditTerm ??
+              state.customer?.payment_terms ??
+              "",
+            paymentMethod: state.customer?.paymentMethod || "",
+            customer_date: state.customer?.customer_date,
+            accum_6m: Number(state.customer?.accum_6m || 0),
+            frequency: Number(state.customer?.frequency || 0),
+            gen_bus: state.customer?.gen_bus,
+            sales_g_cust: Number(state.customer?.sales_g_cust || 0),
+            sales_a_cust: Number(state.customer?.sales_a_cust || 0),
+            sales_s_cust: Number(state.customer?.sales_s_cust || 0),
+            sales_y_cust: Number(state.customer?.sales_y_cust || 0),
+            sales_c_cust: Number(state.customer?.sales_c_cust || 0),
+            sales_e_cust: Number(state.customer?.sales_e_cust || 0),
+            shippingCustomerPay: Number(state.shippingCustomerPay || 0),
+            project_id: selectedProject, // 🔥 ส่ง project_id ที่เลือก (null ถ้าไม่เลือก)
+          },
+          deliveryType: state.deliveryType,
+          cart: state.cart.map((it) => ({
+            sku: it.sku,
+            name: it.name ?? "",
+            qty: Number(it.qty || 0),
+            sqft_sheet: Number(it.sqft_sheet ?? it.sqft ?? 0),
+            cost: it.cost,
+            pkg_size: Number(it.pkg_size ?? 1),
+            category: it.category,
+            unit: it.unit ?? "",
+            product_weight: it.product_weight ?? 0,
+          })),
+        });
+
+        const items = calcRes.data.items || [];
+        const { subtotal, vat, total, product_total, shippingCustomerPay, profit } =
+          calcRes.data.totals || {};
+
+        console.log('📦 [PROJECT CHANGE] API Response items:', items.map(it => ({
+          sku: it.sku,
+          UnitPrice: it.UnitPrice,
+          price_per_sheet: it.price_per_sheet,
+          price_source: it.price_source,
+          _LineTotal: it._LineTotal
+        })));
+
+        setCalculation({
+          cart: items,
+          totals: {
+            exVat: subtotal,
+            vat,
+            total,
+            productTotal: product_total,
+            shippingCustomerPay,
+            profit: profit ?? 0,
+            exVatFmt: fmtTHB(subtotal),
+            vatFmt: fmtTHB(vat),
+            totalFmt: fmtTHB(total),
+          },
+          loading: false,
+          error: null,
         });
         
-        setProjectPrices(priceMap);
+        console.log('✅ [PROJECT CHANGE] Recalculation complete, calculation.cart updated');
       } catch (err) {
-        console.error('❌ Error loading project prices:', err);
-        setProjectPrices({});
+        console.error('❌ [PROJECT CHANGE] Error recalculating with project:', err);
+        setCalculation((prev) => ({
+          ...prev,
+          loading: false,
+          error: 'เกิดข้อผิดพลาดในการคำนวณราคาโครงการ',
+        }));
       }
     };
 
-    fetchProjectPrices();
-  }, [selectedProject]);
+    recalculateWithProject();
+  }, [selectedProject, state.customer, state.cart]); // 🔥 เพิ่ม dependencies เพื่อให้คำนวณใหม่เมื่อมีการเปลี่ยนแปลง
 
   // โหลด Promotion ตาม SKU ที่เลือก
   useEffect(() => {
@@ -781,54 +854,19 @@ function Step6_Summary({ state, dispatch }) {
   // sku -> item (ราคาที่คำนวณใหม่)
   const calcMap = useMemo(() => {
     const map = Object.fromEntries((calculation.cart || []).map((it) => [pricingKeyOf(it), it]));
-    
-    // ⭐ ถ้ามีการเลือกโครงการ ให้ override ราคาด้วยราคาโครงการ
-    if (selectedProject && Object.keys(projectPrices).length > 0) {
-      console.log('🏗️ Applying project prices:', projectPrices);
-      
-      // สร้าง map ใหม่ที่มีราคาโครงการ
-      const updatedMap = { ...map };
-      
-      state.cart.forEach((item) => {
-        const key = pricingKeyOf(item);
-        const projectPrice = projectPrices[item.sku];
-        
-        if (projectPrice !== undefined) {
-          console.log(`🏗️ Using project price for ${item.sku}: ${projectPrice}`);
-          
-          // สร้าง calculated item ใหม่ที่มีราคาโครงการ
-          const isGlass = (item.category || "").toUpperCase() === "G";
-          const sqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
-          const qty = Number(item.qty || 0);
-          
-          let unitPrice = projectPrice;
-          let lineTotal = projectPrice * qty;
-          
-          // สำหรับกระจก ราคาโครงการอาจเป็นต่อแผ่นหรือต่อตารางฟุต
-          if (isGlass && sqft > 0) {
-            // สมมติว่าราคาโครงการเป็นต่อแผ่น
-            unitPrice = projectPrice;
-            lineTotal = projectPrice * qty;
-          }
-          
-          updatedMap[key] = {
-            ...(map[key] || item),
-            sku: item.sku,
-            qty: qty,
-            UnitPrice: unitPrice,
-            price_per_sheet: isGlass ? unitPrice : undefined,
-            lineTotal: lineTotal,
-            _LineTotal: lineTotal,
-            priceSource: 'project', // ⭐ ระบุว่ามาจากโครงการ
-          };
-        }
-      });
-      
-      return updatedMap;
-    }
-    
+    console.log('🔍 [calcMap] Updated:', {
+      cartLength: calculation.cart?.length,
+      mapKeys: Object.keys(map),
+      sampleItems: calculation.cart?.slice(0, 2).map(it => ({
+        sku: it.sku,
+        key: pricingKeyOf(it),
+        UnitPrice: it.UnitPrice,
+        price_per_sheet: it.price_per_sheet,
+        priceSource: it.priceSource
+      }))
+    });
     return map;
-  }, [calculation.cart, selectedProject, projectPrices, state.cart]);
+  }, [calculation.cart]);
 
   const _round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
@@ -1782,16 +1820,36 @@ function Step6_Summary({ state, dispatch }) {
                       </tr>
                     )}
 
-                    {state.cart.map((it, i) => (
-                      <CartItemRow
-                        key={uiKeyOf(it)}
-                        item={it}
-                        index={i}
-                        dispatch={dispatch}
-                        calculatedItem={calcMap[pricingKeyOf(it)]}
-                        customerCode={customerCode}
-                      />
-                    ))}
+                    {state.cart.map((it, i) => {
+                      const key = pricingKeyOf(it);
+                      const calculatedItem = calcMap[key];
+                      
+                      // Log เฉพาะ item แรกเพื่อไม่ให้ log เยอะเกินไป
+                      if (i === 0) {
+                        console.log('🎯 [CartItemRow] Rendering first item:', {
+                          sku: it.sku,
+                          key,
+                          hasCalculatedItem: !!calculatedItem,
+                          calculatedItem: calculatedItem ? {
+                            UnitPrice: calculatedItem.UnitPrice,
+                            price_per_sheet: calculatedItem.price_per_sheet,
+                            priceSource: calculatedItem.priceSource,
+                            _LineTotal: calculatedItem._LineTotal
+                          } : null
+                        });
+                      }
+                      
+                      return (
+                        <CartItemRow
+                          key={uiKeyOf(it)}
+                          item={it}
+                          index={i}
+                          dispatch={dispatch}
+                          calculatedItem={calculatedItem}
+                          customerCode={customerCode}
+                        />
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

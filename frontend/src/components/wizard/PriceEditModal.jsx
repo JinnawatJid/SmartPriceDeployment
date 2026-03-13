@@ -16,10 +16,21 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
 
   // สำหรับกระจก
   const currentSqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
+  const isProjectPrice = calculatedItem?.priceSource === "project";
+  
+  // ⭐ เมื่อเป็นราคาโครงการ UnitPrice เป็นราคาต่อตารางฟุตแล้ว ไม่ต้องคูณ sqft
   const currentPricePerSheet =
     item.priceSource === "manual"
       ? Number(item.price_per_sheet ?? Number(item.UnitPrice ?? 0) * currentSqft)
+      : isProjectPrice
+      ? Number(calculatedItem?.UnitPrice ?? 0)  // ⭐ ราคาโครงการเป็นราคาต่อตารางฟุตแล้ว
       : Number(calculatedItem?.price_per_sheet ?? item.price_per_sheet ?? 0);
+
+  console.log('🔧 [PRICE EDIT MODAL] isProjectPrice:', isProjectPrice);
+  console.log('🔧 [PRICE EDIT MODAL] calculatedItem?.priceSource:', calculatedItem?.priceSource);
+  console.log('🔧 [PRICE EDIT MODAL] calculatedItem?.UnitPrice:', calculatedItem?.UnitPrice);
+  console.log('🔧 [PRICE EDIT MODAL] currentPricePerSheet:', currentPricePerSheet);
+  console.log('🔧 [PRICE EDIT MODAL] item.priceSource:', item.priceSource);
 
   // ⭐ ดึงราคาปกติ (ราคาอ้างอิงจากระบบ) - แยกตามประเภทสินค้า
   let normalPrice = 0;
@@ -47,6 +58,8 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
   const currentPricePerSqft =
     item.priceSource === "manual" && item.pricePerSqft
       ? Number(item.pricePerSqft)
+      : isProjectPrice
+      ? currentPricePerSheet  // ⭐ ราคาโครงการเป็นราคาต่อตารางฟุตแล้ว ไม่ต้องหาร
       : currentSqft > 0 
         ? currentPricePerSheet / currentSqft 
         : 0;

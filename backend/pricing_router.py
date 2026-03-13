@@ -367,14 +367,6 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
 
         results = []
         for _, row in df_calc.iterrows():
-            is_glass = str(row.get("category", "")).upper() == "G"
-
-            price_per_sheet = (
-                round(row["UnitPrice"] * row.get("Sqft_Sheet", 0), 2)
-                if is_glass
-                else row["UnitPrice"]
-            )
-
             results.append({
                 "sku": row["sku"],
                 "name": row.get("name"),
@@ -382,11 +374,12 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                 "sqft_sheet": row.get("Sqft_Sheet", 0),
                 "unit": row.get("unit", ""),
                 "UnitPrice": row["UnitPrice"],
-                "price_per_sheet": price_per_sheet,   # ⭐
+                "price_per_sheet": round(row["UnitPrice"] * row.get("Sqft_Sheet", 0), 2) if str(row.get("category", "")).upper() == "G" else row["UnitPrice"],
                 "_LineTotal": row["LineTotal"],
                 "_Tier_Z": 0,
                 "product_weight": float(row.get("product_weight", 0) or 0),
-                "priceW1": float(row.get("priceW1", 0) or 0),  # ⭐ เพิ่มราคา W1
+                "priceW1": float(row.get("priceW1", 0) or 0),
+                "priceSource": row.get("price_source", "system"),
             })
 
 
@@ -455,70 +448,89 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     df_price["UnitPrice_temp"] = df_price.apply(_compute_unit_price_temp, axis=1)
     
     # ⭐ เพิ่ม: ตรวจสอบราคาโครงการก่อน (มีลำดับความสำคัญสูงสุด)
+    # ดึง project_id จาก customerData (ถ้ามี)
+    project_id = req.customerData.get("project_id")
+    
     print(f"\n{'='*80}")
-    print(f"🏗️ เริ่มตรวจสอบราคาโครงการสำหรับลูกค้า: {customer_code}")
+    if project_id:
+        print(f"🏗️ เริ่มตรวจสอบราคาโครงการ ID: {project_id}")
+    else:
+        print(f"ℹ️ ไม่ได้เลือกโครงการ → ข้ามการตรวจสอบราคาโครงการ")
     print(f"{'='*80}")
     
-    for idx, row in df_price.iterrows():
-        sku = row["sku"]
-        category = str(row.get("category", "")).upper()
-        
-        try:
-            # ดึงราคาโครงการที่ active
-            conn = get_mssql_conn()
-            cursor = conn.cursor()
+    # Initialize price_source column
+    df_price["price_source"] = "system"
+    
+    # 🔥 เฉพาะเมื่อมี project_id ถึงจะค้นหาราคาโครงการ
+    if project_id:
+        for idx, row in df_price.iterrows():
+            sku = row["sku"]
+            category = str(row.get("category", "")).upper()
             
-            today = datetime.today().date().isoformat()
-            
-            sql = """
-            SELECT TOP (1)
-                ph.project_code,
-                ph.project_name,
-                ph.price_start_date,
-                ph.price_end_date,
-                pl.price,
-                pl.unit
-            FROM Project_Price_Header ph
-            JOIN Project_Price_Line pl ON ph.project_id = pl.project_id
-            WHERE ph.status = 'active'
-                AND ph.price_start_date <= ?
-                AND ph.price_end_date >= ?
-                AND ph.customer_code = ?
-                AND pl.sku = ?
-            ORDER BY ph.created_at DESC
-            """
-            
-            cursor.execute(sql, [today, today, customer_code, sku])
-            result = cursor.fetchone()
-            
-            cursor.close()
-            conn.close()
-            
-            if result:
-                project_code = result[0]
-                project_name = result[1] or ""
-                start_date = result[2].isoformat() if result[2] else "N/A"
-                end_date = result[3].isoformat() if result[3] else "N/A"
-                project_price = float(result[4]) if result[4] else 0
-                project_unit = result[5] or ""
+            try:
+                # ดึงราคาโครงการที่ active
+                conn = get_mssql_conn()
+                cursor = conn.cursor()
                 
-                print(f"\n🏗️ SKU: {sku}")
-                print(f"   ✅ พบราคาโครงการ: {project_code} - {project_name}")
-                print(f"   💰 ราคา: {project_price:.2f} บาท/{project_unit}")
-                print(f"   📅 ระยะเวลา: {start_date} ถึง {end_date}")
+                sql = """
+                SELECT TOP (1)
+                    ph.project_code,
+                    ph.project_name,
+                    ph.price_start_date,
+                    ph.price_end_date,
+                    pl.price,
+                    pl.unit,
+                    pl.sku
+                FROM Project_Price_Header ph
+                JOIN Project_Price_Line pl ON ph.project_id = pl.project_id
+                WHERE ph.project_id = ?
+                    AND pl.sku = ?
+                """
+                cursor.execute(sql, [project_id, sku])
                 
-                # ใช้ราคาโครงการทันที (ไม่ต้องเปรียบเทียบ)
-                df_price.at[idx, "NewPrice"] = project_price
-                df_price.at[idx, "price_source"] = "project"
-                df_price.at[idx, "project_code"] = project_code
-                df_price.at[idx, "project_name"] = project_name
-                df_price.at[idx, "project_valid_until"] = end_date
-            else:
-                print(f"\n📦 SKU: {sku}")
-                print(f"   ℹ️ ไม่พบราคาโครงการ → ตรวจสอบประวัติราคาต่อ")
+                result = cursor.fetchone()
                 
-        except Exception as e:
-            print(f"⚠️ ไม่สามารถตรวจสอบราคาโครงการสำหรับ SKU {sku}: {e}")
+                cursor.close()
+                conn.close()
+                
+                if result:
+                    project_code = result[0]
+                    project_name = result[1] or ""
+                    start_date = result[2].isoformat() if result[2] else "N/A"
+                    end_date = result[3].isoformat() if result[3] else "N/A"
+                    price = float(result[4]) if result[4] else 0
+                    project_unit = result[5] or ""
+                    sku_code = result[6] or ""
+                    
+                    # ตัดสินใจว่าใช้ราคาไหนตามประเภทสินค้า
+                    category = sku_code[0].upper() if sku_code else ""
+                    if category == "G":
+                        project_price = price
+                        price_type = "price_per_sqft"
+                    elif category == "A":
+                        project_price = price
+                        price_type = "price_per_kg"
+                    else:
+                        project_price = price
+                        price_type = "price"
+                    
+                    print(f"\n🏗️ SKU: {sku}")
+                    print(f"   ✅ พบราคาโครงการ: {project_code} - {project_name}")
+                    print(f"   💰 ราคา: {project_price:.2f} บาท/{project_unit} ({price_type})")
+                    print(f"   📅 ระยะเวลา: {start_date} ถึง {end_date}")
+                    
+                    # ใช้ราคาโครงการทันที (ไม่ต้องเปรียบเทียบ)
+                    df_price.at[idx, "NewPrice"] = project_price
+                    df_price.at[idx, "price_source"] = "project"
+                    df_price.at[idx, "project_code"] = project_code
+                    df_price.at[idx, "project_name"] = project_name
+                    df_price.at[idx, "project_valid_until"] = end_date
+                else:
+                    print(f"\n📦 SKU: {sku}")
+                    print(f"   ℹ️ ไม่พบในโครงการนี้ → ใช้ราคาระบบ/ประวัติ")
+                    
+            except Exception as e:
+                print(f"⚠️ ไม่สามารถตรวจสอบราคาโครงการสำหรับ SKU {sku}: {e}")
     
     print(f"{'='*80}")
     print(f"✅ ตรวจสอบราคาโครงการเสร็จสิ้น")
@@ -659,12 +671,21 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
 
 
     def _compute_unit_price(row):
-        raw = (
-            float(row["NewPrice"]) * float(row.get("product_weight", 0) or 0)
-            if str(row.get("category", "")).upper() == "A"
-            else float(row["NewPrice"])
-        )
-        return round_up_050(raw)
+        category = str(row.get("category", "")).upper()
+        is_project_price = row.get("price_source") == "project"
+        
+        if category == "A":
+            # อลูมิเนียม: คูณน้ำหนัก
+            raw = float(row["NewPrice"]) * float(row.get("product_weight", 0) or 0)
+        else:
+            # อื่นๆ (รวมกระจก): ใช้ NewPrice โดยตรง
+            raw = float(row["NewPrice"])
+        
+        # ราคาโครงการไม่ต้องปัดเศษ ใช้ราคาเป๊ะๆ
+        if is_project_price:
+            return round(raw, 2)  # แค่ปัด 2 ทศนิยม
+        else:
+            return round_up_050(raw)  # ราคาระบบ/ประวัติ ปัดทีละ 0.50
 
     df_price["UnitPrice"] = df_price.apply(_compute_unit_price, axis=1)
 
@@ -712,6 +733,8 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         
         is_glass = str(row.get("category", "")).upper() == "G"
 
+        # สำหรับกระจก: UnitPrice เป็นราคาต่อตารางฟุต ต้องคูณ sqft เพื่อได้ราคาต่อแผ่น
+        # สำหรับสินค้าอื่นๆ: ใช้ UnitPrice โดยตรง
         price_per_sheet = (
             round(row["UnitPrice"] * row.get("Sqft_Sheet", 0), 2)
             if is_glass
@@ -732,7 +755,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             "price_source": row.get("price_source", "system"),
             "last_purchase_date": row.get("last_purchase_date"),
             "last_purchase_qty": row.get("last_purchase_qty"),
-            "priceW1": float(row.get("priceW1", 0) or 0),  # ⭐ เพิ่มราคา W1
+            "priceW1": float(row.get("priceW1", 0) or 0),
         })
 
     print(

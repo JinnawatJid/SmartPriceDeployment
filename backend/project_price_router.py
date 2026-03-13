@@ -86,6 +86,19 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
         
         # สร้าง Project Price Lines
         for item in project.items:
+            # ตัดสินใจว่าใช้ field ไหนตามประเภทสินค้า
+            category = item.sku[0].upper() if item.sku else ""
+            
+            if category == "G":  # Glass
+                price_value = item.price_per_sqft or item.price
+                price_type = "price_per_sqft"
+            elif category == "A":  # Aluminum
+                price_value = item.price_per_kg or item.price
+                price_type = "price_per_kg"
+            else:
+                price_value = item.price
+                price_type = "price"
+            
             cursor.execute("""
                 INSERT INTO Project_Price_Line 
                 (project_id, sku, product_name, unit, price, quantity)
@@ -95,10 +108,10 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
                 item.sku,
                 item.product_name,
                 item.unit,
-                item.price,
+                price_value,
                 item.quantity
             ))
-            print(f"  ➕ Added item: {item.sku} - {item.price} {item.unit}")
+            print(f"  ➕ Added item: {item.sku} - {price_value} ({price_type})")
         
         conn.commit()
         return {"success": True, "project_id": int(project_id)}
@@ -462,6 +475,19 @@ async def update_project_price(project_id: int, project: ProjectPriceCreate, aut
         
         # สร้าง Project Price Lines ใหม่
         for item in project.items:
+            # ตัดสินใจว่าใช้ field ไหนตามประเภทสินค้า
+            category = item.sku[0].upper() if item.sku else ""
+            
+            if category == "G":  # Glass
+                price_value = item.price_per_sqft or item.price
+                price_type = "price_per_sqft"
+            elif category == "A":  # Aluminum
+                price_value = item.price_per_kg or item.price
+                price_type = "price_per_kg"
+            else:
+                price_value = item.price
+                price_type = "price"
+            
             cursor.execute("""
                 INSERT INTO Project_Price_Line 
                 (project_id, sku, product_name, unit, price, quantity)
@@ -471,10 +497,10 @@ async def update_project_price(project_id: int, project: ProjectPriceCreate, aut
                 item.sku,
                 item.product_name,
                 item.unit,
-                item.price,
+                price_value,
                 item.quantity
             ))
-            print(f"  ➕ Added item: {item.sku} - {item.price} {item.unit}")
+            print(f"  ➕ Added item: {item.sku} - {price_value} ({price_type})")
         
         conn.commit()
         return {"success": True, "project_id": project_id}

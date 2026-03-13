@@ -23,11 +23,25 @@ const TrashIcon = () => (
 
 export default function CartItemRow({ item, index, calculatedItem, dispatch, customerCode }) {
   
+  // 🔍 Log เมื่อ calculatedItem เปลี่ยน
+  useEffect(() => {
+    console.log(`🔍 [CartItemRow ${index}] calculatedItem changed:`, {
+      sku: item.sku,
+      hasCalculatedItem: !!calculatedItem,
+      calculatedItem: calculatedItem ? {
+        UnitPrice: calculatedItem.UnitPrice,
+        price_per_sheet: calculatedItem.price_per_sheet,
+        priceSource: calculatedItem.priceSource,
+        _LineTotal: calculatedItem._LineTotal
+      } : null
+    });
+  }, [calculatedItem, item.sku, index]);
+  
   const cat = (item.category || String(item.sku || "").slice(0, 1)).toUpperCase();
   const isGlass = cat === "G";
 
   // ⭐ ตรวจสอบว่าใช้ราคาโครงการหรือไม่
-  const isProjectPrice = calculatedItem?.priceSource === 'project';
+  const isProjectPrice = calculatedItem?.priceSource === 'project' || calculatedItem?.price_source === 'project';
 
   // ✅ unit price to display
   // - glass: show บาท/แผ่น (price_per_sheet)
@@ -248,8 +262,29 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
               
               {/* ⭐ แสดงว่าใช้ราคาโครงการ */}
               {isProjectPrice && (
-                <span className="text-[9px] text-green-600 font-semibold">
-                  🏗️ ราคาโครงการ
+                <span className="text-[9px] text-green-600 font-semibold bg-green-50 px-1 py-0.5 rounded">
+                  ราคาโครงการ
+                </span>
+              )}
+              
+              {/* ⭐ แสดงว่าใช้ราคาประวัติ */}
+              {(calculatedItem?.priceSource === 'history' || calculatedItem?.price_source === 'history') && (
+                <span className="text-[9px] text-orange-600 font-semibold bg-orange-50 px-1 py-0.5 rounded">
+                  ราคาประวัติ
+                </span>
+              )}
+              
+              {/* ⭐ แสดงว่าใช้ราคาระบบ */}
+              {(calculatedItem?.priceSource === 'system' || calculatedItem?.price_source === 'system') && (
+                <span className="text-[9px] text-blue-600 font-semibold bg-blue-50 px-1 py-0.5 rounded">
+                  ราคาระบบ
+                </span>
+              )}
+              
+              {/* ⭐ แสดงว่าเป็นราคาที่แก้ไขแล้ว */}
+              {item.priceSource === 'manual' && (
+                <span className="text-[9px] text-purple-600 font-semibold bg-purple-50 px-1 py-0.5 rounded">
+                  ✏️ แก้ไขแล้ว
                 </span>
               )}
             </div>
@@ -302,7 +337,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
               <div className="rounded-b-xl border bg-white ">
                 <div className="px-4 py-2 font-semibold text-sm bg-gray-50 flex justify-between items-center">
                   <span>ประวัติราคา</span>
-                  {calculatedItem?.price_source === "history" && (
+                  {calculatedItem?.priceSource === "history" || calculatedItem?.price_source === "history" && (
                     <span className="text-xs text-orange-600 font-medium bg-orange-50 px-2 py-1 rounded">
                       ✓ ใช้ราคาครั้งก่อน 
                     </span>
