@@ -45,10 +45,11 @@ echo.
 echo ==============================================
 echo 2) Setting up Virtual Environment...
 echo ==============================================
-if not exist "venv" (
-    echo Creating virtual environment...
-    python -m venv venv
-)
+echo Removing corrupted or old virtual environment (if any)...
+if exist "venv" rmdir /S /Q "venv"
+
+echo Creating fresh virtual environment...
+python -m venv venv
 call venv\Scripts\activate.bat
 
 echo.
