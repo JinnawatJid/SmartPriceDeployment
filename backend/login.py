@@ -1,10 +1,10 @@
-# login.py — เวอร์ชัน SQLite 100%
+# login.py — ใช้ Employee API
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
-import jwt, os, pandas as pd
+import jwt, os, httpx
 
-from employees import load_employees_sqlite   # ← ใช้ SQLite แทน Excel
+from config.config_external_api import EMP_API_URL, EMP_API_HEADERS
 
 router = APIRouter(prefix="/login", tags=["auth"])
 
@@ -20,25 +20,48 @@ class LoginRequest(BaseModel):
 
 
 # === HELPER ===
-def load_employee(code: str):
-    df = load_employees_sqlite()  # ← SQLite dataframe จาก employees.py
-
-    row = df[df["empCode"].astype(str).str.lower() == code.lower()]
-    if row.empty:
+async def load_employee(code: str):
+    """
+    ดึงข้อมูลพนักงานจาก API
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                EMP_API_URL,
+                headers=EMP_API_HEADERS,
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # API ส่งมาเป็น dict with 'data' key
+            if isinstance(data, dict) and 'data' in data:
+                employees = data['data']
+            elif isinstance(data, list):
+                employees = data
+            else:
+                employees = []
+            
+            # หาพนักงานที่ตรงกับ code
+            for emp in employees:
+                emp_code = str(emp.get("EmpCode", "")).strip()
+                if emp_code.lower() == code.lower():
+                    return {
+                        "id": emp_code,
+                        "name": str(emp.get("EmpName", "")).strip(),
+                        "branchId": str(emp.get("EmpBrchCode", "")).strip() or None,
+                    }
+            
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error fetching employee from API: {e}")
         return None
-
-    r = row.iloc[0]
-    return {
-        "id": str(r["empCode"]).strip(),
-        "name": str(r["empName"]).strip(),
-        "branchId": str(r["branchCode"]).strip() if pd.notna(r["branchCode"]) else None,
-    }
 
 
 # === LOGIN ROUTE ===
 @router.post("")
-def login(req: LoginRequest):
-    emp = load_employee(req.employeeCode)
+async def login(req: LoginRequest):
+    emp = await load_employee(req.employeeCode)
     if not emp:
         raise HTTPException(status_code=401, detail="รหัสพนักงานไม่ถูกต้อง")
 

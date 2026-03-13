@@ -57,9 +57,25 @@ CREDIT_API_HEADERS = {
 }
 
 
+# =========================
+# Employee API (D365)
+# =========================
+EMP_API_URL = os.getenv(
+    "EMP_API_URL",
+    "http://192.192.0.37:8280/employee-dynamic/1.0.0",
+)
+EMP_API_KEY = os.getenv("EMP_API_KEY", "").strip()
+
+EMP_API_HEADERS = {
+    "apikey": EMP_API_KEY,
+    "Content-Type": "application/json",
+}
+
+
 print("BASE_URL =", BASE_URL)
 print("CUSTOMER_API_KEY LOADED =", bool(CUSTOMER_API_KEY))
 print("INVOICE_API_KEY LOADED =", bool(INVOICE_API_KEY))
 print("CREDIT_API_KEY LOADED =", bool(CREDIT_API_KEY))
+print("EMP_API_KEY LOADED =", bool(EMP_API_KEY))
 print("CUSTOMER API HEADERS =", CUSTOMER_API_HEADERS)
 
