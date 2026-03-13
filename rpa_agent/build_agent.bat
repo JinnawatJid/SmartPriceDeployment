@@ -56,7 +56,8 @@ echo.
 echo ==============================================
 echo 3) Installing Dependencies...
 echo ==============================================
-pip install -r requirements.txt
+echo Using verbose output to show build progress (compiling packages may take several minutes)...
+pip install -v -r requirements.txt
 pip install pyinstaller
 
 echo.
