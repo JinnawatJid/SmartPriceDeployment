@@ -10,24 +10,16 @@ echo Please leave this command window open while working!
 
 set CHROME_EXE=""
 
-:: Find Chrome without complex FOR loops that break batch scripts
-if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" (
-    set CHROME_EXE="%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-    goto :FOUND_CHROME
-)
-if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" (
-    set CHROME_EXE="%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-    goto :FOUND_CHROME
-)
-if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" (
-    set CHROME_EXE="%LocalAppData%\Google\Chrome\Application\chrome.exe"
+:: Find the bundled Chrome for Testing
+if exist "%~dp0browser\chrome\chrome.exe" (
+    set CHROME_EXE="%~dp0browser\chrome\chrome.exe"
     goto :FOUND_CHROME
 )
 
 :FOUND_CHROME
 if %CHROME_EXE%=="" (
-    echo [ERROR] Google Chrome was not found on this system!
-    echo Please install Chrome or check the installation path.
+    echo [ERROR] Bundled Chrome was not found!
+    echo Please make sure the 'browser' folder is extracted alongside this script.
     pause
     exit /b
 )
@@ -39,9 +31,9 @@ echo Launching...
 set CHROME_USER_DATA="%TEMP%\chrome_rpa_profile"
 if not exist %CHROME_USER_DATA% mkdir %CHROME_USER_DATA%
 
-:: Close any existing Chrome processes to ensure the debugging port binds correctly
+:: Close any existing Chrome instances running from the bundled folder
 echo Closing existing Chrome instances...
-taskkill /F /IM chrome.exe /T >nul 2>&1
+wmic process where "name='chrome.exe' and CommandLine like '%%9222%%'" delete >nul 2>&1
 timeout /t 2 >nul
 
 :: Start Chrome in background with debugging port and dedicated profile
@@ -62,25 +54,25 @@ echo ============================================================
 echo We will start the background Agent to listen for web requests.
 
 :: Look for the PyInstaller compiled EXE
-if exist "rpa_agent.exe" (
+if exist "%~dp0rpa_agent.exe" (
     echo [OK] Found compiled rpa_agent.exe
-    start "RPA Agent" cmd /k "rpa_agent.exe"
+    start "RPA Agent" cmd /k "%~dp0rpa_agent.exe"
     goto :AGENT_STARTED
 )
 
 :: Look for the PyInstaller compiled EXE inside dist directory
-if exist "dist\rpa_agent.exe" (
+if exist "%~dp0dist\rpa_agent.exe" (
     echo [OK] Found compiled rpa_agent.exe in dist folder
-    start "RPA Agent" cmd /k "dist\rpa_agent.exe"
+    start "RPA Agent" cmd /k "%~dp0dist\rpa_agent.exe"
     goto :AGENT_STARTED
 )
 
 :: Fallback for Developers (Run Python directly)
 python --version >nul 2>&1
 if not errorlevel 1 (
-    if exist "rpa_agent.py" (
+    if exist "%~dp0rpa_agent.py" (
         echo [INFO] No .exe found, but Python is installed. Running raw script...
-        start "RPA Agent" cmd /k "python rpa_agent.py"
+        start "RPA Agent" cmd /k "python %~dp0rpa_agent.py"
         goto :AGENT_STARTED
     )
 )
