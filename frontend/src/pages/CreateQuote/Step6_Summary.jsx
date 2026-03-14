@@ -92,6 +92,8 @@ function Step6_Summary({ state, dispatch }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [shippingOpen, setShippingOpen] = useState(false);
   const [glassOpen, setGlassOpen] = useState(false);
+  const [editingShippingCost, setEditingShippingCost] = useState(false);
+  const [tempShippingCost, setTempShippingCost] = useState(0);
 
   // Product browser state
   const [productFilters, setProductFilters] = useState({});
@@ -1067,6 +1069,7 @@ function Step6_Summary({ state, dispatch }) {
         vat: effectiveTotals.vat,
         grandTotal: effectiveTotals.total,
         shippingCustomerPay: state.shippingCustomerPay ?? 0,
+        shippingRaw: state.shippingCost ?? 0, // ⭐ ค่าขนส่งที่ระบบคิด
       },
       note: state.remark || "",
     };
@@ -1901,14 +1904,62 @@ function Step6_Summary({ state, dispatch }) {
 
               <div className="space-y-2 border-t border-gray-200 pt-4">
                 <h4 className="text-lg font-semibold text-gray-800">สรุปยอด</h4>
-                <SummaryRow
-                  label="ค่าขนส่ง"
-                  value={
-                    state.deliveryType === "DELIVERY"
-                      ? fmtTHB(Number(state.shippingCustomerPay || 0))
-                      : "รับเอง (ไม่มีค่าขนส่ง)"
-                  }
-                />
+                {editingShippingCost && state.deliveryType === "DELIVERY" ? (
+                  <div className="flex justify-between items-center py-2 gap-2">
+                    <span className="font-semibold text-gray-600 text-sm">ค่าขนส่ง</span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={tempShippingCost}
+                        onChange={(e) => setTempShippingCost(Number(e.target.value))}
+                        className="w-20 rounded-lg border border-blue-500 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      />
+                    <div className="flex flex-col  items-center gap-2">                     
+                      <button
+                        onClick={() => {
+                          dispatch({
+                            type: "SET_SHIPPING",
+                            payload: {
+                              distance: state.distance,
+                              cost: state.shippingCost,
+                              companyPay: state.shippingCompanyPay,
+                              customerPay: tempShippingCost,
+                              vehicleType: state.vehicleType,
+                              unloadHours: state.unloadHours,
+                              staffCount: state.staffCount,
+                            },
+                          });
+                          setEditingShippingCost(false);
+                        }}
+                        className="px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded hover:bg-green-700"
+                      >
+                        บันทึก
+                      </button>
+                      <button
+                        onClick={() => setEditingShippingCost(false)}
+                        className="px-2 py-1 text-xs font-semibold text-gray-700 bg-gray-200 rounded hover:bg-gray-300"
+                      >
+                        ยกเลิก
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between py-2 cursor-pointer hover:bg-blue-50 px-2 rounded transition-colors" onDoubleClick={() => {
+                    if (state.deliveryType === "DELIVERY") {
+                      setTempShippingCost(Number(state.shippingCustomerPay || 0));
+                      setEditingShippingCost(true);
+                    }
+                  }}>
+                    <span className="font-semibold text-gray-600">ค่าขนส่ง</span>
+                    <span className="font-bold text-gray-800">
+                      {state.deliveryType === "DELIVERY"
+                        ? fmtTHB(Number(state.shippingCustomerPay || 0))
+                        : "รับเอง (ไม่มีค่าขนส่ง)"}
+                    </span>
+                  </div>
+                )}
                 <SummaryRow
                   label="ราคารวมก่อนภาษี (ไม่รวม VAT)"
                   value={calculation.totals.exVatFmt || "..."}
@@ -2045,6 +2096,8 @@ function Step6_Summary({ state, dispatch }) {
           distanceKm: state.distance || "",
           unloadHours: state.unloadHours || "",
           staffCount: state.staffCount || "",
+          cost: state.shippingCost || 0, // ค่าขนส่งที่ระบบคิด
+          customerPay: state.shippingCustomerPay || 0, // ค่าขนส่งที่ user แก้ไข
         }}
         onClose={() => setShippingOpen(false)}
         onConfirm={async (data) => {
@@ -2061,9 +2114,9 @@ function Step6_Summary({ state, dispatch }) {
               type: "SET_SHIPPING",
               payload: {
                 distance: data.distanceKm,
-                cost: Number(res.data.shipping_cost || 0),
+                cost: Number(res.data.shipping_cost || 0), // ค่าขนส่งที่ระบบคิด
                 companyPay: Number(res.data.company_pay || 0),
-                customerPay: Number(res.data.customer_pay || 0),
+                customerPay: Number(data.customerPay || res.data.customer_pay || 0), // ค่าขนส่งที่ user แก้ไข
                 vehicleType: data.vehicleType,
                 unloadHours: data.unloadHours,
                 staffCount: data.staffCount,

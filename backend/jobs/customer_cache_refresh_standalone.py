@@ -156,6 +156,7 @@ class CustomerCacheRecord:
     gen_bus: Optional[str] = ""
     payment_terms: Optional[str] = ""
     customer_date: Optional[str] = ""
+    blocked: Optional[str] = ""
     accum_6m: float = 0.0
     frequency: int = 0
     sales_g_cust: float = 0.0
@@ -409,8 +410,8 @@ def upsert_customer_batch(customers: List[CustomerCacheRecord], conn: pyodbc.Con
     
     merge_sql = """
     MERGE INTO Customer AS target
-    USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) 
-        AS source (customer_code, customer_name, phone, tax_no, gen_bus, payment_terms, customer_date,
+    USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) 
+        AS source (customer_code, customer_name, phone, tax_no, gen_bus, payment_terms, customer_date, blocked,
                    accum_6m, frequency, sales_g_cust, sales_a_cust, sales_s_cust, sales_y_cust,
                    sales_c_cust, sales_e_cust, calculation_date, last_updated)
     ON target.customer_code = source.customer_code
@@ -422,6 +423,7 @@ def upsert_customer_batch(customers: List[CustomerCacheRecord], conn: pyodbc.Con
             gen_bus = source.gen_bus,
             payment_terms = source.payment_terms,
             customer_date = source.customer_date,
+            blocked = source.blocked,
             accum_6m = source.accum_6m,
             frequency = source.frequency,
             sales_g_cust = source.sales_g_cust,
@@ -433,11 +435,11 @@ def upsert_customer_batch(customers: List[CustomerCacheRecord], conn: pyodbc.Con
             calculation_date = source.calculation_date,
             last_updated = source.last_updated
     WHEN NOT MATCHED THEN
-        INSERT (customer_code, customer_name, phone, tax_no, gen_bus, payment_terms, customer_date,
+        INSERT (customer_code, customer_name, phone, tax_no, gen_bus, payment_terms, customer_date, blocked,
                 accum_6m, frequency, sales_g_cust, sales_a_cust, sales_s_cust, sales_y_cust,
                 sales_c_cust, sales_e_cust, calculation_date, last_updated)
         VALUES (source.customer_code, source.customer_name, source.phone, source.tax_no, source.gen_bus,
-                source.payment_terms, source.customer_date, source.accum_6m, source.frequency,
+                source.payment_terms, source.customer_date, source.blocked, source.accum_6m, source.frequency,
                 source.sales_g_cust, source.sales_a_cust, source.sales_s_cust, source.sales_y_cust,
                 source.sales_c_cust, source.sales_e_cust, source.calculation_date, source.last_updated);
     """
@@ -452,6 +454,7 @@ def upsert_customer_batch(customers: List[CustomerCacheRecord], conn: pyodbc.Con
                 customer.gen_bus or None,
                 customer.payment_terms or None,
                 customer.customer_date or None,
+                customer.blocked or None,
                 customer.accum_6m,
                 customer.frequency,
                 customer.sales_g_cust,
@@ -512,7 +515,7 @@ def run_customer_cache_refresh() -> JobExecutionResult:
         
         for idx, cust_data in enumerate(customers_data, 1):
             try:
-                customer_code = clean(cust_data.get("customer_code") or cust_data.get("Customer"))
+                customer_code = clean(cust_data.get("Customer_No"))
                 
                 if not customer_code:
                     logger.warning(f"  ⚠️ Skipping customer {idx}: No customer code")
@@ -524,12 +527,13 @@ def run_customer_cache_refresh() -> JobExecutionResult:
                 
                 customer_record = CustomerCacheRecord(
                     customer_code=customer_code,
-                    customer_name=clean(cust_data.get("customer_name") or cust_data.get("Name")),
-                    phone=clean(cust_data.get("phone") or cust_data.get("Tel")),
-                    tax_no=clean(cust_data.get("tax_no") or cust_data.get("Tax No.")),
-                    gen_bus=clean(cust_data.get("gen_bus") or cust_data.get("Gen Bus")),
-                    payment_terms=clean(cust_data.get("payment_terms") or cust_data.get("Payment Terms Code")),
-                    customer_date=clean(cust_data.get("customer_date") or cust_data.get("Customer Date")),
+                    customer_name=clean(cust_data.get("Name")),
+                    phone=clean(cust_data.get("Phone_No")),
+                    tax_no=clean(cust_data.get("VAT_Registration_No")),
+                    gen_bus=clean(cust_data.get("Gen_Bus_Posting_Group")),
+                    payment_terms=clean(cust_data.get("Payment_Terms_Code")),
+                    customer_date=clean(cust_data.get("Customer_Date")),
+                    blocked=clean(cust_data.get("Blocked")),
                     **analytics,
                     calculation_date=calculation_date
                 )

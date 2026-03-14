@@ -164,3 +164,44 @@ async def upload_prices(
                 logger.debug(f"Removed temporary file: {temp_path}")
         except Exception as e:
             logger.warning(f"Failed to remove temporary file: {str(e)}")
+
+
+
+# =====================================================
+# EMPLOYEE ACCESS CONTROL ENDPOINTS
+# =====================================================
+
+class EmployeeAccessResponse(BaseModel):
+    """Response for employee access control"""
+    allowed_price_update_employees: list[str]
+    allowed_project_price_employees: list[str]
+
+
+@router.get("/employee-access", response_model=EmployeeAccessResponse)
+def get_employee_access():
+    """
+    Get employee access control lists from environment variables.
+    
+    Returns:
+        EmployeeAccessResponse with lists of allowed employee IDs
+    """
+    # Get from environment variables
+    price_update_str = os.getenv("ALLOWED_PRICE_UPDATE_EMPLOYEES", "")
+    project_price_str = os.getenv("ALLOWED_PROJECT_PRICE_EMPLOYEES", "")
+    
+    # Debug log
+    logger.info(f"🔍 Raw ALLOWED_PRICE_UPDATE_EMPLOYEES: {price_update_str}")
+    logger.info(f"🔍 Raw ALLOWED_PROJECT_PRICE_EMPLOYEES: {project_price_str}")
+    
+    # Parse comma-separated strings into lists
+    price_update_employees = [e.strip() for e in price_update_str.split(",") if e.strip()]
+    project_price_employees = [e.strip() for e in project_price_str.split(",") if e.strip()]
+    
+    logger.info(f"✅ Retrieved employee access: {len(price_update_employees)} price update, {len(project_price_employees)} project price")
+    logger.info(f"✅ Price Update: {price_update_employees}")
+    logger.info(f"✅ Project Price: {project_price_employees}")
+    
+    return EmployeeAccessResponse(
+        allowed_price_update_employees=price_update_employees,
+        allowed_project_price_employees=project_price_employees
+    )

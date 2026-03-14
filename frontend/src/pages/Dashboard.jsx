@@ -7,18 +7,14 @@ import Navbar from "../components/Navbar";
 import GlassSemiSizeModal from "../components/wizard/GlassSemiSizeModal.jsx";
 import api from "../services/api";
 
-// รหัสพนักงานที่มีสิทธิ์เข้าถึงหน้า "เพิ่ม/อัปเดตราคา"
-const ALLOWED_PRICE_UPDATE_EMPLOYEES = ['90038', '20061', '11186', '21702', '21367'];
-
-// รหัสพนักงานที่มีสิทธิ์เข้าถึงหน้า "ราคาโครงการ"
-const ALLOWED_PROJECT_PRICE_EMPLOYEES = ['90038', '20061', '11186', '21702', '21367'];
-
 // --- คอมโพเนนต์หลัก ---
 function Dashboard() {
   const { employee } = useAuth();
   const { dispatch } = useQuote();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState("");
+  const [allowedPriceUpdateEmployees, setAllowedPriceUpdateEmployees] = useState([]);
+  const [allowedProjectPriceEmployees, setAllowedProjectPriceEmployees] = useState([]);
 
   // โหลดวันที่ปัจจุบัน (ภาษาไทย)
   useEffect(() => {
@@ -36,6 +32,24 @@ function Dashboard() {
       .toLocaleDateString("th-TH", { year: "numeric", timeZone: "Asia/Bangkok" })
       .split(" ")[0];
     setCurrentDate(thaiDate.replace(year, ` พ.ศ. ${year}`));
+  }, []);
+
+  // โหลดสิทธิ์พนักงานจาก backend
+  useEffect(() => {
+    const fetchEmployeeAccess = async () => {
+      try {
+        const res = await api.get("/api/admin/employee-access");
+        console.log("🔍 Employee Access from API:", res.data);
+        setAllowedPriceUpdateEmployees(res.data.allowed_price_update_employees);
+        setAllowedProjectPriceEmployees(res.data.allowed_project_price_employees);
+        console.log("✅ Price Update Employees:", res.data.allowed_price_update_employees);
+        console.log("✅ Project Price Employees:", res.data.allowed_project_price_employees);
+      } catch (err) {
+        console.error("Failed to fetch employee access:", err);
+        // ใช้ค่า default ถ้า fetch ล้มเหลว
+      }
+    };
+    fetchEmployeeAccess();
   }, []);
 
   const handleCreateQuote = () => {
@@ -194,7 +208,11 @@ function Dashboard() {
         </div>
         <div className="mt-6 ">
           {/* Update Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
-          {ALLOWED_PRICE_UPDATE_EMPLOYEES.includes(employee?.id) && (
+          {(() => {
+            const showPriceUpdate = allowedPriceUpdateEmployees.includes(employee?.id);
+            console.log("🔍 Show Price Update?", showPriceUpdate, "Employee ID:", employee?.id, "Allowed:", allowedPriceUpdateEmployees);
+            return showPriceUpdate;
+          })() && (
             <div
               className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg"
               onClick={() => navigate("/update-price")}
@@ -206,7 +224,11 @@ function Dashboard() {
           )}
 
           {/* Project Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
-          {ALLOWED_PROJECT_PRICE_EMPLOYEES.includes(employee?.id) && (
+          {(() => {
+            const showProjectPrice = allowedProjectPriceEmployees.includes(employee?.id);
+            console.log("🔍 Show Project Price?", showProjectPrice, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees);
+            return showProjectPrice;
+          })() && (
             <div
               className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#dd8901] hover:bg-[#cd7905] p-8 text-white shadow-lg mt-6"
               onClick={() => navigate("/project-price")}

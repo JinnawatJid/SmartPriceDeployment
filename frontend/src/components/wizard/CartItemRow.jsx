@@ -266,27 +266,8 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                   ราคาโครงการ
                 </span>
               )}
-              
-              {/* ⭐ แสดงว่าใช้ราคาประวัติ */}
-              {(calculatedItem?.priceSource === 'history' || calculatedItem?.price_source === 'history') && (
-                <span className="text-[9px] text-orange-600 font-semibold bg-orange-50 px-1 py-0.5 rounded">
-                  ราคาประวัติ
-                </span>
-              )}
-              
-              {/* ⭐ แสดงว่าใช้ราคาระบบ */}
-              {(calculatedItem?.priceSource === 'system' || calculatedItem?.price_source === 'system') && (
-                <span className="text-[9px] text-blue-600 font-semibold bg-blue-50 px-1 py-0.5 rounded">
-                  ราคาระบบ
-                </span>
-              )}
-              
-              {/* ⭐ แสดงว่าเป็นราคาที่แก้ไขแล้ว */}
-              {item.priceSource === 'manual' && (
-                <span className="text-[9px] text-purple-600 font-semibold bg-purple-50 px-1 py-0.5 rounded">
-                  ✏️ แก้ไขแล้ว
-                </span>
-              )}
+  
+             
             </div>
 
             {/* ปุ่มดูประวัติ ชิดขวา */}
