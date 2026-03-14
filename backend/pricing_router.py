@@ -25,6 +25,7 @@ class CartItem(BaseModel):
     name: str
     price: float | None = None
     sqft_sheet: float | None = None
+    isSoldByPack: bool = False  # ⭐ flag เพื่อบอก backend ว่าต้องคิดราคาแบบสินค้าปกติ
     
     pkg_size: float | None = None
     cost: float | None = None
@@ -139,11 +140,28 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
 
     # Cart → DataFrame
     df_calc = pd.DataFrame([item.model_dump() for item in req.cart])
+    
+    # ⭐ Debug: แสดงข้อมูลที่ได้รับจาก frontend
+    print("\n" + "="*80)
+    print("🔍 DEBUG: Cart items received from frontend")
+    print("="*80)
+    for idx, item in enumerate(req.cart):
+        if item.category == "G":
+            print(f"Item {idx}: SKU={item.sku}, isSoldByPack={item.isSoldByPack}, sqft_sheet={item.sqft_sheet}")
+    print("="*80 + "\n")
 
     df_calc["Pieces"] = pd.to_numeric(df_calc["qty"], errors="coerce").fillna(0)
 
     # sqft_sheet (จาก FE) = ตารางฟุตต่อแผ่น (ถ้าไม่มีให้เป็น 0)
     df_calc["Sqft_Sheet"] = pd.to_numeric(df_calc.get("sqft_sheet", 0), errors="coerce").fillna(0)
+    
+    # isSoldByPack flag
+    df_calc["isSoldByPack"] = df_calc.get("isSoldByPack", False).fillna(False).astype(bool)
+    
+    # ⭐ Debug log
+    print("\n=== DEBUG: DataFrame after processing ===")
+    print(df_calc[["sku", "isSoldByPack", "Pieces", "Sqft_Sheet"]])
+    print("=== END DEBUG ===\n")
 
 
     # Category from SKU
@@ -155,9 +173,18 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     
     df_calc["Quantity"] = np.where(
         df_calc["category"].astype(str).str.upper() == "G",
-        df_calc["Pieces"] * df_calc["Sqft_Sheet"],   # ✅ กระจก: sqft รวม
-        df_calc["Pieces"]                            # ✅ อื่น ๆ: ชิ้น/เส้น
+        np.where(
+            df_calc["isSoldByPack"],              # ⭐ ถ้าขายยกแพ็ก
+            df_calc["Pieces"],                    # ⭐ ไม่คูณ sqft
+            df_calc["Pieces"] * df_calc["Sqft_Sheet"]  # ⭐ ปกติคูณ sqft
+        ),
+        df_calc["Pieces"]                        # ✅ อื่น ๆ: ชิ้น/เส้น
     )
+    
+    # ⭐ Debug: แสดง Quantity ที่คำนวณได้
+    print("\n=== DEBUG: Quantity calculation ===")
+    print(df_calc[["sku", "category", "isSoldByPack", "Pieces", "Sqft_Sheet", "Quantity"]])
+    print("=== END DEBUG ===\n")
 
 
     # Attach customer data
@@ -318,15 +345,24 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         # ใช้ราคา R2 โดยตรง
         df_calc["NewPrice"] = pd.to_numeric(df_calc["priceR2"], errors="coerce").fillna(0)
 
-        # ราคาต่อเส้น (Aluminium)
-        df_calc["UnitPrice"] = df_calc.apply(
-            lambda r: round_up_050(
-                float(r["NewPrice"]) * float(r.get("product_weight", 0) or 0)
-                if str(r.get("category","")).upper() == "A"
-                else float(r["NewPrice"])
-            ),
-            axis=1
-        )
+        # ราคาต่อเส้น (Aluminium) / ราคาต่อหน่วย (อื่นๆ)
+        def _compute_unit_price_default(r):
+            category = str(r.get("category", "")).upper()
+            is_sold_by_pack = bool(r.get("isSoldByPack", False))
+            
+            if category == "A":
+                # อลูมิเนียม: คูณน้ำหนัก
+                raw = float(r["NewPrice"]) * float(r.get("product_weight", 0) or 0)
+            elif category == "G" and is_sold_by_pack:
+                # ⭐ กระจกขายยกแพ็ก: ใช้ NewPrice โดยตรง
+                raw = float(r["NewPrice"])
+            else:
+                # อื่นๆ: ใช้ NewPrice โดยตรง
+                raw = float(r["NewPrice"])
+            
+            return round_up_050(raw)
+        
+        df_calc["UnitPrice"] = df_calc.apply(_compute_unit_price_default, axis=1)
 
 
         df_calc["LineTotal"] = df_calc["UnitPrice"] * df_calc["Quantity"]
@@ -367,6 +403,20 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
 
         results = []
         for _, row in df_calc.iterrows():
+            is_glass = str(row.get("category", "")).upper() == "G"
+            is_sold_by_pack = bool(row.get("isSoldByPack", False))  # ⭐ เช็ค flag
+            
+            # ⭐ สำหรับกระจก:
+            # - ถ้าขายยกแพ็ก: ใช้ UnitPrice โดยตรง
+            # - ถ้าปกติ: คูณ sqft
+            price_per_sheet = (
+                row["UnitPrice"]  # ⭐ ขายยกแพ็ก
+                if is_glass and is_sold_by_pack
+                else round(row["UnitPrice"] * row.get("Sqft_Sheet", 0), 2)
+                if is_glass
+                else row["UnitPrice"]
+            )
+            
             results.append({
                 "sku": row["sku"],
                 "name": row.get("name"),
@@ -374,12 +424,13 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                 "sqft_sheet": row.get("Sqft_Sheet", 0),
                 "unit": row.get("unit", ""),
                 "UnitPrice": row["UnitPrice"],
-                "price_per_sheet": round(row["UnitPrice"] * row.get("Sqft_Sheet", 0), 2) if str(row.get("category", "")).upper() == "G" else row["UnitPrice"],
+                "price_per_sheet": price_per_sheet,
                 "_LineTotal": row["LineTotal"],
                 "_Tier_Z": 0,
                 "product_weight": float(row.get("product_weight", 0) or 0),
                 "priceW1": float(row.get("priceW1", 0) or 0),
                 "priceSource": row.get("price_source", "system"),
+                "isSoldByPack": is_sold_by_pack,  # ⭐ เพิ่ม flag
             })
 
 
@@ -673,12 +724,16 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     def _compute_unit_price(row):
         category = str(row.get("category", "")).upper()
         is_project_price = row.get("price_source") == "project"
+        is_sold_by_pack = bool(row.get("isSoldByPack", False))  # ⭐ เช็ค flag
         
         if category == "A":
             # อลูมิเนียม: คูณน้ำหนัก
             raw = float(row["NewPrice"]) * float(row.get("product_weight", 0) or 0)
+        elif category == "G" and is_sold_by_pack:
+            # ⭐ กระจกขายยกแพ็ก: ใช้ NewPrice โดยตรง (ไม่คูณ sqft)
+            raw = float(row["NewPrice"])
         else:
-            # อื่นๆ (รวมกระจก): ใช้ NewPrice โดยตรง
+            # อื่นๆ (รวมกระจกปกติ): ใช้ NewPrice โดยตรง
             raw = float(row["NewPrice"])
         
         # ราคาโครงการไม่ต้องปัดเศษ ใช้ราคาเป๊ะๆ
@@ -690,6 +745,11 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     df_price["UnitPrice"] = df_price.apply(_compute_unit_price, axis=1)
 
     df_price["_LineTotal"] = df_price["UnitPrice"] * df_price["Quantity"]
+
+    # ⭐ Debug: แสดง Quantity, UnitPrice, _LineTotal
+    print("\n=== DEBUG: LineTotal calculation ===")
+    print(df_price[["sku", "isSoldByPack", "Quantity", "UnitPrice", "_LineTotal"]])
+    print("=== END DEBUG ===\n")
 
     _safe_print_df(df_price, ["sku", "NewPrice", "_LineTotal"], "AFTER PRICE CALC")
 
@@ -732,11 +792,16 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     for _, row in df_price.iterrows():
         
         is_glass = str(row.get("category", "")).upper() == "G"
+        is_sold_by_pack = bool(row.get("isSoldByPack", False))  # ⭐ เช็ค flag
 
-        # สำหรับกระจก: UnitPrice เป็นราคาต่อตารางฟุต ต้องคูณ sqft เพื่อได้ราคาต่อแผ่น
+        # สำหรับกระจก: 
+        # - ถ้าขายยกแพ็ก: ใช้ UnitPrice โดยตรง (ไม่คูณ sqft)
+        # - ถ้าปกติ: UnitPrice เป็นราคาต่อตารางฟุต ต้องคูณ sqft เพื่อได้ราคาต่อแผ่น
         # สำหรับสินค้าอื่นๆ: ใช้ UnitPrice โดยตรง
         price_per_sheet = (
-            round(row["UnitPrice"] * row.get("Sqft_Sheet", 0), 2)
+            row["UnitPrice"]  # ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+            if is_glass and is_sold_by_pack
+            else round(row["UnitPrice"] * row.get("Sqft_Sheet", 0), 2)
             if is_glass
             else row["UnitPrice"]
         )
@@ -756,6 +821,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             "last_purchase_date": row.get("last_purchase_date"),
             "last_purchase_qty": row.get("last_purchase_qty"),
             "priceW1": float(row.get("priceW1", 0) or 0),
+            "isSoldByPack": bool(row.get("isSoldByPack", False)),  # ⭐ เพิ่ม flag
         })
 
     print(

@@ -130,6 +130,9 @@ function quoteReducer(state, action) {
         
         // ⭐ เก็บข้อมูล stock
         stock: newItem.stock ?? null,
+        
+        // ⭐ เก็บ flag isSoldByPack
+        isSoldByPack: newItem.isSoldByPack ?? false,
       };
 
       // 2) หา item ซ้ำ “ต้อง match ด้วย sku + variantCode + sqft”
@@ -218,7 +221,12 @@ function quoteReducer(state, action) {
           // ⭐ CASE 1: ปรับ qty จาก CartItemRow
           // =================================================
           if (from === "cart") {
-            const displayUnitPrice = isGlass
+            const isSoldByPack = it.isSoldByPack || false;  // ⭐ เช็ค flag
+            
+            // ⭐ สำหรับกระจกที่ขายยกแพ็ก ใช้ UnitPrice แทน price_per_sheet
+            const displayUnitPrice = isGlass && isSoldByPack
+              ? Number(it.UnitPrice ?? it.price ?? 0)
+              : isGlass
               ? Number(it.price_per_sheet ?? 0)
               : Number(it.price ?? 0);
 

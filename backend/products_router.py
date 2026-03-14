@@ -1258,6 +1258,7 @@ def get_glass_list(
             im.Variant_Mandatory,
             im.Product_Group,
             im.Product_Sub_Group,
+            im.Base_Unit_of_Measure,
             ip.R1,
             ip.R2,
             ip.W1,
@@ -1321,11 +1322,12 @@ def get_glass_list(
             "height": parsed["height"],
             "product_group": row[4],
             "product_sub_group": row[5],
+            "unit": row[6] or "แผ่น",  # ⭐ เพิ่ม Base_Unit_of_Measure
             "prices": {
-                "R1": float(row[6]) if row[6] is not None else 0,
-                "R2": float(row[7]) if row[7] is not None else 0,
-                "W1": float(row[8]) if row[8] is not None else 0,
-                "W2": float(row[9]) if row[9] is not None else 0,
+                "R1": float(row[7]) if row[7] is not None else 0,
+                "R2": float(row[8]) if row[8] is not None else 0,
+                "W1": float(row[9]) if row[9] is not None else 0,
+                "W2": float(row[10]) if row[10] is not None else 0,
             }
         })
     

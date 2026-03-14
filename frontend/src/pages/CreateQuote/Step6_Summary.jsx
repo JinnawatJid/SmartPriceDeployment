@@ -289,7 +289,7 @@ function Step6_Summary({ state, dispatch }) {
               category: it.category,
               unit: it.unit ?? "",
               product_weight: it.product_weight ?? 0,
-              // ⭐ ลบ relevantSales ออก - ให้ backend คำนวณเองจาก product_group
+              isSoldByPack: it.isSoldByPack ?? false,
             })),
           });
 
@@ -399,8 +399,8 @@ function Step6_Summary({ state, dispatch }) {
             pkg_size: Number(it.pkg_size ?? 1),
             category: it.category,
             unit: it.unit ?? "",
+            isSoldByPack: it.isSoldByPack ?? false,
             DeliveryType: state.deliveryType,
-            // ⭐ ลบ relevantSales ออก - ให้ backend คำนวณเองจาก product_group
           })),
         });
 
@@ -898,6 +898,17 @@ function Step6_Summary({ state, dispatch }) {
       }
 
       // not manual → ใช้ pricing ถ้ามี
+      const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
+      const isGlass = cat === "G";
+      const isSoldByPack = it.isSoldByPack || false;
+      
+      // ⭐ สำหรับกระจกขายยกแพ็ก: คำนวณใหม่
+      if (isGlass && isSoldByPack) {
+        const qty = Number(it.qty ?? 0);
+        const unitPrice = Number(priced?.UnitPrice ?? it.UnitPrice ?? it.price ?? 0);
+        return sum + unitPrice * qty;
+      }
+      
       const lt = Number(priced?._LineTotal ?? priced?.lineTotal ?? it.lineTotal ?? 0);
       if (lt > 0) return sum + lt;
 
@@ -1294,6 +1305,7 @@ function Step6_Summary({ state, dispatch }) {
         category: item.category,
         unit: item.unit,
         product_weight: item.product_weight,
+        isSoldByPack: item.isSoldByPack ?? false, // ⭐ เพิ่ม flag สำหรับขายยกแพ็ก
       };
     });
   };
@@ -1495,11 +1507,17 @@ function Step6_Summary({ state, dispatch }) {
           original?.unit || // จาก cart
           "-";
         const isGlass = (original.category || it.category) === "G";
+        const isSoldByPack = original?.isSoldByPack || false; // ⭐ เช็ค flag ขายยกแพ็ก
 
+        // ⭐ สำหรับกระจกที่ขายยกแพ็ก ใช้ UnitPrice แทน price_per_sheet
         const price = Number(
           original?.priceSource === "manual"
-            ? original.price_per_sheet ?? original.price ?? original.UnitPrice ?? 0
-            : it.price_per_sheet ?? it.UnitPrice ?? it.price ?? original?.price ?? 0
+            ? (isGlass && isSoldByPack)
+              ? original.UnitPrice ?? original.price ?? 0  // ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+              : original.price_per_sheet ?? original.price ?? original.UnitPrice ?? 0
+            : (isGlass && isSoldByPack)
+              ? it.UnitPrice ?? it.price ?? original?.price ?? 0  // ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+              : it.price_per_sheet ?? it.UnitPrice ?? it.price ?? original?.price ?? 0
         );
 
 

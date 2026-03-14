@@ -69,6 +69,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   const [qtyCustomer, setQtyCustomer] = useState(1);
   const [qtySku, setQtySku] = useState(1);
   const [priceMode, setPriceMode] = useState("actual");
+  const [isSoldByPack, setIsSoldByPack] = useState(false); // ⭐ checkbox ขายยกแพ็ก
 
   // ⭐ MULTI-SELECT STATE
   const [selectedItems, setSelectedItems] = useState([]);
@@ -271,6 +272,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       setSelectedItems([]); // ⭐ รีเซ็ตรายการที่เลือก
       setUnitW("inch");
       setUnitH("inch");
+      setIsSoldByPack(false); // ⭐ รีเซ็ต checkbox
     }
   }, [open]);
 
@@ -389,9 +391,9 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
 
       // --- quantity / area ---
       qty: Number(qtyCustomer), // จำนวนแผ่น
-      sqft_sheet: Number(sqftPerPiece),
+      sqft_sheet: Number(sqftPerPiece), // ⭐ เก็บ sqft_sheet ตามปกติ
       skuSqft,
-      unit: "แผ่น",
+      unit: selectedItem.unit || "แผ่น", // ⭐ ใช้หน่วยจาก Item_Master
 
       // --- cut / variant meta ---
       variantCode: autoVariantCode,
@@ -403,6 +405,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
       // --- flags ---
       priceMode,
       isDraftItem: false,
+      isSoldByPack, // ⭐ เพิ่ม flag เพื่อบอก backend ว่าต้องคิดราคาแบบสินค้าปกติ
     };
 
     // 6) เพิ่มลงรายการ
@@ -659,11 +662,25 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
                   setHeight("");
                   setQtyCustomer(1);
                   setCalcResult(null);
+                  setIsSoldByPack(false);
                 }}
                 className="text-xs px-2 py-1 border rounded hover:bg-white"
               >
                 เปลี่ยน SKU
               </button>
+            </div>
+
+            {/* ⭐ CHECKBOX: ขายยกแพ็ก/แผ่น */}
+            <div className="mb-3 p-2 bg-white rounded border border-blue-200">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isSoldByPack}
+                  onChange={(e) => setIsSoldByPack(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="font-medium">ขายยกแพ็ก/แผ่น (คิดราคาแบบสินค้าปกติ)</span>
+              </label>
             </div>
 
             {/* ⭐ แสดง Variant Code ที่จะถูกสร้าง */}
@@ -747,7 +764,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
         {selectedItem && !isVariant && (
           <div className="border rounded p-3 mb-3 bg-green-50">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold text-green-900">
+              <h3 className="font-semibold text-red-600">
                 กำลังเลือก: {selectedItem.description}
               </h3>
               <button
@@ -755,12 +772,27 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
                   setSelectedItem(null);
                   setQtyCustomer(1);
                   setCalcResult(null);
+                  setIsSoldByPack(false);
                 }}
                 className="text-xs px-2 py-1 border rounded hover:bg-white"
               >
                 เปลี่ยน SKU
               </button>
             </div>
+
+            {/* ⭐ CHECKBOX: ขายยกแพ็ก/แผ่น */}
+            <div className="mb-3 p-2 bg-green-50 rounded ">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isSoldByPack}
+                  onChange={(e) => setIsSoldByPack(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="font-medium text-lg">ขายยกแพ็ก/แผ่น (คิดราคาแบบสินค้าปกติ)</span>
+              </label>
+            </div>
+
             <div>
               <label className="text-sm font-medium">จำนวนแผ่น</label>
               <input

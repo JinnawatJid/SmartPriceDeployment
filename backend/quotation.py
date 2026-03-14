@@ -142,6 +142,7 @@ def _build_line_from_payload(item: dict) -> dict:
     qty = float(item.get("qty", 0) or 0)
     price = float(item.get("price", 0) or 0)
     sqft_sheet = float(item.get("sqft_sheet", 0) or 0)
+    is_sold_by_pack = item.get("isSoldByPack", False)  # ⭐ เพิ่ม flag
 
     if qty < 0:
         qty = 0
@@ -150,7 +151,11 @@ def _build_line_from_payload(item: dict) -> dict:
         line_total = float(item.get("lineTotal") or 0)
     else:
         if str(category).upper() == "G":
-            line_total = round(price * sqft_sheet * qty, 2)
+            # ⭐ ถ้าขายยกแพ็ก ไม่คูณ sqft
+            if is_sold_by_pack:
+                line_total = round(price * qty, 2)
+            else:
+                line_total = round(price * sqft_sheet * qty, 2)
         else:
             line_total = round(price * qty, 2)
 
@@ -168,7 +173,8 @@ def _build_line_from_payload(item: dict) -> dict:
         "VariantCode": item.get("variantCode", ""),
         "ProductWeight": float(item.get("product_weight", 0) or 0),
         "CutInfoJson": json.dumps(item.get("cutInfo", "")),
-        "Remark": item.get("remark", "")
+        "Remark": item.get("remark", ""),
+        "IsSoldByPack": "Y" if is_sold_by_pack else "N"  # ⭐ เพิ่ม flag
     }
 
 
@@ -250,15 +256,16 @@ def create_quotation(payload: dict = Body(...)):
                 QuoteID, ItemCode, ItemName, Category,
                 Unit, Quantity,Price_System, UnitPrice, TotalPrice,
                 IsGlassCut, CutInfoJson, Remark,
-                Sqft_Sheet, VariantCode, ProductWeight
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                Sqft_Sheet, VariantCode, ProductWeight, IsSoldByPack
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             quote_no,
             line["ItemCode"], line["ItemName"], line["Category"],
             line["Unit"], line["Quantity"],line["Price_System"], line["UnitPrice"],
             line["TotalPrice"], line["IsGlassCut"],
             line["CutInfoJson"], line["Remark"],
-            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"]
+            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"],
+            line.get("IsSoldByPack", "N")  # ⭐ เพิ่ม flag
         ))
 
         lines_to_excel.append(line)
@@ -381,15 +388,16 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
                 QuoteID, ItemCode, ItemName, Category,
                 Unit, Quantity,Price_System, UnitPrice, TotalPrice,
                 IsGlassCut, CutInfoJson, Remark,
-                Sqft_Sheet, VariantCode, ProductWeight
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                Sqft_Sheet, VariantCode, ProductWeight, IsSoldByPack
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             quote_no,
             line["ItemCode"], line["ItemName"], line["Category"],
             line["Unit"], line["Quantity"],line["Price_System"], line["UnitPrice"],
             line["TotalPrice"], line["IsGlassCut"],
             line["CutInfoJson"], line["Remark"],
-            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"]
+            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"],
+            line.get("IsSoldByPack", "N")  # ⭐ เพิ่ม flag
         ))
 
         lines_to_excel.append(line)
@@ -467,6 +475,7 @@ def list_quotations(
                 "sqft_sheet": ln.get("Sqft_Sheet") or 0,
                 "product_weight": ln.get("ProductWeight") or 0,
                 "variantCode": ln.get("VariantCode", ""),
+                "isSoldByPack": ln.get("IsSoldByPack") == "Y",  # ⭐ เพิ่ม flag
             }
             for ln in lines
         ]
@@ -528,6 +537,7 @@ def get_quotation(quote_no: str):
                 "Price_System": ln.get("Price_System", 0),
                 "product_weight": ln.get("ProductWeight", 0),
                 "variantCode": ln.get("VariantCode", ""),
+                "isSoldByPack": ln.get("IsSoldByPack") == "Y",  # ⭐ เพิ่ม flag
             }
             for ln in lines
         ]

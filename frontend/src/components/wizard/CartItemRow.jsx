@@ -46,26 +46,34 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
   // ✅ unit price to display
   // - glass: show บาท/แผ่น (price_per_sheet)
   // - others: show บาท/หน่วย (UnitPrice/price)
+  // ⭐ ถ้าขายยกแพ็ก ไม่คูณ sqft
   const displayUnitPrice =
     item.priceSource === "manual"
       ? isGlass
-        ? Number(
-            item.price_per_sheet ??
-              Number(item.UnitPrice ?? 0) * Number(item.sqft_sheet ?? item.sqft ?? 0)
-          )
+        ? item.isSoldByPack
+          ? Number(item.UnitPrice ?? item.price ?? 0) // ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+          : Number(
+              item.price_per_sheet ??
+                Number(item.UnitPrice ?? 0) * Number(item.sqft_sheet ?? item.sqft ?? 0)
+            )
         : Number(item.UnitPrice ?? item.price ?? 0)
       : Number(
           (isGlass
-            ? calculatedItem?.price_per_sheet ?? item.price_per_sheet
+            ? item.isSoldByPack
+              ? calculatedItem?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0 // ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+              : calculatedItem?.price_per_sheet ?? item.price_per_sheet
             : calculatedItem?.UnitPrice ?? item.UnitPrice ?? item.price) ?? 0
         );
 
   // ✅ line total
   // - manual: trust item.lineTotal (set by reducer) else fallback compute
   // - non-manual: prefer pricing _LineTotal
+  // ⭐ สำหรับกระจกขายยกแพ็ก: คำนวณใหม่เพื่อให้แน่ใจว่าถูกต้อง
   const displayLineTotal =
     item.priceSource === "manual"
       ? Number(item.lineTotal ?? displayUnitPrice * Number(item.qty || 0))
+      : isGlass && item.isSoldByPack
+      ? displayUnitPrice * Number(item.qty || 0)  // ⭐ ขายยกแพ็ก: คำนวณใหม่
       : Number(
           calculatedItem?._LineTotal ??
             item.lineTotal ??
@@ -192,6 +200,13 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                         {item.name}
                       </p>
                       <p className="text-xs text-gray-500">{item.sku}</p>
+                      
+                      {/* ⭐ แสดง flag ขายยกแพ็ก */}
+                      {item.isSoldByPack && item.category === "G" && (
+                        <div className="mt-1 text-xs bg-orange-50 border border-orange-200 rounded px-2 py-1 text-orange-700 font-medium">
+                          📦 ขายยกแพ็ก/แผ่น
+                        </div>
+                      )}
                       
                       {/* แสดงสต๊อก */}
                       {item.stock && (

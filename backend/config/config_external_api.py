@@ -72,10 +72,26 @@ EMP_API_HEADERS = {
 }
 
 
+# =========================
+# Item Cost API (D365)
+# =========================
+ITEMCOST_API_URL = os.getenv(
+    "ITEMCOST_API_URL",
+    "http://192.192.0.37:8280/silver_itemcostbylocation_dx/1.0.0",
+)
+ITEM_COST_API_KEY = os.getenv("ITEM_COST_API_KEY", "").strip()
+
+ITEMCOST_API_HEADERS = {
+    "apikey": ITEM_COST_API_KEY,
+    "Content-Type": "application/json",
+}
+
+
 print("BASE_URL =", BASE_URL)
 print("CUSTOMER_API_KEY LOADED =", bool(CUSTOMER_API_KEY))
 print("INVOICE_API_KEY LOADED =", bool(INVOICE_API_KEY))
 print("CREDIT_API_KEY LOADED =", bool(CREDIT_API_KEY))
 print("EMP_API_KEY LOADED =", bool(EMP_API_KEY))
+print("ITEM_COST_API_KEY LOADED =", bool(ITEM_COST_API_KEY))
 print("CUSTOMER API HEADERS =", CUSTOMER_API_HEADERS)
 

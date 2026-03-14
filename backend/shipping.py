@@ -1,10 +1,16 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 import pandas as pd
 import math
+import requests
+import logging
 
 from config.db_mssql import get_mssql_conn   # ✅ FIX
+from config.config_external_api import ITEMCOST_API_URL, ITEMCOST_API_HEADERS
+from auth_dependency import get_branch_code
+
+logger = logging.getLogger(__name__)
 
 
 # =====================================================
@@ -53,6 +59,7 @@ class CartLine(BaseModel):
     category: Optional[str] = None
     product_weight: Optional[float] = 0
     sqft_sheet: Optional[float] = 0
+    isSoldByPack: Optional[bool] = False
 
 
 class ShippingFromCartRequest(BaseModel):
@@ -60,11 +67,66 @@ class ShippingFromCartRequest(BaseModel):
     distance_km: float
     unload_hours: float
     staff_count: int
+    location_code: str = ""  # ⭐ เพิ่มเพื่อดึงต้นทุนจาก API
     cart: List[CartLine]
 
 
 def round_shipping_baht(x: float) -> int:
     return int(math.floor(x))
+
+
+# =====================================================
+# 🔧 FIX: FETCH ITEM COST FROM API
+# =====================================================
+
+def fetch_item_cost_from_api(item_no: str, location_code: str) -> Optional[float]:
+    """
+    ดึงต้นทุนสินค้าจาก ITEMCOST API (POST)
+    
+    Args:
+        item_no: หมายเลขสินค้า (SKU)
+        location_code: รหัสสาขา
+    
+    Returns:
+        Unit_Cost หรือ None ถ้าไม่พบ
+    """
+    try:
+        url = ITEMCOST_API_URL
+        payload = {
+            "Item_No": {"$eq": item_no},
+            "Location_Code": {"$eq": location_code}
+        }
+        
+        response = requests.post(
+            url,
+            json=payload,
+            headers=ITEMCOST_API_HEADERS,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            # API ส่งกลับ dict ที่มี "data" หรือ "value" key
+            if isinstance(data, dict):
+                items = data.get("data") or data.get("value") or []
+            elif isinstance(data, list):
+                items = data
+            else:
+                items = []
+            
+            # ดึง Unit_Cost จาก item แรก
+            if items and len(items) > 0:
+                return float(items[0].get("Unit_Cost", 0))
+        
+        logger.warning(f"Failed to fetch cost for {item_no} at {location_code}: {response.status_code} - {response.text}")
+        return None
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API request error for {item_no}: {e}")
+        return None
+    except (ValueError, KeyError, TypeError) as e:
+        logger.error(f"Error parsing API response for {item_no}: {e}")
+        return None
 
 
 # =====================================================
@@ -97,7 +159,7 @@ def load_items_by_skus(skus: list[str]) -> pd.DataFrame:
 # CORE: คำนวณ profit จาก Cart
 # =====================================================
 
-def compute_profit_from_cart(cart: List[CartLine]):
+def compute_profit_from_cart(cart: List[CartLine], location_code: str = ""):
     if not cart:
         return 0.0, False
 
@@ -112,12 +174,16 @@ def compute_profit_from_cart(cart: List[CartLine]):
         df_cart.get("sqft_sheet", 0), errors="coerce"
     ).fillna(0)
 
-    # ✅ FIX: โหลด cost และ product_weight เฉพาะ SKU ใน cart
+    # ✅ FIX: โหลด product_weight เฉพาะ SKU ใน cart
     cart_skus = df_cart["sku"].dropna().astype(str).unique().tolist()
     df_items = load_items_by_skus(cart_skus)
 
     df = df_cart.merge(df_items, on="sku", how="left")
-    df["cost"] = pd.to_numeric(df.get("RE"), errors="coerce").fillna(0)
+    
+    # ⭐ ดึงต้นทุนจาก API แทนคอลัมน์ RE
+    df["cost"] = df["sku"].apply(
+        lambda sku: fetch_item_cost_from_api(str(sku), location_code) or 0
+    )
     
     # ⭐ ใช้ Product_Weight จาก Item_Master ถ้ามี (ถ้าไม่มีใช้จาก cart)
     df["product_weight"] = pd.to_numeric(
@@ -144,6 +210,12 @@ def compute_profit_from_cart(cart: List[CartLine]):
 
         if category == "G":
             sqft = row["sqft_sheet"]
+            is_sold_by_pack = row.get("isSoldByPack", False)  # ⭐ เพิ่ม flag
+            
+            # ⭐ ถ้าขายยกแพ็ก ไม่คูณ sqft
+            if is_sold_by_pack:
+                return (row["price"] - cost) * row["qty"]
+            
             if sqft <= 0:
                 has_missing_cost = True
                 return 0
@@ -244,9 +316,14 @@ def calculate_shipping(data: ShippingRequest):
 # =====================================================
 
 @router.post("/calculate_from_cart")
-def calculate_shipping_from_cart(data: ShippingFromCartRequest):
+def calculate_shipping_from_cart(
+    data: ShippingFromCartRequest,
+    branch_code: str = Depends(get_branch_code)
+):
+    # ⭐ ใช้ branch_code จาก JWT token หรือ location_code จาก request
+    location_code = data.location_code or branch_code
 
-    profit, has_missing_cost = compute_profit_from_cart(data.cart)
+    profit, has_missing_cost = compute_profit_from_cart(data.cart, location_code)
 
     result = _calculate_shipping_cost(
         vehicle_type=data.vehicle_type,
