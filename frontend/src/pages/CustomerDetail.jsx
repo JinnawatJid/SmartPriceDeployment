@@ -37,16 +37,14 @@ function CustomerDetail() {
     setCreditLoading(true);
     try {
       // เรียก backend proxy endpoint
-      const res = await api.get(`/api/credit-status/${customerId}`, {
-        params: { mock: true } // ใช้ mock data ก่อน เพื่อทดสอบ
-      });
+      const res = await api.get(`/api/credit-status/${customerId}`);
       
-      console.log("Credit API response:", res.data);
-      console.log("Credit terms:", res.data?.credit_terms);
+      console.log("✅ Credit API response:", res.data);
+      console.log("✅ Credit terms:", res.data?.credit_terms);
       setCreditData(res.data);
     } catch (err) {
-      console.error("Load credit data error:", err);
-      console.error("Error details:", err.response?.data);
+      console.error("❌ Load credit data error:", err);
+      console.error("❌ Error details:", err.response?.data);
       // ถ้า API ไม่ตอบ ใช้ mock data
       setCreditData(null);
     } finally {

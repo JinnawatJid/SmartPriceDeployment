@@ -9,13 +9,12 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/api/credit-status/{customer_id}")
-async def get_credit_status(customer_id: str, mock: bool = False):
+async def get_credit_status(customer_id: str):
     """
     ดึงข้อมูลเครดิตของลูกค้าจาก External API
     
     Args:
         customer_id: รหัสลูกค้า
-        mock: ใช้ข้อมูล mock หรือไม่ (default: False)
     
     Returns:
         {
@@ -27,28 +26,29 @@ async def get_credit_status(customer_id: str, mock: bool = False):
                 "ga": 60,
                 "yc": 45
             },
-            "updated_at": "2024-02-29T12:48:51.3992",
-            "is_mock": true
+            "updated_at": "2024-02-29T12:48:51.3992"
         }
     """
     try:
         # สร้าง URL สำหรับเรียก External API
         url = f"{CREDIT_API_URL}/api/external/credit-status/{customer_id}"
-        params = {"mock": "true" if mock else "false"}
         
-        logger.info(f"Calling credit API: {url} with params: {params}")
+        logger.info(f"🔍 [CREDIT API] Calling: {url}")
+        logger.info(f"🔍 [CREDIT API] Headers: {CREDIT_API_HEADERS}")
         
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
                 url,
-                headers=CREDIT_API_HEADERS,
-                params=params
+                headers=CREDIT_API_HEADERS
             )
+            
+            logger.info(f"🔍 [CREDIT API] Response status: {response.status_code}")
+            logger.info(f"🔍 [CREDIT API] Response body: {response.text}")
             
             response.raise_for_status()
             data = response.json()
             
-            logger.info(f"Credit API response: {data}")
+            logger.info(f"✅ [CREDIT API] Success! Data: {data}")
             return data
             
     except httpx.HTTPStatusError as e:
