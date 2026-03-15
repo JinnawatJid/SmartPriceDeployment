@@ -15,6 +15,7 @@ import CartItemRow from "../../components/wizard/CartItemRow.jsx";
 import OrderHistoryCard from "../../components/wizard/OrderHistoryCard.jsx";
 import DynamicsImportConfirmModal from "../../components/wizard/DynamicsImportConfirmModal.jsx";
 import SpecialPriceRequestModal from "../../components/wizard/SpecialPriceRequestModal.jsx";
+import PriceEditReasonModal from "../../components/wizard/PriceEditReasonModal.jsx";
 
 import ProductList from "../../components/products/ProductList.jsx";
 import ProductDetail from "../../components/products/ProductDetail.jsx";
@@ -153,6 +154,10 @@ function Step6_Summary({ state, dispatch }) {
   const [showDynamicsConfirm, setShowDynamicsConfirm] = useState(false);
   const [showSpecialPriceModal, setShowSpecialPriceModal] = useState(false);
   const [itemsBelowR1, setItemsBelowR1] = useState([]);
+  const [showPriceEditReasonModal, setShowPriceEditReasonModal] = useState(false);
+  const [priceEditReason, setPriceEditReason] = useState("");
+  const [pendingSaveStatus, setPendingSaveStatus] = useState(null);
+  const [shippingEdited, setShippingEdited] = useState(false);
 
   const sumCartLineTotal = (cart) =>
     cart.reduce((sum, it) => sum + Number(it.lineTotal ?? 0), 0);
@@ -1037,17 +1042,18 @@ function Step6_Summary({ state, dispatch }) {
       // ตรวจสอบว่าราคาอยู่ในช่วงที่ต้องขออนุมัติหรือไม่
       // ลำดับราคา: R2 > R1 > W2 > W1 > SDM (จากมากไปน้อย)
       // เงื่อนไข:
-      // - W2 ≤ ราคา < R1: ต้องอนุมัติจาก ZM เท่านั้น (ส่วนลดน้อย)
-      // - W1 ≤ ราคา < W2: ต้องอนุมัติจาก ZM และ RM (ส่วนลดมาก)
-      // - ราคา < W1 หรือ ราคา ≥ R1: ปฏิเสธ (นอกช่วง)
+      // - ราคา > R1: ✅ OK ไม่ต้องขออนุมัติ (ราคาปกติ)
+      // - R1 ≤ ราคา ≤ W2: ต้องอนุมัติจาก ZM เท่านั้น (ส่วนลดน้อย)
+      // - W2 > ราคา ≥ W1: ต้องอนุมัติจาก ZM และ RM (ส่วนลดมาก)
+      // - ราคา < W1: ❌ REJECTED (ราคาต่ำเกินไป)
       
-      if (requestedPrice > 0 && requestedPrice >= r1Price) {
-        // ราคา ≥ R1 = ปฏิเสธ (ราคาสูงเกินไป ไม่ต้องขออนุมัติ หรือใช้ราคาปกติ)
-        console.log(`   ✅ OK: ราคาปกติ ไม่ต้องขออนุมัติ (${requestedPrice.toFixed(2)} ≥ ${r1Price.toFixed(2)})`);
+      if (requestedPrice > r1Price) {
+        // ราคา > R1 = ✅ OK ไม่ต้องขออนุมัติ
+        console.log(`   ✅ OK: ราคาปกติ ไม่ต้องขออนุมัติ (${requestedPrice.toFixed(2)} > ${r1Price.toFixed(2)})`);
         return; // ไม่ต้องขออนุมัติ
-      } else if (requestedPrice >= w2Price && requestedPrice < r1Price) {
-        // W2 ≤ ราคา < R1 = ต้องอนุมัติจาก ZM เท่านั้น (single-level, ส่วนลดน้อย)
-        console.log(`   ✅ ZM_ONLY: ต้องอนุมัติจาก Zone Manager (${w2Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${r1Price.toFixed(2)})`);
+      } else if (requestedPrice >= r1Price && requestedPrice <= w2Price) {
+        // R1 ≤ ราคา ≤ W2 = ต้องอนุมัติจาก ZM เท่านั้น (single-level, ส่วนลดน้อย)
+        console.log(`   ⚠️ ZM_ONLY: ต้องอนุมัติจาก Zone Manager (${r1Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} ≤ ${w2Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
           name: item.name,
@@ -1059,8 +1065,8 @@ function Step6_Summary({ state, dispatch }) {
           w1_price: w1Price,
           approval_level: 'ZM_ONLY', // Single-level
         });
-      } else if (requestedPrice >= w1Price && requestedPrice < w2Price) {
-        // W1 ≤ ราคา < W2 = ต้องอนุมัติจาก ZM และ RM (multi-level, ส่วนลดมาก)
+      } else if (requestedPrice < w2Price && requestedPrice >= w1Price) {
+        // W2 > ราคา ≥ W1 = ต้องอนุมัติจาก ZM และ RM (multi-level, ส่วนลดมาก)
         console.log(`   ⚠️ ZM_THEN_RM: ต้องอนุมัติจาก ZM และ RM (${w1Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${w2Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
@@ -1074,7 +1080,7 @@ function Step6_Summary({ state, dispatch }) {
           approval_level: 'ZM_THEN_RM', // Multi-level
         });
       } else if (requestedPrice < w1Price) {
-        // ราคา < W1 = ปฏิเสธ (ราคาต่ำเกินไป)
+        // ราคา < W1 = ❌ REJECTED (ราคาต่ำเกินไป)
         console.log(`   ❌ REJECTED: ราคาต่ำกว่า W1 (${requestedPrice.toFixed(2)} < ${w1Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
@@ -1120,7 +1126,7 @@ function Step6_Summary({ state, dispatch }) {
 
   const [saving, setSaving] = useState(false);
 
-  const buildQuotationPayload = (status) => {
+  const buildQuotationPayload = (status, editReason = "") => {
     const isEditDraft = state.status === "open";
 
     const cartPayload = (state.cart || []).map((it) => {
@@ -1229,6 +1235,17 @@ function Step6_Summary({ state, dispatch }) {
     // ⭐ ใช้ logic เดียวกับ Summary หน้า Step6
     const effectiveTotals = computeEffectiveTotals(state.cart, calcMap);
 
+    // ⭐ สร้าง note โดยรวมเหตุผลการแก้ไขค่าขนส่ง (ถ้ามี)
+    let finalNote = state.remark || "";
+    if (editReason) {
+      const timestamp = new Date().toLocaleString('th-TH');
+      const reasonText = `[แก้ไขค่าขนส่ง ${timestamp}] ${editReason}`;
+      // ⭐ ตัดข้อความให้ไม่เกิน 500 ตัวอักษร (ป้องกัน truncation error)
+      const maxLength = 500;
+      const newNote = finalNote ? `${finalNote}\n${reasonText}` : reasonText;
+      finalNote = newNote.length > maxLength ? newNote.substring(0, maxLength) : newNote;
+    }
+
     return {
       id: state.id || null,
       quoteNo: state.quoteNo || null,
@@ -1250,7 +1267,7 @@ function Step6_Summary({ state, dispatch }) {
         shippingCustomerPay: state.shippingCustomerPay ?? 0,
         shippingRaw: state.shippingCost ?? 0, // ⭐ ค่าขนส่งที่ระบบคิด
       },
-      note: state.remark || "",
+      note: finalNote,
     };
   };
 
@@ -1478,11 +1495,17 @@ function Step6_Summary({ state, dispatch }) {
     });
   };
 
+  // ตรวจสอบว่ามีการแก้ไขค่าขนส่งหรือไม่
+  const hasShippingEdits = () => {
+    // ถ้าเป็น DELIVERY และค่าขนส่งถูกแก้ไข
+    return state.deliveryType === "DELIVERY" && shippingEdited;
+  };
+
   const handleSaveQuotation = async (status) => {
     try {
       setSaving(true);
 
-      const payload = buildQuotationPayload(status);
+      const payload = buildQuotationPayload(status, priceEditReason);
       const res = await saveQuotation(payload, state);
 
       // ⭐ สำคัญที่สุด
@@ -1497,6 +1520,11 @@ function Step6_Summary({ state, dispatch }) {
         });
       }
 
+      // ล้างเหตุผลการแก้ไขราคาและค่าขนส่งหลังบันทึกสำเร็จ
+      setPriceEditReason("");
+      setPendingSaveStatus(null);
+      setShippingEdited(false);
+
       if (status === "open") {
         navigate("/quote-drafts");
         return;
@@ -1509,6 +1537,18 @@ function Step6_Summary({ state, dispatch }) {
       alert("บันทึกใบเสนอราคาไม่สำเร็จ");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePriceEditReasonConfirm = (reason) => {
+    setPriceEditReason(reason);
+    setShowPriceEditReasonModal(false);
+    
+    // บันทึกต่อด้วย status ที่รอไว้
+    if (pendingSaveStatus) {
+      setTimeout(() => {
+        handleSaveQuotation(pendingSaveStatus);
+      }, 100);
     }
   };
 
@@ -2182,7 +2222,9 @@ function Step6_Summary({ state, dispatch }) {
                               staffCount: state.staffCount,
                             },
                           });
+                          // ⭐ เปิด Modal ขอเหตุผลทันทีเมื่อกดบันทึกค่าขนส่ง
                           setEditingShippingCost(false);
+                          setShowPriceEditReasonModal(true);
                         }}
                         className="px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded hover:bg-green-700"
                       >
@@ -2197,20 +2239,22 @@ function Step6_Summary({ state, dispatch }) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex justify-between py-2 cursor-pointer hover:bg-blue-50 px-2 rounded transition-colors" onDoubleClick={() => {
+                  <div className="flex justify-between py-2 cursor-pointer hover:bg-blue-50  rounded transition-colors" onDoubleClick={() => {
                     if (state.deliveryType === "DELIVERY") {
                       setTempShippingCost(Number(state.shippingCustomerPay || 0));
                       setEditingShippingCost(true);
                     }
                   }}>
-                    <span className="font-semibold text-gray-600">ค่าขนส่ง</span>
+                    <span className="font-semibold text-gray-600 ">ค่าขนส่ง</span>
                     <span className="font-bold text-gray-800">
                       {state.deliveryType === "DELIVERY"
                         ? fmtTHB(Number(state.shippingCustomerPay || 0))
-                        : "รับเอง (ไม่มีค่าขนส่ง)"}
-                    </span>
+                        : "รับเอง "}
+                    </span>                
                   </div>
+                  
                 )}
+                <span className="text-[10px] font-semibold text-blue-600">"ระบบจะบันทึกค่าขนส่งที่แก้ไขเพื่อการเปรียบเทียบ"</span>
                 <SummaryRow
                   label="ราคารวมก่อนภาษี (ไม่รวม VAT)"
                   value={calculation.totals.exVatFmt || "..."}
@@ -2291,29 +2335,22 @@ function Step6_Summary({ state, dispatch }) {
                       </>
                     ) : (
                       <>
-                        {/* แสดงคำเตือนถ้ามีสินค้าที่ไม่สามารถขออนุมัติได้ */}
-                        {rejectedItems.length > 0 && (
-                          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-3">
-                            <p className="text-sm font-semibold text-red-800">
-                              ⚠️ พบสินค้า {rejectedItems.length} รายการที่ราคานอกช่วงที่อนุมัติได้
-                            </p>
-                            <p className="text-xs text-red-700 mt-1">
-                              กรุณาแก้ไขราคาให้อยู่ในช่วง R1 ถึง W1 ก่อนส่งขออนุมัติ
-                            </p>
-                          </div>
-                        )}
-                        
                         <button
-                          disabled={calculation.loading || !!calculation.error || rejectedItems.length > 0}
-                          onClick={() => setShowSpecialPriceModal(true)}
-                          className="flex w-full items-center justify-center rounded-lg bg-[#9333EA] px-6 py-3 font-semibold text-white shadow-md hover:bg-[#7e22ce] disabled:opacity-50"
-                        >
-                          <SaveIcon /> 
-                          {rejectedItems.length > 0 
-                            ? `ไม่สามารถขออนุมัติได้ (${rejectedItems.length} รายการนอกช่วง)`
-                            : `ขอราคาพิเศษ (${approvableItems.length} รายการ)`
-                          }
-                        </button>
+                            disabled={calculation.loading || !!calculation.error || rejectedItems.length > 0}
+                            onClick={() => setShowSpecialPriceModal(true)}
+                            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#9333EA] px-6 py-3 font-semibold text-white shadow-md hover:bg-[#7e22ce] disabled:opacity-50"
+                          >
+                            <img 
+                              src="/assets/rfq.png"
+                              alt="rfq"
+                              className="h-7 w-7"
+                            />
+
+                            {rejectedItems.length > 0 
+                              ? `ไม่สามารถขออนุมัติได้ (${rejectedItems.length} รายการนอกช่วง)`
+                              : `ขอราคาพิเศษ`
+                            }
+                          </button>
                       </>
                     )}
                   </>
@@ -2484,6 +2521,16 @@ function Step6_Summary({ state, dispatch }) {
         onClose={() => setShowSpecialPriceModal(false)}
         onConfirm={handleSpecialPriceRequest}
         itemsBelowR1={itemsBelowR1}
+      />
+
+      {/* Price Edit Reason Modal */}
+      <PriceEditReasonModal
+        isOpen={showPriceEditReasonModal}
+        onClose={() => {
+          setShowPriceEditReasonModal(false);
+          setPendingSaveStatus(null);
+        }}
+        onConfirm={handlePriceEditReasonConfirm}
       />
     </div>
   );

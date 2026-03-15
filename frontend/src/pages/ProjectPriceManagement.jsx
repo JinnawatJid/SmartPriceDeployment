@@ -879,14 +879,14 @@ const ProjectPriceManagement = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  หมายเหตุ
+                  รายการสินค้า
                 </label>
                 <input
                   type="text"
                   value={formData.remark}
                   onChange={(e) => setFormData({...formData, remark: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2"
-                  placeholder="หมายเหตุเพิ่มเติม"
+                  placeholder="กรอกรายละเอียดรายการสินค้า เช่น กระจกใส AGC 6 มม."
                 />
               </div>
             </div>
@@ -1306,7 +1306,13 @@ const ProjectPriceManagement = () => {
                   </div>
                 </div>
 
-
+                {/* ⭐ แสดง Remark */}
+                {project.remark && (
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-2 mb-3 rounded">
+                    <p className="text-xs font-semibold text-blue-800 mb-1">รายการสินค้าที่ขอราคาพิเศษ:</p>
+                    <p className="text-sm text-blue-700">{project.remark}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>

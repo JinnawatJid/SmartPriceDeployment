@@ -218,7 +218,13 @@ function Dashboard() {
 
         </div>
         <div className="mt-6 ">
+
           
+            {(() => {
+            const showProjectPrice = allowedProjectPriceEmployees.includes(employee?.id);
+            console.log("🔍 Show Project Price?", showProjectPrice, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees);
+            return showProjectPrice;
+          })() && (
             <div
               className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#9333EA] hover:bg-[#7e22ce] p-8 text-white shadow-lg"
               onClick={() => navigate("/special-price-approval")}
@@ -229,7 +235,9 @@ function Dashboard() {
                 มี {pendingApprovalCount} รายการรอการอนุมัติ
               </p>
             </div>
-          
+          )}
+
+    
 
           {/* Update Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
           {(() => {
@@ -242,7 +250,7 @@ function Dashboard() {
               onClick={() => navigate("/update-price")}
             >
               <img src="/assets/refresh.png" className="w-16 h-16 mb-4" />
-              <h2 className="text-4xl font-bold">เพิ่ม / อัปเดตราคา</h2>
+              <h2 className="text-4xl font-bold">เพิ่ม / อัปเดตราคา / จัดการโปรโมชั่น</h2>
               <p className="mt-2 text-lg text-white/70">สำหรับผู้จัดการ</p>
             </div>
           )}

@@ -217,7 +217,7 @@ def create_quotation(payload: dict = Body(...)):
         "SubtotalAmount": payload.get("totals", {}).get("exVat", 0),
         "TotalAmount": payload.get("totals", {}).get("grandTotal", 0),
         "NeedsTax": "Y" if payload.get("needTaxInvoice") else "N",
-        "Remark": payload.get("note", ""),
+        "Remark": (payload.get("note", "") or "")[:255],  # ⭐ ตัดให้ไม่เกิน 255 ตัวอักษร
         "LastUpdate": now,
         "CustomerName": cust_name,
         "Tel": customer.get("phone", ""),
