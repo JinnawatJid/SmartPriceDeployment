@@ -182,6 +182,19 @@ const ProjectPriceManagement = () => {
     }
   };
 
+  // Fetch customer name from API
+  const fetchCustomerName = async (customerCode) => {
+    try {
+      const res = await api.post(`/api/customer/search?code=${customerCode}`);
+      if (res.data && res.data.name) {
+        setFormData(prev => ({...prev, customer_name: res.data.name}));
+      }
+    } catch (err) {
+      console.error('Error fetching customer name:', err);
+      setFormData(prev => ({...prev, customer_name: ''}));
+    }
+  };
+
   // Auto-generate code when inputs change
   useEffect(() => {
     if (!priceMode) return;
@@ -570,7 +583,7 @@ const ProjectPriceManagement = () => {
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">จัดการราคาโครงการ</h1>
+        <h1 className="text-3xl font-bold text-gray-800">ขอราคาพิเศษ</h1>
         <button
           onClick={() => {
             setPriceMode(null);
@@ -602,31 +615,28 @@ const ProjectPriceManagement = () => {
                 <button
                   type="button"
                   onClick={() => handleModeChange('project')}
-                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-100 transition"
                 >
-                  <div className="font-semibold text-gray-800">โครงการ</div>
-                  <div className="text-xs text-gray-600 mt-1">รหัส: PJYYMMXX</div>
-                  <div className="text-xs text-gray-500 mt-1">ต้องใส่ชื่อโครงการ</div>
+                  <div className="font-semibold text-gray-800 hover:text-lg">โครงการ</div>
+                  <div className="text-xs text-gray-500 mt-1">ราคาโครงการ</div>
                 </button>
                 
                 <button
                   type="button"
                   onClick={() => handleModeChange('branch')}
-                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-100 transition"
                 >
-                  <div className="font-semibold text-gray-800">สาขา</div>
-                  <div className="text-xs text-gray-600 mt-1">รหัส: BRYYMMXX</div>
-                  <div className="text-xs text-gray-500 mt-1">เลือกสาขาก่อน</div>
+                  <div className="font-semibold text-gray-800 hover:text-lg">สาขา</div>
+                  <div className="text-xs text-gray-500 mt-1">ราคาโครงการของสาขา</div>
                 </button>
                 
                 <button
                   type="button"
                   onClick={() => handleModeChange('customer')}
-                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+                  className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-100 transition"
                 >
-                  <div className="font-semibold text-gray-800">ลูกค้าพิเศษ</div>
-                  <div className="text-xs text-gray-600 mt-1">รหัส: YYMMCUSTCODE</div>
-                  <div className="text-xs text-gray-500 mt-1">ไม่ต้องใส่ชื่อโครงการ</div>
+                  <div className="font-semibold text-gray-800 hover:text-lg">ลูกค้าพิเศษ</div>
+                  <div className="text-xs text-gray-500 mt-1">ราคาพิเศษ/ลูกค้า</div>
                 </button>
               </div>
             </div>
@@ -702,7 +712,17 @@ const ProjectPriceManagement = () => {
                 <input
                   type="text"
                   value={formData.customer_code}
-                  onChange={(e) => setFormData({...formData, customer_code: e.target.value})}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setFormData({...formData, customer_code: code});
+                    
+                    // Auto-fetch customer name when code is entered
+                    if (code.trim().length > 0) {
+                      fetchCustomerName(code.trim());
+                    } else {
+                      setFormData(prev => ({...prev, customer_name: ''}));
+                    }
+                  }}
                   className="w-full border rounded-lg px-3 py-2"
                   placeholder="เช่น 08015AY"
                 />
@@ -715,9 +735,9 @@ const ProjectPriceManagement = () => {
                 <input
                   type="text"
                   value={formData.customer_name}
-                  onChange={(e) => setFormData({...formData, customer_name: e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="ชื่อลูกค้า"
+                  readOnly
+                  className="w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-700"
+                  placeholder="ชื่อลูกค้า (อัตโนมัติ)"
                 />
               </div>
             </div>
@@ -733,7 +753,17 @@ const ProjectPriceManagement = () => {
                   type="text"
                   required
                   value={formData.customer_code}
-                  onChange={(e) => setFormData({...formData, customer_code: e.target.value})}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setFormData({...formData, customer_code: code});
+                    
+                    // Auto-fetch customer name when code is entered
+                    if (code.trim().length > 0) {
+                      fetchCustomerName(code.trim());
+                    } else {
+                      setFormData(prev => ({...prev, customer_name: ''}));
+                    }
+                  }}
                   className="w-full border rounded-lg px-3 py-2"
                   placeholder="เช่น 08015AY"
                 />
@@ -746,9 +776,9 @@ const ProjectPriceManagement = () => {
                 <input
                   type="text"
                   value={formData.customer_name}
-                  onChange={(e) => setFormData({...formData, customer_name: e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="ชื่อลูกค้า"
+                  readOnly
+                  className="w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-700"
+                  placeholder="ชื่อลูกค้า (อัตโนมัติ)"
                 />
               </div>
             </div>

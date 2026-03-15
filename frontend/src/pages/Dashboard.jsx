@@ -75,6 +75,7 @@ function Dashboard() {
   const [todayCount, setTodayCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [contactCustomerCount, setContactCustomerCount] = useState(0);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -116,6 +117,15 @@ function Dashboard() {
             .map((q) => q.customer?.id)
         );
         setContactCustomerCount(uniqueCustomers.size);
+
+        // ---- 4) รอการอนุมัติราคาพิเศษ ----
+        try {
+          const resPendingApprovals = await api.get("/api/special-price-requests/pending/approvals");
+          setPendingApprovalCount((resPendingApprovals.data || []).length);
+        } catch (err) {
+          console.log("No pending approvals or not authorized:", err);
+          setPendingApprovalCount(0);
+        }
       } catch (err) {
         console.error("Dashboard load error:", err);
       }
@@ -205,8 +215,22 @@ function Dashboard() {
               </div>
             </div>
           </div>
+
         </div>
         <div className="mt-6 ">
+          
+            <div
+              className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#9333EA] hover:bg-[#7e22ce] p-8 text-white shadow-lg"
+              onClick={() => navigate("/special-price-approval")}
+            >
+              <img src="/assets/approve.png" className="w-16 h-16 mb-4" />
+              <h2 className="text-4xl font-bold">อนุมัติราคาพิเศษ</h2>
+              <p className="mt-2 text-lg text-white/70">
+                มี {pendingApprovalCount} รายการรอการอนุมัติ
+              </p>
+            </div>
+          
+
           {/* Update Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
           {(() => {
             const showPriceUpdate = allowedPriceUpdateEmployees.includes(employee?.id);
@@ -214,7 +238,7 @@ function Dashboard() {
             return showPriceUpdate;
           })() && (
             <div
-              className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg"
+              className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg mt-6"
               onClick={() => navigate("/update-price")}
             >
               <img src="/assets/refresh.png" className="w-16 h-16 mb-4" />

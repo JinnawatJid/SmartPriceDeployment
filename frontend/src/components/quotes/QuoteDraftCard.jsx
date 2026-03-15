@@ -15,10 +15,46 @@ export default function QuoteDraftCard({
   dueDateText,
   totalAmount,
   items = [],
+  specialPriceRequest,
   onEdit,
   onDelete,
 }) {
   const navigate = useNavigate();
+  
+  // ตรวจสอบสถานะ special price request
+  const sprStatus = specialPriceRequest?.status;
+  const isApproved = sprStatus === 'APPROVED';
+  const isPending = sprStatus && ['SUBMITTED', 'PENDING_ZM', 'PENDING_RM'].includes(sprStatus);
+  const isRejected = sprStatus === 'REJECTED';
+  
+  const getStatusBadge = () => {
+    if (isApproved) {
+      return (
+        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+          <span>✓</span>
+          <span>ราคาพิเศษอนุมัติแล้ว</span>
+        </div>
+      );
+    }
+    if (isPending) {
+      return (
+        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs font-semibold">
+          <span>⏳</span>
+          <span>รอการอนุมัติ</span>
+        </div>
+      );
+    }
+    if (isRejected) {
+      return (
+        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
+          <span>✗</span>
+          <span>ราคาพิเศษถูกปฏิเสธ</span>
+        </div>
+      );
+    }
+    return null;
+  };
+  
   return (
     <div className="flex flex-col   rounded-2xl border border-gray-200 bg-white shadow-md transition-shadow">
       {/* Header */}
@@ -27,8 +63,11 @@ export default function QuoteDraftCard({
           {/* เลขที่ใบเสนอราคา */}
           <div className="flex-1">
             <p className="text-xl font-extrabold text-[#0084FF]">{quoteNo}</p>
+            {/* แสดงสถานะ special price request */}
+            <div className="mt-1">
+              {getStatusBadge()}
+            </div>
           </div>
-
         </div>
 
         <p className="mt-2 font-semibold text-gray-800">{customerName}</p>
@@ -77,20 +116,41 @@ export default function QuoteDraftCard({
 
       {/* Footer buttons */}
       <div className="flex border-t border-gray-200">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="flex-1 py-2 text-sm font-semibold text-white bg-[#0084FF] hover:bg-blue-700 rounded-bl-2xl"
-        >
-          แก้ไข
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex-1 py-2 text-sm font-semibold text-white bg-[#FF0000] hover:bg-red-700 rounded-br-2xl"
-        >
-          ลบ
-        </button>
+        {isApproved ? (
+          <>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex-1 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-bl-2xl"
+            >
+              ใช้ราคาที่อนุมัติ
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="flex-1 py-2 text-sm font-semibold text-white bg-[#FF0000] hover:bg-red-700 rounded-br-2xl"
+            >
+              ลบ
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex-1 py-2 text-sm font-semibold text-white bg-[#0084FF] hover:bg-blue-700 rounded-bl-2xl"
+            >
+              แก้ไข
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="flex-1 py-2 text-sm font-semibold text-white bg-[#FF0000] hover:bg-red-700 rounded-br-2xl"
+            >
+              ลบ
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

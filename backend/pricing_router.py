@@ -130,7 +130,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         
         print(f"🔍 DEBUG: Loaded {len(df)} items, sample prices:")
         if not df.empty:
-            print(df[["sku", "R1", "R2", "priceR1", "priceR2"]].head(3).to_string(index=False))
+            print(df[["sku", "R2", "R1", "W2", "W1", "priceR2", "priceR1", "priceW2", "priceW1"]].head(3).to_string(index=False))
 
         df["pkg_size"] = pd.to_numeric(df.get("pkg_size"), errors="coerce").fillna(1)
         df["product_weight"] = pd.to_numeric(df.get("Product_Weight"), errors="coerce").fillna(0)
@@ -219,7 +219,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         "category",
         "RE",
         "product_weight",
-        "priceR1", "priceR2", "priceW1", "priceW2",
+        "priceR1", "priceR2", "priceW1", "priceW2", "priceSDM",
         "pkg_size",
         "Base_Unit_of_Measure",
     ]
@@ -428,7 +428,11 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                 "_LineTotal": row["LineTotal"],
                 "_Tier_Z": 0,
                 "product_weight": float(row.get("product_weight", 0) or 0),
+                "priceR2": float(row.get("priceR2", 0) or 0),
+                "priceR1": float(row.get("priceR1", 0) or 0),
+                "priceW2": float(row.get("priceW2", 0) or 0),
                 "priceW1": float(row.get("priceW1", 0) or 0),
+                "priceSDM": float(row.get("priceSDM", 0) or 0),
                 "priceSource": row.get("price_source", "system"),
                 "isSoldByPack": is_sold_by_pack,  # ⭐ เพิ่ม flag
             })
@@ -453,7 +457,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     # -------------------------------------------------------------
 
     _safe_print_df(df_calc,
-                   ["sku", "name", "Quantity", "priceR1", "priceR2", "category"],
+                   ["sku", "name", "Quantity", "priceR2", "priceR1", "priceW2", "priceW1", "priceSDM", "category"],
                    "AFTER MERGE ITEM DATA")
     
     
@@ -820,7 +824,11 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             "price_source": row.get("price_source", "system"),
             "last_purchase_date": row.get("last_purchase_date"),
             "last_purchase_qty": row.get("last_purchase_qty"),
+            "priceR2": float(row.get("priceR2", 0) or 0),
+            "priceR1": float(row.get("priceR1", 0) or 0),
+            "priceW2": float(row.get("priceW2", 0) or 0),
             "priceW1": float(row.get("priceW1", 0) or 0),
+            "priceSDM": float(row.get("priceSDM", 0) or 0),
             "isSoldByPack": bool(row.get("isSoldByPack", False)),  # ⭐ เพิ่ม flag
         })
 
