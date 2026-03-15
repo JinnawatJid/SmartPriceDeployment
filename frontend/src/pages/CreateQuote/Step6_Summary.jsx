@@ -1037,8 +1037,8 @@ function Step6_Summary({ state, dispatch }) {
       // ตรวจสอบว่าราคาอยู่ในช่วงที่ต้องขออนุมัติหรือไม่
       // ลำดับราคา: R2 > R1 > W2 > W1 > SDM (จากมากไปน้อย)
       // เงื่อนไข:
-      // - W1 ≤ ราคา ≤ W2: ต้องอนุมัติจาก ZM เท่านั้น
-      // - W2 < ราคา < R1: ต้องอนุมัติจาก ZM และ RM
+      // - W2 ≤ ราคา < R1: ต้องอนุมัติจาก ZM เท่านั้น (ส่วนลดน้อย)
+      // - W1 ≤ ราคา < W2: ต้องอนุมัติจาก ZM และ RM (ส่วนลดมาก)
       // - ราคา < W1 หรือ ราคา ≥ R1: ปฏิเสธ (นอกช่วง)
       
       if (requestedPrice > 0 && requestedPrice >= r1Price) {
@@ -1046,22 +1046,8 @@ function Step6_Summary({ state, dispatch }) {
         console.log(`   ✅ OK: ราคาปกติ ไม่ต้องขออนุมัติ (${requestedPrice.toFixed(2)} ≥ ${r1Price.toFixed(2)})`);
         return; // ไม่ต้องขออนุมัติ
       } else if (requestedPrice >= w2Price && requestedPrice < r1Price) {
-        // W2 ≤ ราคา < R1 = ต้องอนุมัติจาก ZM และ RM (multi-level)
-        console.log(`   ⚠️ ZM_THEN_RM: ต้องอนุมัติจาก ZM และ RM (${w2Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${r1Price.toFixed(2)})`);
-        belowR1Items.push({
-          sku: item.sku,
-          name: item.name,
-          qty: item.qty,
-          unit: item.unit,
-          requested_price: requestedPrice,
-          r1_price: r1Price,
-          w2_price: w2Price,
-          w1_price: w1Price,
-          approval_level: 'ZM_THEN_RM', // Multi-level
-        });
-      } else if (requestedPrice >= w1Price && requestedPrice < w2Price) {
-        // W1 ≤ ราคา < W2 = ต้องอนุมัติจาก ZM เท่านั้น (single-level)
-        console.log(`   ✅ ZM_ONLY: ต้องอนุมัติจาก Zone Manager (${w1Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${w2Price.toFixed(2)})`);
+        // W2 ≤ ราคา < R1 = ต้องอนุมัติจาก ZM เท่านั้น (single-level, ส่วนลดน้อย)
+        console.log(`   ✅ ZM_ONLY: ต้องอนุมัติจาก Zone Manager (${w2Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${r1Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
           name: item.name,
@@ -1072,6 +1058,20 @@ function Step6_Summary({ state, dispatch }) {
           w2_price: w2Price,
           w1_price: w1Price,
           approval_level: 'ZM_ONLY', // Single-level
+        });
+      } else if (requestedPrice >= w1Price && requestedPrice < w2Price) {
+        // W1 ≤ ราคา < W2 = ต้องอนุมัติจาก ZM และ RM (multi-level, ส่วนลดมาก)
+        console.log(`   ⚠️ ZM_THEN_RM: ต้องอนุมัติจาก ZM และ RM (${w1Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${w2Price.toFixed(2)})`);
+        belowR1Items.push({
+          sku: item.sku,
+          name: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          requested_price: requestedPrice,
+          r1_price: r1Price,
+          w2_price: w2Price,
+          w1_price: w1Price,
+          approval_level: 'ZM_THEN_RM', // Multi-level
         });
       } else if (requestedPrice < w1Price) {
         // ราคา < W1 = ปฏิเสธ (ราคาต่ำเกินไป)
