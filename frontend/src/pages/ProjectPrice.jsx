@@ -12,6 +12,7 @@ export default function ProjectPrice() {
   const { employee } = useAuth();
   const navigate = useNavigate();
   const [allowedEmployees, setAllowedEmployees] = useState(ALLOWED_PROJECT_PRICE_EMPLOYEES);
+  const [employeeRole, setEmployeeRole] = useState(null);
 
   // โหลดสิทธิ์พนักงานจาก backend
   useEffect(() => {
@@ -26,16 +27,40 @@ export default function ProjectPrice() {
     fetchEmployeeAccess();
   }, []);
 
+  // โหลด role ของพนักงานจาก employees.json
+  useEffect(() => {
+    const fetchEmployeeRole = async () => {
+      if (!employee?.id) return;
+      
+      try {
+        const res = await api.get("/api/employees/role", {
+          params: { employee_id: employee.id }
+        });
+        setEmployeeRole(res.data.role);
+      } catch (err) {
+        console.error("Failed to fetch employee role:", err);
+      }
+    };
+    fetchEmployeeRole();
+  }, [employee?.id]);
+
+  // ตรวจสอบว่าพนักงานมีสิทธิ์เข้าถึงหรือไม่
+  const hasAccess = employee && (
+    allowedEmployees.includes(employee.id) || 
+    employeeRole === 'RM' || 
+    employeeRole === 'ZM'
+  );
+
   // ตรวจสอบสิทธิ์เข้าถึง
   useEffect(() => {
-    if (employee && !allowedEmployees.includes(employee.id)) {
+    if (employee && employeeRole !== null && !hasAccess) {
       // ถ้าไม่ใช่พนักงานที่อนุญาต ให้กลับไปที่ Dashboard
       navigate("/dashboard", { replace: true });
     }
-  }, [employee, allowedEmployees, navigate]);
+  }, [employee, employeeRole, hasAccess, navigate]);
 
   // ถ้าไม่ใช่พนักงานที่อนุญาต ให้แสดงข้อความ
-  if (employee && !allowedEmployees.includes(employee.id)) {
+  if (employee && employeeRole !== null && !hasAccess) {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">

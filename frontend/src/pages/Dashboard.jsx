@@ -219,11 +219,11 @@ function Dashboard() {
         </div>
         <div className="mt-6 ">
 
-          
-            {(() => {
-            const showProjectPrice = allowedProjectPriceEmployees.includes(employee?.id);
-            console.log("🔍 Show Project Price?", showProjectPrice, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees);
-            return showProjectPrice;
+          {/* Special Price Approval Card - แสดงเฉพาะพนักงานที่อนุญาต (ใช้สิทธิ์เดียวกับราคาโครงการ) */}
+          {(() => {
+            const showSpecialPriceApproval = allowedProjectPriceEmployees.includes(employee?.id);
+            console.log("🔍 Show Special Price Approval?", showSpecialPriceApproval, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees);
+            return showSpecialPriceApproval;
           })() && (
             <div
               className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#9333EA] hover:bg-[#7e22ce] p-8 text-white shadow-lg"
@@ -236,8 +236,6 @@ function Dashboard() {
               </p>
             </div>
           )}
-
-    
 
           {/* Update Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
           {(() => {
