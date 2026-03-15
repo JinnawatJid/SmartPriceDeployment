@@ -151,6 +151,13 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
     const cat = (item.category || String(item.sku || "").slice(0, 1)).toUpperCase();
     const isAluminium = cat === "A";
 
+    console.log('🔄 [CART ITEM] Dispatching price update:', {
+      sku: item.sku,
+      category: cat,
+      isAluminium,
+      data
+    });
+
     dispatch({
       type: "UPDATE_CART_PRICE",
       payload: {

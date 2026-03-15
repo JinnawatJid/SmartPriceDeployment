@@ -99,24 +99,38 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
   const calculatedPricePerLine = roundUp050(pricePerKg * weight);
 
   const handleSave = () => {
+    console.log('💾 [PRICE EDIT] Saving manual price:', {
+      sku: item.sku,
+      category: cat,
+      isGlass,
+      isAluminium,
+      isProjectPrice
+    });
+    
     if (isGlass) {
       // บันทึกราคาต่อแผ่น (จากการคำนวณ)
-      onSave({
+      const saveData = {
         unitPrice: calculatedPricePerSheet,
         pricePerSqft: pricePerSqft,
-      });
+      };
+      console.log('💾 [PRICE EDIT] Glass price data:', saveData);
+      onSave(saveData);
     } else if (isAluminium) {
       // บันทึกราคาต่อเส้น (จากการคำนวณ) และน้ำหนัก
-      onSave({
+      const saveData = {
         unitPrice: calculatedPricePerLine,
         pricePerKg: pricePerKg,
         weight: weight,
-      });
+      };
+      console.log('💾 [PRICE EDIT] Aluminium price data:', saveData);
+      onSave(saveData);
     } else {
       // สินค้าอื่นๆ
-      onSave({
+      const saveData = {
         unitPrice: otherPrice,
-      });
+      };
+      console.log('💾 [PRICE EDIT] Other product price data:', saveData);
+      onSave(saveData);
     }
   };
 

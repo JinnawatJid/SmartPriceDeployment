@@ -282,6 +282,8 @@ function quoteReducer(state, action) {
     // UPDATE CART PRICE (MANUAL)
     // -------------------------
     case "UPDATE_CART_PRICE": {
+      console.log('🔧 [REDUCER] UPDATE_CART_PRICE triggered:', action.payload);
+      
       const { 
         sku, 
         variantCode = null, 
@@ -310,6 +312,16 @@ function quoteReducer(state, action) {
           const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
           const isGlass = cat === "G";
           const isAluminium = cat === "A";
+          
+          console.log('🔧 [REDUCER] Updating item:', {
+            sku,
+            category: cat,
+            isGlass,
+            isAluminium,
+            unitPrice,
+            pricePerSqft,
+            pricePerKg
+          });
 
           // -------------------------
           // 🔒 manual price wins
@@ -324,7 +336,7 @@ function quoteReducer(state, action) {
               price: undefined,
               lineTotal: pricePerSheet * qty,
               priceSource: "manual",        // ⭐ สำคัญ
-              needsPricing: false,          // ⭐ กัน pricing override
+              needsPricing: true,           // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
               unit: it.unit, // ⭐ เก็บ unit ไว้
               ...(pricePerSqft && { pricePerSqft }), // เก็บราคาต่อตร.ฟุต
             };
@@ -339,7 +351,7 @@ function quoteReducer(state, action) {
               price_per_sheet: undefined,
               lineTotal: unitPrice * qty,
               priceSource: "manual",
-              needsPricing: false,
+              needsPricing: true,           // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
               unit: it.unit, // ⭐ เก็บ unit ไว้
               ...(pricePerKg && { pricePerKg }), // เก็บราคาต่อกก.
               ...(weight !== undefined && { weight, product_weight: weight }), // เก็บน้ำหนัก
@@ -354,7 +366,7 @@ function quoteReducer(state, action) {
             price_per_sheet: undefined,
             lineTotal: unitPrice * qty,
             priceSource: "manual",          // ⭐ สำคัญ
-            needsPricing: false,
+            needsPricing: true,             // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
             unit: it.unit, // ⭐ เก็บ unit ไว้
           };
         }),

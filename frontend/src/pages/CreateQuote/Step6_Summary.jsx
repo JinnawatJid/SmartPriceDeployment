@@ -241,6 +241,7 @@ function Step6_Summary({ state, dispatch }) {
 
   useEffect(() => {
     if (state.status === "open") {
+      // ⭐ ส่งสินค้าที่ต้องคำนวณราคา (รวมสินค้าที่แก้ราคาด้วย)
       const itemsNeedingPricing = (state.cart || []).filter(
         (it) => it.source === "ui" && it.needsPricing
       );
@@ -282,6 +283,16 @@ function Step6_Summary({ state, dispatch }) {
 
       const calcDraft = async () => {
         try {
+          console.log('📤 [STEP6] Sending pricing request to backend');
+          console.log('📤 [STEP6] Items needing pricing:', itemsNeedingPricing.length);
+          console.log('📤 [STEP6] Items details:', itemsNeedingPricing.map(it => ({
+            sku: it.sku,
+            priceSource: it.priceSource,
+            needsPricing: it.needsPricing,
+            UnitPrice: it.UnitPrice,
+            pricePerSqft: it.pricePerSqft
+          })));
+          
           const customerCode = getCustomerCode(state.customer);
 
           const res = await api.post("/api/pricing/calculate", {
@@ -325,10 +336,27 @@ function Step6_Summary({ state, dispatch }) {
               unit: it.unit ?? "",
               product_weight: it.product_weight ?? 0,
               isSoldByPack: it.isSoldByPack ?? false,
+              // ⭐ Include manual price info so backend can validate and create special price requests
+              priceSource: it.priceSource ?? "system",
+              UnitPrice: it.priceSource === "manual" ? Number(it.UnitPrice ?? 0) : undefined,
+              pricePerSqft: it.priceSource === "manual" ? Number(it.pricePerSqft ?? 0) : undefined,
+              pricePerKg: it.priceSource === "manual" ? Number(it.pricePerKg ?? 0) : undefined,
+              weight: it.priceSource === "manual" ? Number(it.weight ?? 0) : undefined,
             })),
           });
 
           const pricedItems = res.data.items || [];
+          
+          console.log('📥 [STEP6] Received pricing response from backend');
+          console.log('📥 [STEP6] Priced items count:', pricedItems.length);
+          console.log('📥 [STEP6] Priced items details:', pricedItems.map(pi => ({
+            sku: pi.sku,
+            UnitPrice: pi.UnitPrice,
+            price_source: pi.price_source,
+            priceR1: pi.priceR1,
+            priceW2: pi.priceW2,
+            priceW1: pi.priceW1
+          })));
 
           pricedItems.forEach((pi) => {
             const key = `${pi.sku}__${Number(pi.sqft_sheet ?? 0)}`;
@@ -346,7 +374,7 @@ function Step6_Summary({ state, dispatch }) {
           const total = grossBeforeVat;
 
           setCalculation({
-            cart: [],
+            cart: pricedItems,  // ⭐ เก็บข้อมูลจาก backend เพื่อใช้ใน calcMap
             totals: {
               exVat,
               vat,
@@ -986,16 +1014,37 @@ function Step6_Summary({ state, dispatch }) {
 
   // ตรวจสอบสินค้าที่ราคาต่ำกว่า R1 หรืออยู่ในช่วงที่ต้องขออนุมัติ
   const checkPricesBelowR1 = () => {
+    console.log('\n' + '='.repeat(80));
+    console.log('🔍 [CHECK PRICES] Starting price check for special price request');
+    console.log('='.repeat(80));
+    console.log('📊 [CHECK PRICES] Cart items:', state.cart?.length || 0);
+    console.log('📊 [CHECK PRICES] calcMap keys:', Object.keys(calcMap || {}).length);
+    
     const belowR1Items = [];
     
     (state.cart || []).forEach((item) => {
       const key = pricingKeyOf(item);
       const calc = calcMap?.[key];
       
+      console.log(`\n🔍 [CHECK PRICES] Checking item: ${item.sku}`);
+      console.log(`   priceSource: ${item.priceSource}`);
+      console.log(`   needsPricing: ${item.needsPricing}`);
+      console.log(`   calcMap key: ${key}`);
+      console.log(`   calc found: ${!!calc}`);
+      
+      if (calc) {
+        console.log(`   calc.priceR1: ${calc.priceR1}`);
+        console.log(`   calc.priceW2: ${calc.priceW2}`);
+        console.log(`   calc.priceW1: ${calc.priceW1}`);
+      }
+      
       // ⭐ เช็คเฉพาะสินค้าที่มีการแก้ไขราคาด้วยตนเอง (manual)
       if (item.priceSource !== 'manual') {
+        console.log(`   ⏭️ Skipping: not manual price`);
         return; // ข้ามสินค้าที่ใช้ราคาจากระบบ
       }
+      
+      console.log(`   ✅ Manual price detected, checking thresholds...`);
       
       // ดึงราคา threshold จาก calculation (เรียงจากมากไปน้อย)
       const r2Price = Number(calc?.priceR2 || 0);
@@ -1004,40 +1053,51 @@ function Step6_Summary({ state, dispatch }) {
       const w1Price = Number(calc?.priceW1 || 0);
       const sdmPrice = Number(calc?.priceSDM || 0);
       
+      // คำนวณราคาที่ขอ
+      const sqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
+      const isGlass = (item.category || "").toUpperCase() === "G";
+      
       // 🔍 LOG: แสดงราคาทั้ง 5 ระดับ (เรียงจากมากไปน้อย)
-      console.log(`📊 [PRICE CHECK] SKU: ${item.sku} | ${item.name} (MANUAL PRICE)`);
-      console.log(`   R2:  ${r2Price.toFixed(2)} บาท (ราคาสูงสุด)`);
-      console.log(`   R1:  ${r1Price.toFixed(2)} บาท (ราคาขั้นต่ำ)`);
-      console.log(`   W2:  ${w2Price.toFixed(2)} บาท (ขั้นกลาง)`);
-      console.log(`   W1:  ${w1Price.toFixed(2)} บาท (ขั้นสูง)`);
-      console.log(`   SDM: ${sdmPrice.toFixed(2)} บาท (ราคาต่ำสุด)`);
+      const isGlassItem = isGlass;
+      const priceUnit = isGlassItem ? "บาท/ตร.ฟุต" : "บาท";
+      console.log(`📊 [PRICE CHECK] SKU: ${item.sku} | ${item.name} (MANUAL PRICE) | Category: ${isGlassItem ? "Glass" : "Other"}`);
+      console.log(`   R2:  ${r2Price.toFixed(2)} ${priceUnit} (ราคาสูงสุด)`);
+      console.log(`   R1:  ${r1Price.toFixed(2)} ${priceUnit} (ราคาขั้นต่ำ)`);
+      console.log(`   W2:  ${w2Price.toFixed(2)} ${priceUnit} (ขั้นกลาง)`);
+      console.log(`   W1:  ${w1Price.toFixed(2)} ${priceUnit} (ขั้นสูง)`);
+      console.log(`   SDM: ${sdmPrice.toFixed(2)} ${priceUnit} (ราคาต่ำสุด)`);
       
       if (r1Price === 0) {
         console.log(`   ⚠️ ไม่มีข้อมูล threshold สำหรับสินค้านี้`);
         return; // ไม่มีข้อมูล threshold
       }
       
-      // คำนวณราคาที่ขอ
-      const sqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
-      const isGlass = (item.category || "").toUpperCase() === "G";
-      
       let requestedPrice;
       if (item.priceSource === "manual") {
         if (isGlass && sqft > 0) {
-          requestedPrice = Number(item.price_per_sheet ?? Number(item.UnitPrice ?? 0) * sqft);
+          // ⭐ สำคัญ: กระจกต้องเทียบราคาต่อตารางฟุต ไม่ใช่ต่อแผ่น
+          // ถ้ามี pricePerSqft (ราคาต่อตารางฟุต) ให้ใช้โดยตรง
+          // ไม่งั้นคำนวณจาก price_per_sheet / sqft
+          if (item.pricePerSqft) {
+            requestedPrice = Number(item.pricePerSqft);
+          } else {
+            const pricePerSheet = Number(item.price_per_sheet ?? Number(item.UnitPrice ?? 0));
+            requestedPrice = sqft > 0 ? pricePerSheet / sqft : 0;
+          }
         } else {
           requestedPrice = Number(item.UnitPrice ?? item.price ?? 0);
         }
       } else {
         if (isGlass && sqft > 0) {
-          requestedPrice = Number(calc?.price_per_sheet ?? item.price_per_sheet ?? 0);
+          // ใช้ UnitPrice จาก pricing (ซึ่งเป็นราคาต่อตารางฟุต) โดยตรง
+          requestedPrice = Number(calc?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0);
         } else {
           requestedPrice = Number(calc?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0);
         }
       }
       
       // 🔍 LOG: แสดงราคาที่ขอ
-      console.log(`   💰 ราคาที่ขอ: ${requestedPrice.toFixed(2)} บาท`);
+      console.log(`   💰 ราคาที่ขอ: ${requestedPrice.toFixed(2)} ${priceUnit} (${isGlassItem ? "ต่อตร.ฟุต" : "ต่อหน่วย"})`);
       
       // ตรวจสอบว่าราคาอยู่ในช่วงที่ต้องขออนุมัติหรือไม่
       // ลำดับราคา: R2 > R1 > W2 > W1 > SDM (จากมากไปน้อย)
@@ -1051,9 +1111,9 @@ function Step6_Summary({ state, dispatch }) {
         // ราคา > R1 = ✅ OK ไม่ต้องขออนุมัติ
         console.log(`   ✅ OK: ราคาปกติ ไม่ต้องขออนุมัติ (${requestedPrice.toFixed(2)} > ${r1Price.toFixed(2)})`);
         return; // ไม่ต้องขออนุมัติ
-      } else if (requestedPrice >= r1Price && requestedPrice <= w2Price) {
-        // R1 ≤ ราคา ≤ W2 = ต้องอนุมัติจาก ZM เท่านั้น (single-level, ส่วนลดน้อย)
-        console.log(`   ⚠️ ZM_ONLY: ต้องอนุมัติจาก Zone Manager (${r1Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} ≤ ${w2Price.toFixed(2)})`);
+      } else if (requestedPrice <= r1Price && requestedPrice > w2Price) {
+        // R1 >= ราคา > W2 = ต้องอนุมัติจาก ZM เท่านั้น (single-level, ส่วนลดน้อย)
+        console.log(`   ⚠️ ZM_ONLY: ต้องอนุมัติจาก Zone Manager (${w2Price.toFixed(2)} < ${requestedPrice.toFixed(2)} ≤ ${r1Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
           name: item.name,
@@ -1065,9 +1125,9 @@ function Step6_Summary({ state, dispatch }) {
           w1_price: w1Price,
           approval_level: 'ZM_ONLY', // Single-level
         });
-      } else if (requestedPrice < w2Price && requestedPrice >= w1Price) {
-        // W2 > ราคา ≥ W1 = ต้องอนุมัติจาก ZM และ RM (multi-level, ส่วนลดมาก)
-        console.log(`   ⚠️ ZM_THEN_RM: ต้องอนุมัติจาก ZM และ RM (${w1Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${w2Price.toFixed(2)})`);
+      } else if (requestedPrice <= w2Price && requestedPrice > w1Price) {
+        // W2 >= ราคา > W1 = ต้องอนุมัติจาก ZM และ RM (multi-level, ส่วนลดมาก)
+        console.log(`   ⚠️ ZM_THEN_RM: ต้องอนุมัติจาก ZM และ RM (${w1Price.toFixed(2)} < ${requestedPrice.toFixed(2)} ≤ ${w2Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
           name: item.name,
@@ -1079,9 +1139,9 @@ function Step6_Summary({ state, dispatch }) {
           w1_price: w1Price,
           approval_level: 'ZM_THEN_RM', // Multi-level
         });
-      } else if (requestedPrice < w1Price) {
-        // ราคา < W1 = ❌ REJECTED (ราคาต่ำเกินไป)
-        console.log(`   ❌ REJECTED: ราคาต่ำกว่า W1 (${requestedPrice.toFixed(2)} < ${w1Price.toFixed(2)})`);
+      } else if (requestedPrice <= w1Price) {
+        // ราคา <= W1 = ❌ REJECTED (ราคาต่ำเกินไป)
+        console.log(`   ❌ REJECTED: ราคาต่ำกว่าหรือเท่ากับ W1 (${requestedPrice.toFixed(2)} ≤ ${w1Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
           name: item.name,
@@ -1091,7 +1151,7 @@ function Step6_Summary({ state, dispatch }) {
           r1_price: r1Price,
           w2_price: w2Price,
           w1_price: w1Price,
-          approval_level: 'REJECTED', // ต่ำกว่า W1
+          approval_level: 'REJECTED', // ต่ำกว่าหรือเท่ากับ W1
         });
       }
     });
@@ -1106,7 +1166,12 @@ function Step6_Summary({ state, dispatch }) {
       console.log(`   ⚠️ ZM_THEN_RM: ${zmThenRm} รายการ`);
       console.log(`   ❌ REJECTED: ${rejected} รายการ`);
     } else {
-      console.log(`\n✅ ไม่มีสินค้าที่ต้องขออนุมัติ (ไม่มีการแก้ไขราคาด้วยตนเอง)`);
+      const manualItems = (state.cart || []).filter(it => it.priceSource === 'manual').length;
+      if (manualItems > 0) {
+        console.log(`\n✅ มีสินค้าแก้ไขราคา ${manualItems} รายการ แต่ราคาอยู่ในช่วงที่ไม่ต้องขออนุมัติ (> R1)`);
+      } else {
+        console.log(`\n✅ ไม่มีสินค้าที่แก้ไขราคาด้วยตนเอง`);
+      }
     }
     console.log('─'.repeat(60));
     
@@ -1115,8 +1180,15 @@ function Step6_Summary({ state, dispatch }) {
 
   // ตรวจสอบราคาเมื่อ cart หรือ calcMap เปลี่ยน
   useEffect(() => {
+    console.log('🔄 [EFFECT] Cart or calcMap changed, checking prices...');
+    console.log('🔄 [EFFECT] Cart length:', state.cart?.length || 0);
+    console.log('🔄 [EFFECT] calcMap keys:', Object.keys(calcMap || {}).length);
+    console.log('🔄 [EFFECT] Manual items in cart:', state.cart?.filter(it => it.priceSource === 'manual').length || 0);
+    
     const items = checkPricesBelowR1();
     setItemsBelowR1(items);
+    
+    console.log('🔄 [EFFECT] Items below R1:', items.length);
   }, [state.cart, calcMap]);
 
   // แยกรายการที่สามารถขออนุมัติได้ และที่ไม่สามารถขออนุมัติได้
@@ -2297,6 +2369,13 @@ function Step6_Summary({ state, dispatch }) {
                 </button>
                 
                 {/* แสดงปุ่มขอราคาพิเศษถ้ามีสินค้าที่ราคาต่ำกว่า R1 */}
+                {(() => {
+                  console.log('🎯 [RENDER] Checking if should show special price button');
+                  console.log('🎯 [RENDER] itemsBelowR1.length:', itemsBelowR1.length);
+                  console.log('🎯 [RENDER] itemsBelowR1:', itemsBelowR1);
+                  console.log('🎯 [RENDER] specialPriceRequest:', specialPriceRequest);
+                  return null;
+                })()}
                 {itemsBelowR1.length > 0 ? (
                   <>
                     {/* ถ้า special price request approved แล้ว แสดงปุ่มยืนยัน */}

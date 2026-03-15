@@ -33,6 +33,12 @@ class CartItem(BaseModel):
     unit: str | None = None
     product_weight: float | None = None
     relevantSales: float | None = None
+    # ⭐ Manual price fields for special price requests
+    priceSource: str | None = None  # "system", "manual", "project", "history"
+    UnitPrice: float | None = None  # Manual unit price
+    pricePerSqft: float | None = None  # Manual price per sqft (for glass)
+    pricePerKg: float | None = None  # Manual price per kg (for aluminium)
+    weight: float | None = None  # Manual weight (for aluminium)
 
 
 class PricingRequest(BaseModel):
@@ -146,6 +152,8 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     print("🔍 DEBUG: Cart items received from frontend")
     print("="*80)
     for idx, item in enumerate(req.cart):
+        if item.priceSource == "manual":
+            print(f"Item {idx}: SKU={item.sku}, priceSource=manual, UnitPrice={item.UnitPrice}")
         if item.category == "G":
             print(f"Item {idx}: SKU={item.sku}, isSoldByPack={item.isSoldByPack}, sqft_sheet={item.sqft_sheet}")
     print("="*80 + "\n")
@@ -158,9 +166,16 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     # isSoldByPack flag
     df_calc["isSoldByPack"] = df_calc.get("isSoldByPack", False).fillna(False).astype(bool)
     
+    # ⭐ เก็บข้อมูล manual price ที่ได้รับจาก frontend
+    df_calc["_manual_price"] = pd.to_numeric(df_calc.get("UnitPrice"), errors="coerce")
+    df_calc["_manual_pricePerSqft"] = pd.to_numeric(df_calc.get("pricePerSqft"), errors="coerce")
+    df_calc["_manual_pricePerKg"] = pd.to_numeric(df_calc.get("pricePerKg"), errors="coerce")
+    df_calc["_manual_weight"] = pd.to_numeric(df_calc.get("weight"), errors="coerce")
+    df_calc["_priceSource"] = df_calc.get("priceSource", "system")
+    
     # ⭐ Debug log
     print("\n=== DEBUG: DataFrame after processing ===")
-    print(df_calc[["sku", "isSoldByPack", "Pieces", "Sqft_Sheet"]])
+    print(df_calc[["sku", "isSoldByPack", "Pieces", "Sqft_Sheet", "_priceSource", "_manual_price"]])
     print("=== END DEBUG ===\n")
 
 
@@ -452,9 +467,49 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         }
 
 
-    # -------------------------------------------------------------
+    # ⭐ HANDLE MANUAL PRICES (before normal pricing flow)
+    # If user manually edited a price, use that instead of calculating
+    print("\n" + "="*80)
+    print("🔍 Checking for manually edited prices...")
+    print("="*80)
+    
+    manual_price_items = []
+    for idx, row in df_calc.iterrows():
+        if row.get("priceSource") == "manual" and row.get("UnitPrice"):
+            manual_price_items.append({
+                "sku": row["sku"],
+                "manual_price": row.get("UnitPrice"),
+                "pricePerSqft": row.get("pricePerSqft"),
+                "pricePerKg": row.get("pricePerKg"),
+                "weight": row.get("weight"),
+            })
+            print(f"✅ Found manual price for {row['sku']}: {row.get('UnitPrice')} บาท")
+    
+    if manual_price_items:
+        print(f"📝 Total items with manual prices: {len(manual_price_items)}")
+    print("="*80 + "\n")
+
+    # Store manual prices for later use
+    df_calc["_manual_price"] = df_calc.apply(
+        lambda row: row.get("UnitPrice") if row.get("priceSource") == "manual" else None,
+        axis=1
+    )
+    df_calc["_manual_pricePerSqft"] = df_calc.apply(
+        lambda row: row.get("pricePerSqft") if row.get("priceSource") == "manual" else None,
+        axis=1
+    )
+    df_calc["_manual_pricePerKg"] = df_calc.apply(
+        lambda row: row.get("pricePerKg") if row.get("priceSource") == "manual" else None,
+        axis=1
+    )
+    df_calc["_manual_weight"] = df_calc.apply(
+        lambda row: row.get("weight") if row.get("priceSource") == "manual" else None,
+        axis=1
+    )
+
+    # =====================================================================
     # NORMAL FLOW (มี customer code → คำนวณด้วย LevelPrice, Price)
-    # -------------------------------------------------------------
+    # =====================================================================
 
     _safe_print_df(df_calc,
                    ["sku", "name", "Quantity", "priceR2", "priceR1", "priceW2", "priceW1", "priceSDM", "category"],
@@ -490,6 +545,16 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
 
     # 👉 ตอนนี้ df_lp schema ตรงกับที่ Price.py ต้องการแล้ว
     df_price = Price(df_lp)
+    
+    # ⭐ Preserve manual price columns from df_calc
+    if "_manual_price" in df_calc.columns:
+        df_price["_manual_price"] = df_calc["_manual_price"].values
+    if "_manual_pricePerSqft" in df_calc.columns:
+        df_price["_manual_pricePerSqft"] = df_calc["_manual_pricePerSqft"].values
+    if "_manual_pricePerKg" in df_calc.columns:
+        df_price["_manual_pricePerKg"] = df_calc["_manual_pricePerKg"].values
+    if "_manual_weight" in df_calc.columns:
+        df_price["_manual_weight"] = df_calc["_manual_weight"].values
     
     # คำนวณ UnitPrice ก่อน (เพื่อใช้เปรียบเทียบกับราคาประวัติ)
     def _compute_unit_price_temp(row):
@@ -747,6 +812,23 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             return round_up_050(raw)  # ราคาระบบ/ประวัติ ปัดทีละ 0.50
 
     df_price["UnitPrice"] = df_price.apply(_compute_unit_price, axis=1)
+
+    # ⭐ OVERRIDE WITH MANUAL PRICES if provided
+    print("\n" + "="*80)
+    print("🔍 Applying manual price overrides...")
+    print("="*80)
+    
+    for idx, row in df_price.iterrows():
+        sku = row["sku"]
+        manual_price = row.get("_manual_price")
+        
+        if manual_price and manual_price > 0:
+            print(f"✅ Overriding price for {sku}: {row['UnitPrice']:.2f} → {manual_price:.2f} บาท")
+            df_price.at[idx, "UnitPrice"] = manual_price
+            df_price.at[idx, "price_source"] = "manual"
+            df_price.at[idx, "NewPrice"] = manual_price  # Also update NewPrice for consistency
+    
+    print("="*80 + "\n")
 
     df_price["_LineTotal"] = df_price["UnitPrice"] * df_price["Quantity"]
 

@@ -99,6 +99,48 @@ export default function SpecialPriceApproval() {
     }).format(value);
   };
 
+  // ⭐ ฟังก์ชันคำนวณราคาต่อหน่วยพิเศษ (sqft, kg)
+  const getPricePerUnit = (item) => {
+    const category = item.category || '';
+    const isSoldByPack = item.is_sold_by_pack || false;
+    
+    // ถ้าขายยกแพค ให้เทียบเหมือนสินค้าปกติ
+    if (isSoldByPack) {
+      return {
+        normal: item.normal_price,
+        requested: item.requested_price,
+        unit: item.unit || 'หน่วย'
+      };
+    }
+    
+    // กระจก: ต่อตารางฟุต
+    if (category.toUpperCase() === 'G') {
+      const sqft = item.sqft_sheet || 1;
+      return {
+        normal: sqft > 0 ? item.normal_price / sqft : item.normal_price,
+        requested: sqft > 0 ? item.requested_price / sqft : item.requested_price,
+        unit: 'ตร.ฟุต'
+      };
+    }
+    
+    // อลูมิเนียม: ต่อกิโลกรัม
+    if (category.toUpperCase() === 'A') {
+      const weight = item.product_weight || 1;
+      return {
+        normal: weight > 0 ? item.normal_price / weight : item.normal_price,
+        requested: weight > 0 ? item.requested_price / weight : item.requested_price,
+        unit: 'กิโลกรัม'
+      };
+    }
+    
+    // สินค้าอื่น: ต่อหน่วย
+    return {
+      normal: item.normal_price,
+      requested: item.requested_price,
+      unit: item.unit || 'หน่วย'
+    };
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('th-TH', {
       year: 'numeric',
@@ -242,17 +284,24 @@ export default function SpecialPriceApproval() {
               <div className="mb-6 pb-6 border-b">
                 <h3 className="font-semibold text-gray-900 mb-3">รายการสินค้า</h3>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {selectedRequest.items?.map((item, idx) => (
-                    <div key={idx} className="text-sm bg-gray-50 p-2 rounded">
-                      <p className="font-medium text-gray-900">{item.item_name}</p>
-                      <p className="text-gray-600">
-                        จำนวน: {item.quantity} {item.unit}
-                      </p>
-                      <p className="text-gray-600">
-                        ราคา: {formatCurrency(item.normal_price)} → {formatCurrency(item.requested_price)}
-                      </p>
-                    </div>
-                  ))}
+                  {selectedRequest.items?.map((item, idx) => {
+                    const priceInfo = getPricePerUnit(item);
+                    return (
+                      <div key={idx} className="text-sm bg-gray-50 p-2 rounded">
+                        <p className="font-medium text-gray-900">{item.item_name}</p>
+                        <p className="text-gray-600">
+                          จำนวน: {item.quantity} {item.unit}
+                        </p>
+                        <p className="text-gray-600">
+                          ราคา (ต่อ{priceInfo.unit}): {formatCurrency(priceInfo.normal)} → {formatCurrency(priceInfo.requested)}
+                        </p>
+                        {/* แสดงราคารวมด้วย */}
+                        <p className="text-gray-500 text-xs">
+                          รวม: {formatCurrency(item.normal_price)} → {formatCurrency(item.requested_price)}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
