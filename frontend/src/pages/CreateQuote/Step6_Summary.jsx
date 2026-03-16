@@ -184,6 +184,28 @@ function Step6_Summary({ state, dispatch }) {
   const [priceEditReason, setPriceEditReason] = useState("");
   const [pendingSaveStatus, setPendingSaveStatus] = useState(null);
   const [shippingEdited, setShippingEdited] = useState(false);
+  const [isPreOrder, setIsPreOrder] = useState(false);
+
+  // โหลด pre_order จาก quote header เมื่อเป็น draft
+  useEffect(() => {
+    const loadPreOrderStatus = async () => {
+      if (!state.quoteNo) {
+        setIsPreOrder(false);
+        return;
+      }
+
+      try {
+        const res = await api.get(`/api/quotation/${state.quoteNo}`);
+        const preOrderValue = res.data?.header?.Pre_Order ?? res.data?.header?.pre_order ?? 0;
+        setIsPreOrder(preOrderValue === 1);
+      } catch (err) {
+        console.error('Error loading pre-order status:', err);
+        setIsPreOrder(false);
+      }
+    };
+
+    loadPreOrderStatus();
+  }, [state.quoteNo]);
 
   const sumCartLineTotal = (cart) =>
     cart.reduce((sum, it) => sum + Number(it.lineTotal ?? 0), 0);
@@ -1377,6 +1399,7 @@ function Step6_Summary({ state, dispatch }) {
         shippingRaw: state.shippingCost ?? 0, // ⭐ ค่าขนส่งที่ระบบคิด
       },
       note: finalNote,
+      pre_order: isPreOrder ? 1 : 0, // ⭐ เพิ่ม pre_order field
     };
   };
 
@@ -2388,6 +2411,23 @@ function Step6_Summary({ state, dispatch }) {
               </div>
 
               <div className="space-y-3 border-t border-gray-200 pt-4">
+                {/* Pre-Order Checkbox */}
+                <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <input
+                    type="checkbox"
+                    id="preOrderCheckbox"
+                    checked={isPreOrder}
+                    onChange={(e) => setIsPreOrder(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <label
+                    htmlFor="preOrderCheckbox"
+                    className="text-sm font-medium text-gray-700 cursor-pointer select-none"
+                  >
+                    ใบเสนอราคานี้เป็น Pre-Order
+                  </label>
+                </div>
+
                 <button className="flex w-full items-center justify-center rounded-lg bg-[#c1c1c1] px-6 py-3 font-semibold text-white shadow-md  disabled:opacity-50">
                   <FileIcon />
                   แนบไฟล์
