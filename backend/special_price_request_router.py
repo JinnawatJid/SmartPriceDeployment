@@ -12,7 +12,12 @@ router = APIRouter(prefix="/api/special-price-requests", tags=["special-price-re
 def load_employees():
     """Load employees from employees.json"""
     try:
-        with open('employees.json', 'r', encoding='utf-8') as f:
+        import os
+        # Get the directory of the current file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        employees_path = os.path.join(current_dir, 'employees.json')
+        
+        with open(employees_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             return data.get('employees', [])
     except Exception as e:
