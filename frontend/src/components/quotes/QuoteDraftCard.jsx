@@ -84,6 +84,17 @@ export default function QuoteDraftCard({
           <span className="text-gray-500">วันที่สร้าง:</span>
           <span className="font-medium text-gray-800">{dueDateText}</span>
         </div>
+        
+        {/* แสดงระยะเวลาใช้ราคาพิเศษ */}
+        {specialPriceRequest?.valid_from && specialPriceRequest?.valid_to && (
+          <div className="flex justify-between bg-blue-50 border border-blue-200 rounded px-2 py-1">
+            <span className="text-blue-700 font-medium">ระยะเวลาใช้ราคา:</span>
+            <span className="font-medium text-blue-900">
+              {new Date(specialPriceRequest.valid_from).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} - {new Date(specialPriceRequest.valid_to).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
+          </div>
+        )}
+        
         <div className="flex justify-between border-t border-gray-100 pt-2 mt-1">
           <span className="text-gray-500">มูลค่าโดยประมาณ:</span>
           <span className="font-semibold text-emerald-600">฿ {formatNumber(totalAmount)}</span>

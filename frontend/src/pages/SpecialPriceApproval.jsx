@@ -244,6 +244,15 @@ export default function SpecialPriceApproval() {
                         </div>
                       </div>
 
+                      {request.valid_from && request.valid_to && (
+                        <div className="mb-3 bg-blue-50 border border-blue-200 rounded p-2">
+                          <p className="text-xs text-blue-700 font-medium">ระยะเวลาใช้ราคา</p>
+                          <p className="text-sm text-blue-900">
+                            {new Date(request.valid_from).toLocaleDateString('th-TH')} - {new Date(request.valid_to).toLocaleDateString('th-TH')}
+                          </p>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-600">
                           ส่วนลด: {request.discount_percentage?.toFixed(2)}%
@@ -278,6 +287,14 @@ export default function SpecialPriceApproval() {
                   <p className="text-sm text-gray-600">เหตุผล</p>
                   <p className="text-gray-900">{selectedRequest.request_reason || '-'}</p>
                 </div>
+                {selectedRequest.valid_from && selectedRequest.valid_to && (
+                  <div>
+                    <p className="text-sm text-gray-600">ระยะเวลาใช้ราคา</p>
+                    <p className="text-gray-900">
+                      {new Date(selectedRequest.valid_from).toLocaleDateString('th-TH')} - {new Date(selectedRequest.valid_to).toLocaleDateString('th-TH')}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Items */}

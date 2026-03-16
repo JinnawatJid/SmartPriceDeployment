@@ -93,6 +93,44 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     print(f"🔍 DEBUG: All SKUs in cart: {[item.sku for item in req.cart]}")
     print(f"🔍 DEBUG: Customer Data keys: {list(req.customerData.keys())}")
 
+    # ⭐ Load active special prices for customer
+    special_prices_dict = {}
+    customer_code = req.customerData.get('customerCode')
+    if customer_code:
+        try:
+            conn = get_mssql_conn()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 
+                    spri.item_code,
+                    spri.requested_price
+                FROM special_price_requests spr
+                INNER JOIN special_price_request_items spri ON spr.id = spri.request_id
+                WHERE spr.customer_code = ?
+                    AND spr.status = 'APPROVED'
+                    AND spr.valid_from IS NOT NULL
+                    AND spr.valid_to IS NOT NULL
+                    AND CAST(GETDATE() AS DATE) BETWEEN CAST(spr.valid_from AS DATE) AND CAST(spr.valid_to AS DATE)
+                ORDER BY spr.approved_at DESC
+            """, [customer_code])
+            
+            rows = cursor.fetchall()
+            for row in rows:
+                item_code = row[0]
+                special_price = float(row[1])
+                # เก็บเฉพาะรายการแรก (ล่าสุด) ของแต่ละ SKU
+                if item_code not in special_prices_dict:
+                    special_prices_dict[item_code] = special_price
+                    print(f"💰 [SPECIAL PRICE] {item_code}: {special_price}")
+            
+            cursor.close()
+            conn.close()
+            
+            if special_prices_dict:
+                print(f"✅ [SPECIAL PRICE] Found {len(special_prices_dict)} active special prices for customer {customer_code}")
+        except Exception as e:
+            print(f"⚠️ [SPECIAL PRICE] Error loading special prices: {e}")
+
     # Load Items DB
     def load_items_by_skus(skus: list[str]) -> pd.DataFrame:
         if not skus:
@@ -813,13 +851,38 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
 
     df_price["UnitPrice"] = df_price.apply(_compute_unit_price, axis=1)
 
-    # ⭐ OVERRIDE WITH MANUAL PRICES if provided
+    # ⭐ OVERRIDE WITH SPECIAL PRICES (highest priority)
+    print("\n" + "="*80)
+    print("💰 Applying special price overrides...")
+    print("="*80)
+    
+    for idx, row in df_price.iterrows():
+        sku = row["sku"]
+        
+        # ตรวจสอบราคาพิเศษก่อน
+        if sku in special_prices_dict:
+            special_price = special_prices_dict[sku]
+            print(f"✅ [SPECIAL PRICE] Overriding price for {sku}: {row['UnitPrice']:.2f} → {special_price:.2f} บาท")
+            df_price.at[idx, "UnitPrice"] = special_price
+            df_price.at[idx, "price_source"] = "special"
+            df_price.at[idx, "NewPrice"] = special_price
+            df_price.at[idx, "priceSource"] = "special"  # เพิ่ม flag สำหรับ frontend
+            continue  # ข้ามการตรวจสอบ manual price
+    
+    print("="*80 + "\n")
+
+    # ⭐ OVERRIDE WITH MANUAL PRICES if provided (second priority)
     print("\n" + "="*80)
     print("🔍 Applying manual price overrides...")
     print("="*80)
     
     for idx, row in df_price.iterrows():
         sku = row["sku"]
+        
+        # ถ้ามีราคาพิเศษแล้ว ข้าม
+        if row.get("price_source") == "special":
+            continue
+            
         manual_price = row.get("_manual_price")
         
         if manual_price and manual_price > 0:

@@ -4,6 +4,8 @@ import api from '../../services/api';
 
 export default function SpecialPriceRequestModal({ open, onClose, onConfirm, itemsBelowR1 }) {
   const [reason, setReason] = useState('');
+  const [validFrom, setValidFrom] = useState('');
+  const [validTo, setValidTo] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [approverInfo, setApproverInfo] = useState(null);
   const [loadingApprover, setLoadingApprover] = useState(false);
@@ -12,6 +14,13 @@ export default function SpecialPriceRequestModal({ open, onClose, onConfirm, ite
   useEffect(() => {
     if (open) {
       loadApproverInfo();
+      // ตั้งค่าวันที่เริ่มต้นเป็นวันนี้
+      const today = new Date().toISOString().split('T')[0];
+      setValidFrom(today);
+      // ตั้งค่าวันที่สิ้นสุดเป็น 30 วันจากวันนี้
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 30);
+      setValidTo(futureDate.toISOString().split('T')[0]);
     }
   }, [open]);
 
@@ -43,6 +52,16 @@ export default function SpecialPriceRequestModal({ open, onClose, onConfirm, ite
       return;
     }
 
+    if (!validFrom || !validTo) {
+      alert('กรุณาระบุวันที่เริ่มต้นและวันที่สิ้นสุดของราคาพิเศษ');
+      return;
+    }
+
+    if (new Date(validFrom) > new Date(validTo)) {
+      alert('วันที่เริ่มต้นต้องไม่เกินวันที่สิ้นสุด');
+      return;
+    }
+
     if (rejectedItems.length > 0) {
       alert('พบสินค้าที่ราคานอกช่วงที่อนุมัติได้ กรุณาแก้ไขราคาก่อนส่งขออนุมัติ');
       return;
@@ -50,8 +69,10 @@ export default function SpecialPriceRequestModal({ open, onClose, onConfirm, ite
 
     setSubmitting(true);
     try {
-      await onConfirm(reason);
+      await onConfirm(reason, validFrom, validTo);
       setReason('');
+      setValidFrom('');
+      setValidTo('');
     } finally {
       setSubmitting(false);
     }
@@ -252,6 +273,34 @@ export default function SpecialPriceRequestModal({ open, onClose, onConfirm, ite
             </div>
           </div>
 
+          {/* Date Range */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                วันที่เริ่มต้น <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={validFrom}
+                onChange={(e) => setValidFrom(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={submitting}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                วันที่สิ้นสุด <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={validTo}
+                onChange={(e) => setValidTo(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={submitting}
+              />
+            </div>
+          </div>
+
           {/* Reason */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -290,7 +339,7 @@ export default function SpecialPriceRequestModal({ open, onClose, onConfirm, ite
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting || !reason.trim() || rejectedItems.length > 0}
+            disabled={submitting || !reason.trim() || !validFrom || !validTo || rejectedItems.length > 0}
             className="flex-1 px-6 py-3 bg-blue-600 rounded-lg font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {submitting ? 'กำลังส่ง...' : 

@@ -44,6 +44,8 @@ class CreateSpecialPriceRequest(BaseModel):
     items: List[SpecialPriceItem]
     request_reason: Optional[str] = None
     quote_no: Optional[str] = None  # Link to quote
+    valid_from: Optional[str] = None  # วันที่เริ่มต้นใช้ราคา
+    valid_to: Optional[str] = None  # วันที่สิ้นสุดใช้ราคา
 
 class ApproveRequest(BaseModel):
     pass
@@ -274,8 +276,9 @@ async def create_special_price_request(
             (request_number, quote_no, customer_code, customer_name, customer_type, 
              requester_name, request_reason, original_total, requested_total, 
              discount_percentage, status, branch, approver_employee_id, 
+             valid_from, valid_to,
              created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), GETDATE())
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), GETDATE())
         """, (
             request_number,
             req.quote_no,
@@ -289,7 +292,9 @@ async def create_special_price_request(
             discount_percentage,
             new_status,  # Use routed status instead of DRAFT
             employee_info.get('branch_code'),
-            approver_id
+            approver_id,
+            req.valid_from,
+            req.valid_to
         ))
         
         conn.commit()
@@ -484,7 +489,7 @@ async def update_special_price_request(
             UPDATE special_price_requests
             SET customer_code = ?, customer_name = ?, customer_type = ?,
                 original_total = ?, requested_total = ?, discount_percentage = ?,
-                request_reason = ?, updated_at = GETDATE()
+                request_reason = ?, valid_from = ?, valid_to = ?, updated_at = GETDATE()
             WHERE id = ?
         """, (
             req.customer_code,
@@ -494,6 +499,8 @@ async def update_special_price_request(
             requested_total,
             discount_percentage,
             req.request_reason,
+            req.valid_from,
+            req.valid_to,
             request_id
         ))
         
@@ -1101,4 +1108,106 @@ async def get_special_price_request_by_quote(
         
     except Exception as e:
         print(f"Error in get_special_price_request_by_quote: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/active-prices/{customer_code}")
+async def get_active_special_prices(
+    customer_code: str,
+    employee_info: dict = Depends(get_employee_info)
+):
+    """
+    ดึงราคาพิเศษที่อนุมัติแล้วและยังอยู่ในช่วงเวลาที่กำหนด
+    สำหรับลูกค้ารายนั้น ๆ
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # ดึงรายการที่อนุมัติแล้วและยังอยู่ในช่วงเวลา
+        cursor.execute("""
+            SELECT 
+                spr.id,
+                spr.request_number,
+                spr.customer_code,
+                spr.customer_name,
+                spr.valid_from,
+                spr.valid_to,
+                spr.approved_at,
+                spri.item_code,
+                spri.item_name,
+                spri.requested_price,
+                spri.normal_price,
+                spri.unit
+            FROM special_price_requests spr
+            INNER JOIN special_price_request_items spri ON spr.id = spri.request_id
+            WHERE spr.customer_code = ?
+                AND spr.status = 'APPROVED'
+                AND spr.valid_from IS NOT NULL
+                AND spr.valid_to IS NOT NULL
+                AND CAST(GETDATE() AS DATE) BETWEEN CAST(spr.valid_from AS DATE) AND CAST(spr.valid_to AS DATE)
+            ORDER BY spr.approved_at DESC
+        """, [customer_code])
+        
+        columns = [description[0] for description in cursor.description]
+        rows = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        if not rows:
+            return {
+                "has_active_prices": False,
+                "items": []
+            }
+        
+        # จัดกลุ่มตาม item_code (ถ้ามีหลายรายการให้เอาล่าสุด)
+        items_dict = {}
+        for row in rows:
+            item_data = dict(zip(columns, row))
+            item_code = item_data['item_code']
+            
+            # เก็บเฉพาะรายการล่าสุด (เรียงตาม approved_at DESC แล้ว)
+            if item_code not in items_dict:
+                # แปลงวันที่เป็น string ถ้าเป็น datetime object
+                valid_from = item_data['valid_from']
+                valid_to = item_data['valid_to']
+                approved_at = item_data['approved_at']
+                
+                # ตรวจสอบว่าเป็น datetime object หรือ string
+                if hasattr(valid_from, 'isoformat'):
+                    valid_from = valid_from.isoformat()
+                elif valid_from:
+                    valid_from = str(valid_from)
+                    
+                if hasattr(valid_to, 'isoformat'):
+                    valid_to = valid_to.isoformat()
+                elif valid_to:
+                    valid_to = str(valid_to)
+                    
+                if hasattr(approved_at, 'isoformat'):
+                    approved_at = approved_at.isoformat()
+                elif approved_at:
+                    approved_at = str(approved_at)
+                
+                items_dict[item_code] = {
+                    "item_code": item_code,
+                    "item_name": item_data['item_name'],
+                    "special_price": float(item_data['requested_price']),
+                    "normal_price": float(item_data['normal_price']),
+                    "unit": item_data['unit'],
+                    "request_number": item_data['request_number'],
+                    "valid_from": valid_from,
+                    "valid_to": valid_to,
+                    "approved_at": approved_at
+                }
+        
+        return {
+            "has_active_prices": True,
+            "customer_code": customer_code,
+            "items": list(items_dict.values())
+        }
+        
+    except Exception as e:
+        print(f"Error in get_active_special_prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -232,3 +232,81 @@
 - No cross-region routing occurs (Regional_Manager from different region cannot approve)
 
 **Test Strategy:** Metamorphic testing comparing routing information with employee hierarchy data and verifying region consistency.
+
+
+### Requirement 11: Special Price Validity Period
+
+**User Story:** As a sales employee, I want to specify the validity period for special prices, so that approved prices can be used within a defined timeframe without requesting approval again.
+
+#### Acceptance Criteria
+
+1. WHEN creating a special price request, THE System SHALL allow the employee to specify valid_from and valid_to dates
+2. THE System SHALL validate that valid_from date is not after valid_to date
+3. THE System SHALL store the validity period in the special_price_requests table
+4. WHEN displaying special price requests, THE System SHALL show the validity period to all users
+5. THE System SHALL set default validity period to 30 days from the current date if not specified
+
+### Requirement 12: Reuse Approved Special Prices
+
+**User Story:** As a sales employee, I want to automatically use previously approved special prices that are still valid, so that I don't need to request approval again for the same customer and items.
+
+#### Acceptance Criteria
+
+1. WHEN creating a quote for a customer, THE System SHALL check if there are approved special prices for that customer that are currently valid (current date is between valid_from and valid_to)
+2. IF valid special prices exist for items in the quote, THE System SHALL display a notification showing which items have active special prices
+3. WHEN an item has an active special price and the requested price is equal to or higher than the approved special price, THE System SHALL NOT require a new approval request
+4. THE System SHALL display the active special price information including: item name, approved price, validity period, and request number
+5. IF the requested price is lower than the active special price, THE System SHALL require a new approval request
+6. THE System SHALL retrieve active special prices using the endpoint `/api/special-price-requests/active-prices/{customer_code}`
+7. THE System SHALL filter active prices based on: status = 'APPROVED', current date BETWEEN valid_from AND valid_to
+8. IF multiple approved prices exist for the same item, THE System SHALL use the most recently approved price
+
+### Requirement 13: Display Active Special Prices
+
+**User Story:** As a sales employee, I want to see which items have active special prices when creating a quote, so that I can utilize approved prices without requesting new approvals.
+
+#### Acceptance Criteria
+
+1. WHEN viewing the quote summary page, THE System SHALL display a notification if active special prices exist for the customer
+2. THE notification SHALL show: number of items with active prices, item names, approved prices, and validity end dates
+3. THE System SHALL display up to 5 items in the notification, with an indicator if more items exist
+4. THE notification SHALL use a green color scheme to indicate approved/active status
+5. WHEN checking prices below R1, THE System SHALL exclude items that have active special prices at or below the requested price
+6. THE System SHALL log in console when an item uses an active special price instead of requiring new approval
+
+## Updated Correctness Properties
+
+### Property 9: Validity Period Correctness
+
+**Property:** Special prices are only considered active if the current date falls within the validity period.
+
+**Invariant:**
+- IF current_date < valid_from THEN price is not active
+- IF current_date > valid_to THEN price is not active
+- IF valid_from ≤ current_date ≤ valid_to AND status = 'APPROVED' THEN price is active
+
+**Test Strategy:** Time-based property testing with various date ranges and current dates.
+
+### Property 10: Price Reuse Logic Correctness
+
+**Property:** Previously approved special prices are correctly reused when applicable, and new approvals are only required when necessary.
+
+**Invariant:**
+- IF active_special_price exists AND requested_price ≥ active_special_price THEN no new approval required
+- IF active_special_price exists AND requested_price < active_special_price THEN new approval required
+- IF no active_special_price exists AND requested_price < R1 THEN new approval required
+- IF multiple active prices exist for same item THEN most recent approval is used
+
+**Test Strategy:** Scenario-based testing with various combinations of active prices and requested prices.
+
+### Property 11: Active Price Retrieval Correctness
+
+**Property:** The system correctly retrieves and filters active special prices for a given customer.
+
+**Invariant:**
+- Retrieved prices must have status = 'APPROVED'
+- Retrieved prices must have current_date BETWEEN valid_from AND valid_to
+- Retrieved prices must match the specified customer_code
+- IF multiple prices exist for same item, only the most recent is returned
+
+**Test Strategy:** Database query testing with various customer codes, dates, and approval statuses.
