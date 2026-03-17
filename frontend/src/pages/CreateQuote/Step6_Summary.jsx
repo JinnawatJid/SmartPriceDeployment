@@ -1103,12 +1103,19 @@ function Step6_Summary({ state, dispatch }) {
       
       // คำนวณราคาที่ขอ
       const sqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
+      const weight = Number(item.weight ?? item.product_weight ?? 0);
       const isGlass = (item.category || "").toUpperCase() === "G";
+      const isAluminium = (item.category || "").toUpperCase() === "A";
       
       // 🔍 LOG: แสดงราคาทั้ง 5 ระดับ (เรียงจากมากไปน้อย)
-      const isGlassItem = isGlass;
-      const priceUnit = isGlassItem ? "บาท/ตร.ฟุต" : "บาท";
-      console.log(`📊 [PRICE CHECK] SKU: ${item.sku} | ${item.name} (MANUAL PRICE) | Category: ${isGlassItem ? "Glass" : "Other"}`);
+      let priceUnit = "บาท";
+      if (isGlass) {
+        priceUnit = "บาท/ตร.ฟุต";
+      } else if (isAluminium) {
+        priceUnit = "บาท/กก.";
+      }
+      
+      console.log(`📊 [PRICE CHECK] SKU: ${item.sku} | ${item.name} (MANUAL PRICE) | Category: ${isGlass ? "Glass" : isAluminium ? "Aluminium" : "Other"}`);
       console.log(`   R2:  ${r2Price.toFixed(2)} ${priceUnit} (ราคาสูงสุด)`);
       console.log(`   R1:  ${r1Price.toFixed(2)} ${priceUnit} (ราคาขั้นต่ำ)`);
       console.log(`   W2:  ${w2Price.toFixed(2)} ${priceUnit} (ขั้นกลาง)`);
@@ -1123,14 +1130,21 @@ function Step6_Summary({ state, dispatch }) {
       let requestedPrice;
       if (item.priceSource === "manual") {
         if (isGlass && sqft > 0) {
-          // ⭐ สำคัญ: กระจกต้องเทียบราคาต่อตารางฟุต ไม่ใช่ต่อแผ่น
-          // ถ้ามี pricePerSqft (ราคาต่อตารางฟุต) ให้ใช้โดยตรง
-          // ไม่งั้นคำนวณจาก price_per_sheet / sqft
+          // ⭐ กระจก: เทียบราคาต่อตารางฟุต
           if (item.pricePerSqft) {
             requestedPrice = Number(item.pricePerSqft);
           } else {
             const pricePerSheet = Number(item.price_per_sheet ?? Number(item.UnitPrice ?? 0));
             requestedPrice = sqft > 0 ? pricePerSheet / sqft : 0;
+          }
+        } else if (isAluminium && weight > 0) {
+          // ⭐ อลูมิเนียม: เทียบราคาต่อกิโลกรัม (ไม่ใช่ราคารวม)
+          // ต้องใช้ pricePerKg โดยตรง ไม่ใช่ราคารวมต่อเส้น
+          if (item.pricePerKg) {
+            requestedPrice = Number(item.pricePerKg);
+          } else {
+            // ถ้าไม่มี pricePerKg ให้ใช้ UnitPrice ซึ่งควรเป็นราคาต่อกก.อยู่แล้ว
+            requestedPrice = Number(item.UnitPrice ?? item.price ?? 0);
           }
         } else {
           requestedPrice = Number(item.UnitPrice ?? item.price ?? 0);
@@ -1139,13 +1153,16 @@ function Step6_Summary({ state, dispatch }) {
         if (isGlass && sqft > 0) {
           // ใช้ UnitPrice จาก pricing (ซึ่งเป็นราคาต่อตารางฟุต) โดยตรง
           requestedPrice = Number(calc?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0);
+        } else if (isAluminium && weight > 0) {
+          // ⭐ อลูมิเนียม: ใช้ราคาต่อกิโลกรัมจาก pricing
+          requestedPrice = Number(calc?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0);
         } else {
           requestedPrice = Number(calc?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0);
         }
       }
       
       // 🔍 LOG: แสดงราคาที่ขอ
-      console.log(`   💰 ราคาที่ขอ: ${requestedPrice.toFixed(2)} ${priceUnit} (${isGlassItem ? "ต่อตร.ฟุต" : "ต่อหน่วย"})`);
+      console.log(`   💰 ราคาที่ขอ: ${requestedPrice.toFixed(2)} ${priceUnit}`);
       
       // ตรวจสอบว่าราคาอยู่ในช่วงที่ต้องขออนุมัติหรือไม่
       // ลำดับราคา: R2 >= R1 > W2 > W1 > SDM (จากมากไปน้อย)

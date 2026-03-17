@@ -3,28 +3,71 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 import json
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from auth_dependency import get_employee_info
 from config.db_mssql import get_mssql_conn as get_db_connection
+
+# Load environment variables
+load_dotenv()
 
 router = APIRouter(prefix="/api/special-price-requests", tags=["special-price-requests"])
 
 # Load employees data for routing
 def load_employees():
-    """Load employees from employees.json"""
+    """Load employees from employees.json using path from .env"""
     try:
-        import os
-        # Get the directory of the current file
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        employees_path = os.path.join(current_dir, 'employees.json')
+        # Get path from environment variable
+        env_path = os.getenv('EMPLOYEES_JSON_PATH', 'employees.json')
         
+        print(f"🔍 Loading employees from: {env_path}")
+        print(f"   Current working directory: {Path.cwd()}")
+        print(f"   Script directory: {Path(__file__).parent}")
+        
+        # If path is relative, try multiple base directories
+        if not Path(env_path).is_absolute():
+            possible_paths = [
+                # 1. Relative to current working directory
+                Path.cwd() / env_path,
+                # 2. Relative to script directory
+                Path(__file__).parent / env_path,
+                # 3. Relative to backend directory (parent of script)
+                Path(__file__).parent.parent / 'backend' / env_path,
+                # 4. Docker app directory
+                Path('/app') / env_path,
+            ]
+        else:
+            # Absolute path
+            possible_paths = [Path(env_path)]
+        
+        employees_path = None
+        for path in possible_paths:
+            print(f"   Checking: {path} ... {'✓' if path.exists() else '✗'}")
+            if path.exists():
+                employees_path = path
+                break
+        
+        if not employees_path:
+            print(f"❌ employees.json not found in any of the expected locations")
+            print(f"💡 Set EMPLOYEES_JSON_PATH in .env to the correct path")
+            return []
+        
+        print(f"✅ Found employees.json at: {employees_path}")
         with open(employees_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return data.get('employees', [])
+            employees = data.get('employees', [])
+            print(f"✅ Loaded {len(employees)} employees")
+            return employees
+            
     except Exception as e:
-        print(f"Error loading employees.json: {e}")
+        print(f"❌ Error loading employees.json: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 EMPLOYEES = load_employees()
+print(f"📋 Total employees loaded: {len(EMPLOYEES)}")
 
 # ============ Models ============
 

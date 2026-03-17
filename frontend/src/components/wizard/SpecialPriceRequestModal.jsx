@@ -243,6 +243,10 @@ export default function SpecialPriceRequestModal({ open, onClose, onConfirm, ite
                   approvalLevelColor = 'text-orange-600';
                 }
                 
+                // ⭐ สำหรับสินค้าอลูมิเนียม ราคาจะเป็นต่อกิโลกรัม
+                const isAluminium = item.sku?.charAt(0)?.toUpperCase() === 'A';
+                const priceUnit = isAluminium ? '/กก.' : '';
+                
                 return (
                   <div key={idx} className="bg-gray-50 p-3 rounded-lg">
                     <div className="flex justify-between items-start">
@@ -257,11 +261,11 @@ export default function SpecialPriceRequestModal({ open, onClose, onConfirm, ite
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-gray-600">ราคาขั้นต่ำ (R1)</p>
+                        <p className="text-sm text-gray-600">ราคาขั้นต่ำ (R1){priceUnit}</p>
                         <p className="font-semibold text-gray-900">
                           {formatCurrency(item.r1_price)}
                         </p>
-                        <p className="text-sm text-red-600 mt-1">ราคาที่ขอ</p>
+                        <p className="text-sm text-red-600 mt-1">ราคาที่ขอ{priceUnit}</p>
                         <p className="font-semibold text-red-600">
                           {formatCurrency(item.requested_price)}
                         </p>

@@ -679,7 +679,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
                   onChange={(e) => setIsSoldByPack(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="font-medium">ขายยกแพ็ก/แผ่น (คิดราคาแบบสินค้าปกติ)</span>
+                <span className="font-medium">ขายยกลัง (กรุณากดเลือก)</span>
               </label>
             </div>
 
@@ -789,7 +789,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
                   onChange={(e) => setIsSoldByPack(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="font-medium text-lg">ขายยกแพ็ก/แผ่น (คิดราคาแบบสินค้าปกติ)</span>
+                <span className="font-medium text-lg">ขายยกลัง (กรุณากดเลือก)</span>
               </label>
             </div>
 
