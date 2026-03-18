@@ -1,5 +1,5 @@
 # auth_dependency.py
-from fastapi import Header
+from fastapi import Header, Request
 import jwt
 import os
 import logging
@@ -10,20 +10,22 @@ JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-this")
 JWT_ALG = "HS256"
 
 
-def get_branch_code(authorization: str = Header(None)) -> str:
+def get_branch_code(request: Request, authorization: str = Header(None)) -> str:
     """
-    Extract branch code from JWT token in Authorization header.
+    Extract branch code from JWT token in cookies or Authorization header.
     
     Returns:
         Branch code from token, or "00TR" as default if no token provided
     """
-    if not authorization:
-        logger.info("No Authorization header provided, using default branch 00TR")
+    token = request.cookies.get("auth_token")
+    if not token and authorization:
+        token = authorization.replace("Bearer ", "").strip()
+
+    if not token:
+        logger.info("No auth_token cookie or Authorization header provided, using default branch 00TR")
         return "00TR"  # Default branch
     
     try:
-        # Remove "Bearer " prefix if present
-        token = authorization.replace("Bearer ", "").strip()
         
         # Decode JWT token
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
@@ -49,9 +51,9 @@ def get_branch_code(authorization: str = Header(None)) -> str:
         return "00TR"  # Default on any error
 
 
-def get_employee_info(authorization: str = Header(None)) -> dict:
+def get_employee_info(request: Request, authorization: str = Header(None)) -> dict:
     """
-    Extract employee information from JWT token in Authorization header.
+    Extract employee information from JWT token in cookies or Authorization header.
     
     Returns:
         Dictionary with employee_id, name, branch_code, role, and region
@@ -64,13 +66,15 @@ def get_employee_info(authorization: str = Header(None)) -> dict:
         "region": "Unknown"
     }
     
-    if not authorization:
-        logger.info("No Authorization header provided, using default employee info")
+    token = request.cookies.get("auth_token")
+    if not token and authorization:
+        token = authorization.replace("Bearer ", "").strip()
+
+    if not token:
+        logger.info("No auth_token cookie or Authorization header provided, using default employee info")
         return default_info
     
     try:
-        # Remove "Bearer " prefix if present
-        token = authorization.replace("Bearer ", "").strip()
         
         # Decode JWT token
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
