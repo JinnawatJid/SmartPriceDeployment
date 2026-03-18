@@ -17,6 +17,7 @@ const getBaseURL = () => {
 const api = axios.create({
   baseURL: getBaseURL(),
   timeout: 3000000,
+  withCredentials: true,  // สำคัญ! ต้องส่ง Cookie ไปด้วยทุก request
 });
 
 // แนบ token (ถ้ามี) ในทุก request

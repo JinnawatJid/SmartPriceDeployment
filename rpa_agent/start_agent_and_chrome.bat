@@ -25,11 +25,32 @@ if %CHROME_EXE%=="" (
 )
 
 echo [OK] Found Chrome at: %CHROME_EXE%
-echo Launching...
+
+:: Detect Python architecture
+echo.
+echo ============================================================
+echo Detecting Python Architecture...
+echo ============================================================
+python -c "import struct; print('64-bit' if struct.calcsize('P') * 8 == 64 else '32-bit')" > "%TEMP%\python_arch.txt" 2>nul
+if errorlevel 1 (
+    echo [WARNING] Could not detect Python architecture
+) else (
+    set /p PYTHON_ARCH=<"%TEMP%\python_arch.txt"
+    echo [OK] Python Architecture: %PYTHON_ARCH%
+    del "%TEMP%\python_arch.txt"
+)
+echo.
 
 :: Create a dedicated User Data Directory for RPA Chrome to avoid profile locks
 set CHROME_USER_DATA="%TEMP%\chrome_rpa_profile"
-if not exist %CHROME_USER_DATA% mkdir %CHROME_USER_DATA%
+
+:: Clear cookies by removing the profile directory
+echo Clearing Chrome cookies and cache...
+if exist %CHROME_USER_DATA% (
+    rmdir /s /q %CHROME_USER_DATA% >nul 2>&1
+    echo [OK] Cleared previous Chrome profile data
+)
+mkdir %CHROME_USER_DATA%
 
 :: Close any existing Chrome instances running from the bundled folder
 echo Closing existing Chrome instances...
@@ -41,11 +62,13 @@ timeout /t 2 >nul
 :: --no-default-browser-check prevents annoying popups
 :: --disable-features=BlockInsecurePrivateNetworkRequests disables PNA CORS checks so the frontend can talk to 127.0.0.1
 echo Launching Chrome with dedicated RPA profile...
-start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir=%CHROME_USER_DATA% --no-first-run --no-default-browser-check --disable-features=BlockInsecurePrivateNetworkRequests
+start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir=%CHROME_USER_DATA% --no-first-run --no-default-browser-check --disable-features=BlockInsecurePrivateNetworkRequests "http://192.192.0.37:8000/" "http://192.192.0.6:8080/BC23TNGLIV"
 echo [OK] Chrome started on port 9222
 
-:: Give Chrome a moment to open
-timeout /t 2 >nul
+:: Give Chrome a moment to open and load the tabs
+echo Opening required tabs...
+timeout /t 3 >nul
+echo [OK] Opened tabs: http://192.192.0.37:8000/ and http://192.192.0.6:8080/BC23TNGLIV
 
 echo.
 echo ============================================================

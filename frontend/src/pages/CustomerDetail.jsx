@@ -18,16 +18,6 @@ function CustomerDetail() {
   const [creditData, setCreditData] = useState(null);
   const [creditLoading, setCreditLoading] = useState(false);
 
-  // Mock credit data (ใช้เป็น fallback ถ้า API ไม่ตอบ)
-  const mockCreditData = {
-    creditLimit: 100000,
-    creditUsed: 75000,
-    creditAvailable: 25000,
-    paymentTerm: "ปลด",
-    creditDays: 15,
-    lastPaymentDate: "20 พ.ย. 2025",
-  };
-
   useEffect(() => {
     loadCustomerData();
     loadCreditData();
@@ -327,9 +317,9 @@ function CustomerDetail() {
 
   const creditPercentage = creditData 
     ? ((creditData.credit_limit - (creditData.credit_available || 0)) / creditData.credit_limit) * 100
-    : (mockCreditData.creditUsed / mockCreditData.creditLimit) * 100;
+    : 0;
 
-  // ใช้ข้อมูลจาก API ถ้ามี ไม่งั้นใช้ mock
+  // ใช้ข้อมูลจาก API ถ้ามี ไม่งั้นใส่ 0 (สำหรับลูกค้าเงินสด)
   const displayCredit = creditData ? {
     creditLimit: creditData.credit_limit || 0,
     creditUsed: (creditData.credit_limit || 0) - (creditData.credit_available || 0),
@@ -339,7 +329,16 @@ function CustomerDetail() {
     creditDaysYC: creditData.credit_terms?.yc || 0,  // yc = ยิปซัม/โครงคร่าว
     creditDaysAL: creditData.credit_terms?.ae || 0,  // ae = อลูมิเนียม/อุปกรณ์
     lastUpdate: creditData.updated_at || null,
-  } : mockCreditData;
+  } : {
+    creditLimit: 0,
+    creditUsed: 0,
+    creditAvailable: 0,
+    paymentTerm: "เงินสด",
+    creditDaysGA: 0,
+    creditDaysYC: 0,
+    creditDaysAL: 0,
+    lastUpdate: null,
+  };
 
   return (
     <div className="min-h-screen w-full bg-[#F5F5F5] p-6">

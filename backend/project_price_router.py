@@ -58,10 +58,51 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
     conn = None
     
     try:
+        # Validate วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา
+        if project.price_end_date and project.price_start_date:
+            if project.price_end_date < project.price_start_date:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา"
+                )
+        
         conn = get_mssql_conn()
         cursor = conn.cursor()
         
-        print(f"🏗️ [CREATE PROJECT PRICE] Project Code: {project.project_code}")
+        # สร้างเลขที่เอกสารอัตโนมัติ (เหมือนใบเสนอราคา)
+        # ดึง mode จาก project_code ที่ส่งมา (ถ้ามี) หรือใช้ default
+        mode = 'project'  # default
+        if project.project_code:
+            if project.project_code.startswith('PJ'):
+                mode = 'project'
+            elif project.branch_code:
+                mode = 'branch'
+            elif project.customer_code:
+                mode = 'customer'
+        
+        # สร้างเลขที่เอกสารใหม่
+        now = datetime.now()
+        buddhist_year = str(now.year + 543)[-2:]
+        month = str(now.month).zfill(2)
+        
+        if mode == 'project':
+            prefix = f"PJ{buddhist_year}{month}"
+        elif mode == 'branch':
+            branch_prefix = project.branch_code[:2] if project.branch_code else 'XX'
+            prefix = f"{branch_prefix}{buddhist_year}{month}"
+        else:  # customer
+            prefix = f"{buddhist_year}{month}{project.customer_code}"
+        
+        # นับจำนวนเอกสารที่มี prefix เดียวกัน
+        cursor.execute("""
+            SELECT COUNT(*) as cnt FROM Project_Price_Header
+            WHERE project_code LIKE ?
+        """, (f"{prefix}%",))
+        count = cursor.fetchone()[0]
+        running_number = str(count + 1).zfill(4)
+        generated_code = f"{prefix}{running_number}"
+        
+        print(f"🏗️ [CREATE PROJECT PRICE] Generated Code: {generated_code}")
         
         # สร้าง Project Price Header
         cursor.execute("""
@@ -70,7 +111,7 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
              price_start_date, price_end_date, request_by, request_date, status, remark, created_at, updated_at, CreatedByEmployeeCode)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, GETDATE(), GETDATE(), ?)
         """, (
-            project.project_code,
+            generated_code,  # ใช้เลขที่ที่สร้างใหม่
             project.project_name,
             project.customer_code,
             project.customer_name,
@@ -87,7 +128,7 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
         cursor.execute("SELECT @@IDENTITY AS id")
         project_id = cursor.fetchone()[0]
         
-        print(f"✅ [CREATE PROJECT PRICE] Created project with ID: {project_id}, Created by: {current_user.get('employee_id') or current_user.get('id') or 'Unknown'}")
+        print(f"✅ [CREATE PROJECT PRICE] Created project with ID: {project_id}, Code: {generated_code}, Created by: {current_user.get('employee_id') or current_user.get('id') or 'Unknown'}")
         
         # สร้าง Project Price Lines
         for item in project.items:
@@ -106,8 +147,10 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
             print(f"  ➕ Added item: {item.sku} - {item.price}")
         
         conn.commit()
-        return {"success": True, "project_id": int(project_id)}
+        return {"success": True, "project_id": int(project_id), "project_code": generated_code}
     
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ [CREATE PROJECT PRICE] Error: {str(e)}")
         if conn:
@@ -442,6 +485,14 @@ async def update_project_price(project_id: int, project: ProjectPriceCreate, aut
     conn = None
     
     try:
+        # Validate วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา
+        if project.price_end_date and project.price_start_date:
+            if project.price_end_date < project.price_start_date:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา"
+                )
+        
         conn = get_mssql_conn()
         cursor = conn.cursor()
         

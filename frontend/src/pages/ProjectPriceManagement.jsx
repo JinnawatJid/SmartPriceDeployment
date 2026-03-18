@@ -159,27 +159,6 @@ const ProjectPriceManagement = () => {
       remark: '',
     });
     setItems([]);
-    
-    // Auto-fetch next code for project mode
-    if (mode === 'project') {
-      fetchNextCode('project');
-    }
-  };
-
-  // Fetch next code from backend
-  const fetchNextCode = async (mode, branchCode = null, customerCode = null) => {
-    try {
-      let url = `/api/project-prices/next-code/${mode}`;
-      const params = [];
-      if (branchCode) params.push(`branch_code=${branchCode}`);
-      if (customerCode) params.push(`customer_code=${customerCode}`);
-      if (params.length > 0) url += '?' + params.join('&');
-      
-      const res = await api.get(url);
-      setFormData(prev => ({...prev, project_code: res.data.next_code}));
-    } catch (err) {
-      console.error('Error fetching next code:', err);
-    }
   };
 
   // Fetch customer name from API
@@ -194,17 +173,6 @@ const ProjectPriceManagement = () => {
       setFormData(prev => ({...prev, customer_name: ''}));
     }
   };
-
-  // Auto-generate code when inputs change
-  useEffect(() => {
-    if (!priceMode) return;
-    
-    if (priceMode === 'branch' && formData.branch_code) {
-      fetchNextCode('branch', formData.branch_code);
-    } else if (priceMode === 'customer' && formData.customer_code) {
-      fetchNextCode('customer', null, formData.customer_code);
-    }
-  }, [priceMode, formData.branch_code, formData.customer_code]);
 
   const loadFilterOptions = async () => {
     try {
@@ -445,6 +413,14 @@ const ProjectPriceManagement = () => {
       return;
     }
 
+    // Validate วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา
+    if (formData.price_end_date && formData.price_start_date) {
+      if (formData.price_end_date < formData.price_start_date) {
+        alert('วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา');
+        return;
+      }
+    }
+
     try {
       const payload = {
         ...formData,
@@ -466,8 +442,9 @@ const ProjectPriceManagement = () => {
         setEditingProjectId(null);
       } else {
         // Create new project
-        await api.post('/api/project-prices/', payload);
-        alert('บันทึกราคาโครงการเรียบร้อยแล้ว');
+        const response = await api.post('/api/project-prices/', payload);
+        const generatedCode = response.data?.project_code || 'สร้างสำเร็จ';
+        alert(`บันทึกราคาโครงการเรียบร้อยแล้ว\nเลขที่เอกสาร: ${generatedCode}`);
       }
       
       // Reset form
@@ -489,7 +466,8 @@ const ProjectPriceManagement = () => {
       loadProjects();
     } catch (err) {
       console.error('Error saving project:', err);
-      alert('เกิดข้อผิดพลาดในการบันทึก');
+      const errorMsg = err.response?.data?.detail || 'เกิดข้อผิดพลาดในการบันทึก';
+      alert(errorMsg);
     }
   };
 
@@ -669,38 +647,29 @@ const ProjectPriceManagement = () => {
           {(priceMode || editingProjectId) && (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Row 1: Project Info */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  รหัสโครงการ *
-                </label>
-                {editingProjectId ? (
-                  <div className="border rounded-lg px-3 py-2 bg-gray-100 text-gray-800 font-mono font-semibold">
-                    {formData.project_code}
-                  </div>
-                ) : (
-                  <div className="border rounded-lg px-3 py-2 bg-gray-50 text-gray-800 font-mono font-semibold">
-                    {formData.project_code || 'กำลังสร้าง...'}
-                  </div>
-                )}
-              </div>
-              
-              {(priceMode === 'project' || editingProjectId) && (
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ชื่อโครงการ *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.project_name}
-                  onChange={(e) => setFormData({...formData, project_name: e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="เช่น โครงการคอนโดXXX"
-                />
-              </div>
-              )}
+            {(priceMode === 'project' || editingProjectId) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ชื่อโครงการ *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.project_name}
+                onChange={(e) => setFormData({...formData, project_name: e.target.value})}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="เช่น โครงการคอนโดXXX"
+              />
             </div>
+            )}
+            
+            {editingProjectId && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              <span className="text-sm text-blue-800">
+                🔧 กำลังแก้ไขโครงการ: <span className="font-mono font-semibold">{formData.project_code}</span>
+              </span>
+            </div>
+            )}
 
             {/* Row 2: Customer Info */}
             {(priceMode !== 'customer' || editingProjectId) && (
@@ -851,7 +820,7 @@ const ProjectPriceManagement = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  วันที่ขอ
+                  วันที่อนุมัติ
                 </label>
                 <input
                   type="date"
