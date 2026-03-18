@@ -1,9 +1,8 @@
-// src/pages/Login.jsx (NEW DESIGN)
+// src/pages/Login.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
 
-// ไอคอนสำหรับช่อง Input (เป็น optional แต่ช่วยให้สวยขึ้น)
 const UserIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -47,30 +46,33 @@ function Login() {
   };
 
   return (
-    // 1. พื้นหลัง Gradient เต็มจอ
     <div className="flex min-h-screen w-full items-center justify-center bg-white">
-      {/* 2. การ์ด Login สีขาวตรงกลาง */}
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl">
-        {/* 3. ส่วน Logo */}
+        {/* Logo */}
         <div className="flex justify-center mb-6">
-          {/* ❗️ หมายเหตุ: 
-            ให้คุณนำไฟล์โลโก้ (เช่น logo.png) ไปไว้ในโฟลเดอร์ /public
-            แล้วอ้างอิงตามนี้ครับ
-          */}
           <img src="/assets/favicon.png" alt="Smart Pricing Logo" className="h-25 " />
         </div>
 
-        {/* 4. หัวข้อ "Login" */}
-        <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">Login</h1>
+        {/* หัวข้อ */}
+        <h1 className="mb-2 text-center text-2xl font-bold text-gray-800">Login</h1>
+        <p className="mb-6 text-center text-sm text-gray-500">
+          กรุณากรอกรหัสพนักงานเพื่อเข้าสู่ระบบ
+        </p>
 
-        {/* 5. ฟอร์ม */}
+        {/* แสดง Error */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700 text-center">{error}</p>
+          </div>
+        )}
+
+        {/* Employee Code Login Form */}
         <form onSubmit={handleSubmit} className="w-full">
           <div>
             <label htmlFor="employeeCode" className="mb-2 block text-sm font-medium text-gray-600">
-              Employee Code
+              รหัสพนักงาน
             </label>
 
-            {/* 6. ช่อง Input (แบบมีไอคอน) */}
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                 <UserIcon />
@@ -82,21 +84,18 @@ function Login() {
                 onChange={(e) => setEmployeeCode(e.target.value)}
                 placeholder="รหัสพนักงานของคุณ"
                 className="w-full rounded-lg border border-gray-300 bg-gray-50 p-3 pl-10 text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
               />
             </div>
           </div>
 
-          {/* 7. แสดง Error (ถ้ามี) */}
-          {error && <p className="mt-3 text-center text-sm text-red-600">{error}</p>}
-
-          {/* 8. ปุ่ม Login (สี Gradient) */}
-          <div className="mt-8">
+          <div className="mt-6">
             <button
               type="submit"
               disabled={loading}
               className="w-full rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 py-3 font-bold text-white shadow-md transition-all duration-300 hover:from-blue-600 hover:to-blue-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70"
             >
-              {loading ? "กำลังตรวจสอบ..." : "Login"}
+              {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
             </button>
           </div>
         </form>

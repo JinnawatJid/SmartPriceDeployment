@@ -28,6 +28,7 @@ from chrome_debug_router import router as chrome_debug_router
 from promotion_router import router as promotion_router
 from project_price_router import router as project_price_router
 from special_price_request_router import router as special_price_request_router
+from uxp_auth import router as uxp_auth_router
 
 from config.config_external_api import CUSTOMER_API_KEY
 # from logging_config import setup_logging
@@ -97,12 +98,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Vite dev server
-        "http://localhost:3000",  # Alternative dev port
+        "http://localhost:3000",  # UXP Portal
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
-        "*"  # Allow all for flexibility
+        # TODO: เพิ่ม production URLs
+        # "https://uxp.company.com",
+        # "https://smartpricing.company.com",
     ],
-    allow_credentials=True,
+    allow_credentials=True,  # สำคัญ! ต้องเป็น True เพื่อรับ Cookie จาก UXP
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -129,6 +132,7 @@ app.include_router(chrome_debug_router)  # Chrome debug mode starter
 app.include_router(promotion_router)  # Promotion management
 app.include_router(project_price_router)  # Project price management
 app.include_router(special_price_request_router)  # Special price request management
+app.include_router(uxp_auth_router)  # UXP SSO authentication
 
 
 
