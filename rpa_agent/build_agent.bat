@@ -20,36 +20,110 @@ if exist "rpa_agent.py" (
 
 echo.
 echo ==============================================
-echo 1) Checking for Python Installation...
+echo 1) Select Target Architecture...
 echo ==============================================
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Python is not installed or not in PATH.
-    echo Please install Python 3.9+ and try again.
+echo The branch machines require a 32-bit executable.
+echo Your system default Python might be 64-bit.
+echo.
+echo Please select the architecture you want to build for:
+echo [1] 32-bit (For Branch Machines - Recommended)
+echo [2] 64-bit (For Local Testing Only)
+echo.
+set /p ARCH_CHOICE="Enter 1 or 2: "
+
+if "%ARCH_CHOICE%"=="1" (
+    set TARGET_ARCH=32
+    echo You selected: 32-bit Build
+) else if "%ARCH_CHOICE%"=="2" (
+    set TARGET_ARCH=64
+    echo You selected: 64-bit Build
+) else (
+    echo Invalid choice. Exiting.
     pause
     exit /b 1
 )
 
-:: Check for 32-bit Python explicitly
-python -c "import platform; import sys; sys.exit(0) if platform.architecture()[0] == '32bit' else sys.exit(1)"
-if errorlevel 1 (
-    echo [WARNING] You are not using a 32-bit Python interpreter.
-    echo To deploy to 32-bit Windows machines, you MUST use a 32-bit version of Python.
-    echo Found:
-    python -c "import platform; print(platform.architecture()[0])"
-    echo Press any key to continue building anyway, or close this window to stop...
+echo.
+echo ==============================================
+echo 2) Locating Python Installation...
+echo ==============================================
+
+set "PYTHON_EXE="
+
+if "%TARGET_ARCH%"=="32" (
+    echo Searching for 32-bit Python...
+
+    :: Attempt 1: Try the Python Launcher 'py' targeting 32-bit
+    py -3-32 -c "import platform,sys; sys.exit(0) if platform.architecture()[0]=='32bit' else sys.exit(1)" >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_EXE=py -3-32"
+        goto :FOUND_PYTHON
+    )
+
+    :: Attempt 2: Check common installation paths for 32-bit Python
+    for %%P in (
+        "C:\Python312-32\python.exe"
+        "C:\Python311-32\python.exe"
+        "%LocalAppData%\Programs\Python\Python312-32\python.exe"
+        "%LocalAppData%\Programs\Python\Python311-32\python.exe"
+        "C:\Program Files (x86)\Python312-32\python.exe"
+    ) do (
+        if exist "%%~P" (
+            "%%~P" -c "import platform,sys; sys.exit(0) if platform.architecture()[0]=='32bit' else sys.exit(1)" >nul 2>&1
+            if not errorlevel 1 (
+                set "PYTHON_EXE="%%~P""
+                goto :FOUND_PYTHON
+            )
+        )
+    )
+
+    :: Attempt 3: Check if default python is 32-bit
+    python -c "import platform,sys; sys.exit(0) if platform.architecture()[0]=='32bit' else sys.exit(1)" >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_EXE=python"
+        goto :FOUND_PYTHON
+    )
+
+    echo [ERROR] Could not find a 32-bit Python installation!
+    echo Please download and install the "Windows installer (32-bit)" for Python 3.12 or 3.11.
     pause
+    exit /b 1
+) else (
+    echo Searching for 64-bit Python...
+
+    :: Attempt 1: Check default python
+    python --version >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_EXE=python"
+        goto :FOUND_PYTHON
+    )
+
+    :: Attempt 2: Try Python Launcher
+    py -3 -V >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_EXE=py -3"
+        goto :FOUND_PYTHON
+    )
+
+    echo [ERROR] Could not find any Python installation!
+    pause
+    exit /b 1
 )
+
+:FOUND_PYTHON
+echo [OK] Using Python interpreter: %PYTHON_EXE%
+%PYTHON_EXE% -V
+%PYTHON_EXE% -c "import platform; print('Architecture:', platform.architecture()[0])"
 
 echo.
 echo ==============================================
-echo 2) Setting up Virtual Environment...
+echo 3) Setting up Virtual Environment...
 echo ==============================================
 echo Removing corrupted or old virtual environment (if any)...
 if exist "venv" rmdir /S /Q "venv"
 
 echo Creating fresh virtual environment...
-python -m venv venv
+%PYTHON_EXE% -m venv venv
 call venv\Scripts\activate.bat
 
 echo.

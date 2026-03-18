@@ -134,7 +134,7 @@ async def init_from_uxp(request: Request, response: Response):
 
 # === LOGIN ROUTE ===
 @router.post("")
-async def login(req: LoginRequest, response: Response):
+async def login(req: LoginRequest):
     emp = await load_employee(req.employeeCode)
     if not emp:
         raise HTTPException(status_code=401, detail="รหัสพนักงานไม่ถูกต้อง")
@@ -148,17 +148,6 @@ async def login(req: LoginRequest, response: Response):
         },
         JWT_SECRET,
         algorithm=JWT_ALG,
-    )
-
-    # สร้าง HttpOnly cookie
-    response.set_cookie(
-        key="auth_token",
-        value=token,
-        httponly=True,
-        secure=os.getenv("COOKIE_SECURE", "false").lower() == "true",
-        samesite="lax",
-        max_age=JWT_EXPIRE_HOURS * 3600,
-        path="/",
     )
 
     return {"token": token, "employee": emp}

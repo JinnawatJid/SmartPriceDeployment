@@ -17,8 +17,9 @@ from selenium.webdriver.chrome.service import Service
 # Fix encoding for Windows console
 if sys.platform == "win32":
     import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    # Add line_buffering=True so print statements appear immediately in PyInstaller frozen console
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
 
 def convert_quote_code(input_code):
     """
@@ -1185,9 +1186,18 @@ class RPAHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Not Found")
 
 def run_server(port=8001):
+    print("="*60)
+    print("   SMART PRICING LOCAL RPA AGENT IS STARTING...")
+    print("="*60)
+    print("Initializing server...")
+
     server_address = ('0.0.0.0', port)
     httpd = HTTPServer(server_address, RPAHandler)
-    print(f"Starting Local RPA Agent on port {port}...")
+
+    print(f"\n[OK] Local RPA Agent is running and listening on port {port}!")
+    print("[INFO] Waiting for requests from the Smart Pricing Web App...")
+    print("[INFO] (Do not close this window while working)\n")
+
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
