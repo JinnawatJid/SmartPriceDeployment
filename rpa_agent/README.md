@@ -31,23 +31,27 @@ During development, we encountered three major challenges regarding browser auto
 *   **Solution:** We added the `--disable-features=BlockInsecurePrivateNetworkRequests` flag directly into the `start_agent_and_chrome.bat` script. This automatically bypasses the PNA check for that specific Chrome session, allowing the frontend to talk to the Local Agent without requiring the user to manually configure Chrome flags.
 
 ### 3. The Offline Selenium Failure ("Unable to obtain driver for chrome" / HTTP 500)
-*   **Problem:** Selenium 4 uses an internal tool called "Selenium Manager" to automatically download the correct `chromedriver.exe` matching the user's installed Chrome version over the internet. Because branch computers operate in strictly offline or restricted network environments, this download failed, causing the RPA agent to crash on startup.
-*   **Solution:** We made the agent fully offline-capable. `rpa_agent.py` was updated to check its own directory for a file named `chromedriver.exe`. If found, it explicitly initializes the browser using that local file (`webdriver.Chrome(service=Service(executable_path=...))`), completely bypassing the internet-dependent Selenium Manager.
+*   **Problem:** Selenium 4 uses an internal tool called "Selenium Manager" to automatically download the correct `chromedriver.exe` matching the user's installed Chrome version over the internet. Because branch computers operate in strictly offline or restricted network environments, this download failed, causing the RPA agent to crash on startup. Furthermore, matching the ChromeDriver to the host machine's auto-updating Chrome browser was a constant maintenance nightmare for the IT team.
+*   **Solution:** We adopted an industry-standard offline bundling approach. The build script now automatically downloads a portable **32-bit Chrome for Testing** and its matching **ChromeDriver**. These are bundled into a `browser` directory. The `start_agent_and_chrome.bat` script launches this specific bundled browser instead of the system Chrome. This completely isolates the RPA agent from host OS browser updates and internet dependency.
+
+### 4. The 32-bit Architecture Compatibility & Heavy Dependencies
+*   **Problem:** Branch machines run 32-bit Windows, meaning a 64-bit `.exe` would instantly crash with a "not compatible" error. Additionally, building the `.exe` with `fastapi` and `pydantic` occasionally failed because some dependencies required a Rust C++ compiler.
+*   **Solution:** `build_agent.bat` was updated with an interactive menu that automatically locates a 32-bit Python installation on the developer's machine (without messing up their global 64-bit PATH) to guarantee a 32-bit build. Furthermore, `fastapi` was stripped out entirely; the agent now uses Python's ultra-lightweight, built-in `http.server`, removing the need for a Rust compiler and resulting in a much faster, cleaner build process.
 
 ---
 
 ## 🏗️ Phase 1: Building the Agent (IT Team / Developer)
 
-**⚠️ Requires Internet Access and Python 3.9+**
+**⚠️ Requires Internet Access**
 
-To distribute the Agent to branch users, you must build it into a standalone `.exe` so they do not need to install Python.
+To distribute the Agent to branch users, you must build it into a self-contained release package.
 
-1. Ensure Python 3.9+ is installed on your **developer machine**.
-   *   *Note: If branch machines are running older 32-bit Windows 10 installations, you MUST install a 32-bit version of Python on your developer machine to compile a compatible 32-bit `.exe`.*
+1. Ensure a **32-bit version of Python** is installed on your developer machine (download the "Windows installer (32-bit)" from python.org). You do **not** need to add it to your PATH if you already have a 64-bit version installed.
 2. Open a terminal in the `rpa_agent/` directory.
 3. Run `build_agent.bat`.
-4. This script creates a virtual environment, downloads dependencies, and compiles the Python script using PyInstaller.
-5. The final artifact will be located at `rpa_agent/dist/rpa_agent.exe`.
+4. The script will present an interactive menu. **Select Option [1] for 32-bit build.**
+5. The script will automatically locate your 32-bit Python, download the portable Chrome browser, compile the script using PyInstaller, and package everything together.
+6. The final artifact will be a single zip file located at `rpa_agent/rpa_agent_release.zip`.
 
 ---
 
@@ -55,10 +59,10 @@ To distribute the Agent to branch users, you must build it into a standalone `.e
 
 **✅ No Internet or Python Required on Branch PCs**
 
-Provide the branch users with a folder containing exactly these three files:
-1. `rpa_agent.exe` (from the `dist` folder generated in Phase 1)
-2. `start_agent_and_chrome.bat`
-3. `chromedriver.exe` **(CRITICAL)**: You must manually download the exact version of `chromedriver.exe` that matches the branch computer's installed Google Chrome version (e.g., v118) from Google's official ChromeDriver repository and place it in the same folder.
+Deploying to the branch is now incredibly simple:
+1. Send `rpa_agent_release.zip` to the branch machine.
+2. Have the branch user (or IT) extract the zip file to their Desktop or C: drive.
+3. Inside the extracted folder, they will find everything pre-configured (`rpa_agent.exe`, the `browser/` folder, and the launcher script).
 
 ---
 
