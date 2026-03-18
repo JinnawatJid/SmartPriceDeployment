@@ -6,42 +6,45 @@ export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [employee, setEmployee] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token"));
   const [loading, setLoading] = useState(true);
 
+  // ตรวจสอบ authentication เมื่อ component mount
   useEffect(() => {
-    if (token) {
-      // (Optional) ควรมีการ verify token กับ backend
-      // แต่ในที่นี้ เราจะแค่ดึงข้อมูลพนักงานจาก localStorage ถ้ามี
-      const storedEmp = localStorage.getItem("employee");
-      if (storedEmp) {
-        setEmployee(JSON.parse(storedEmp));
-      }
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      // เรียก /login/me เพื่อดึงข้อมูลผู้ใช้จาก cookie
+      const response = await api.get("/api/login/me");
+      setEmployee(response.data.employee);
+    } catch (error) {
+      console.log("Not authenticated or token expired");
+      setEmployee(null);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [token]);
+  };
 
   const login = async (employeeCode) => {
     const response = await api.post("/api/login", { employeeCode });
-    const { token, employee } = response.data;
-    setToken(token);
+    const { employee } = response.data;
     setEmployee(employee);
-    localStorage.setItem("token", token);
-    localStorage.setItem("employee", JSON.stringify(employee));
-    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    // Cookie ถูกสร้างโดย backend อัตโนมัติ
   };
 
-  const logout = () => {
-    setToken(null);
-    setEmployee(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("employee");
-    delete api.defaults.headers.common["Authorization"];
+  const logout = async () => {
+    try {
+      await api.post("/api/login/logout");
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setEmployee(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ employee, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ employee, loading, login, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

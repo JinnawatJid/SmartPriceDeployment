@@ -1,6 +1,5 @@
 // src/App.jsx (แก้ไข)
 import { Routes, Route, Outlet } from "react-router-dom";
-import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import CreateQuoteWizard from "./pages/CreateQuote/CreateQuoteWizard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -15,22 +14,20 @@ import CustomerDetail from "./pages/CustomerDetail.jsx";
 import CustomerSearch from "./pages/CustomerSearch.jsx";
 import PromotionManagement from "./pages/PromotionManagement.jsx";
 import SpecialPriceApproval from "./pages/SpecialPriceApproval.jsx";
+import Login from "./pages/Login.jsx";
 
 // --- Layout 1 (สำหรับ Dashboard) ---
 const DashboardLayout = () => (
   <div className="min-h-screen w-full bg-[#F5F5F5] text-gray-800">
-    <Navbar /> {/* ❗️ 2. วาง Navbar ที่นี่ */}
-    <Outlet /> {/* หน้า Dashboard จะถูก Render ตรงนี้ (ใต้ Navbar) */}
+    <Navbar />
+    <Outlet />
   </div>
 );
 
 // --- Layout 2 (สำหรับ Wizard) ---
 const WizardLayout = () => (
-  // ❗️ 3. เราปรับโครงสร้างตรงนี้เล็กน้อย
-  // ให้พื้นหลังเทา (bg-gray-100) อยู่รูท
   <div className="min-h-screen w-full flex flex-col bg-gray-100 text-gray-800">
-    <Navbar /> {/* ❗️ 4. วาง Navbar ที่นี่ */}
-    {/* 5. สร้าง <main> เพื่อเป็น "พื้นที่สีเทา" ที่แท้จริง (อยู่ใต้ Navbar) */}
+    <Navbar />
     <main className="flex-1 w-full p-4 flex flex-col">
       <div className="bg-white container mx-auto max-w-[1280px] flex-1 flex flex-col rounded-lg shadow-lg">
         <Outlet />
@@ -43,12 +40,13 @@ const WizardLayout = () => (
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Login />} />
+      {/* Login route - ไม่ต้องผ่าน ProtectedRoute */}
       <Route path="/login" element={<Login />} />
 
       <Route element={<ProtectedRoute />}>
         {/* 2.1: Dashboard (ใช้ DashboardLayout) */}
         <Route element={<DashboardLayout />}>
+          <Route path="/" element={<Dashboard />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/update-price" element={<UpdatePrice />} />
           <Route path="/project-price" element={<ProjectPrice />} />

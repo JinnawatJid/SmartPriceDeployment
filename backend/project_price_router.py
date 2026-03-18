@@ -58,12 +58,12 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
     conn = None
     
     try:
-        # Validate วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา
+        # Validate วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มใช้ราคา
         if project.price_end_date and project.price_start_date:
-            if project.price_end_date < project.price_start_date:
+            if project.price_end_date <= project.price_start_date:
                 raise HTTPException(
                     status_code=400, 
-                    detail="วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา"
+                    detail="วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มใช้ราคา"
                 )
         
         conn = get_mssql_conn()
@@ -485,12 +485,12 @@ async def update_project_price(project_id: int, project: ProjectPriceCreate, aut
     conn = None
     
     try:
-        # Validate วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา
+        # Validate วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มใช้ราคา
         if project.price_end_date and project.price_start_date:
-            if project.price_end_date < project.price_start_date:
+            if project.price_end_date <= project.price_start_date:
                 raise HTTPException(
                     status_code=400, 
-                    detail="วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา"
+                    detail="วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มใช้ราคา"
                 )
         
         conn = get_mssql_conn()

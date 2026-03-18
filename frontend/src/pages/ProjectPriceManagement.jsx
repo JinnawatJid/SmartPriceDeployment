@@ -413,10 +413,10 @@ const ProjectPriceManagement = () => {
       return;
     }
 
-    // Validate วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา
+    // Validate วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มใช้ราคา
     if (formData.price_end_date && formData.price_start_date) {
-      if (formData.price_end_date < formData.price_start_date) {
-        alert('วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มใช้ราคา');
+      if (formData.price_end_date <= formData.price_start_date) {
+        alert('วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มใช้ราคา');
         return;
       }
     }
@@ -441,10 +441,10 @@ const ProjectPriceManagement = () => {
         alert('อัพเดทราคาโครงการเรียบร้อยแล้ว');
         setEditingProjectId(null);
       } else {
-        // Create new project
+        // Create new project - เลขที่จะถูกสร้างโดย backend
         const response = await api.post('/api/project-prices/', payload);
         const generatedCode = response.data?.project_code || 'สร้างสำเร็จ';
-        alert(`บันทึกราคาโครงการเรียบร้อยแล้ว\nเลขที่เอกสาร: ${generatedCode}`);
+        alert(`บันทึกราคาโครงการเรียบร้อยแล้ว\nเลขที่ใบคำขอ: ${generatedCode}`);
       }
       
       // Reset form
@@ -663,14 +663,6 @@ const ProjectPriceManagement = () => {
             </div>
             )}
             
-            {editingProjectId && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-              <span className="text-sm text-blue-800">
-                🔧 กำลังแก้ไขโครงการ: <span className="font-mono font-semibold">{formData.project_code}</span>
-              </span>
-            </div>
-            )}
-
             {/* Row 2: Customer Info */}
             {(priceMode !== 'customer' || editingProjectId) && (
             <div className="grid grid-cols-2 gap-4">

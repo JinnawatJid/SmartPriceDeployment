@@ -130,8 +130,17 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
                       loadCustomerFull(c.id);
                     }}
                   >
-                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
-                    <p className="text-xs text-gray-500">{c.phone}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                        <p className="text-xs text-gray-500">{c.phone}</p>
+                      </div>
+                      <div className="ml-2">
+                        <span className="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                          {c.id}
+                        </span>
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
