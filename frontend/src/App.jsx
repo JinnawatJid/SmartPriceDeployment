@@ -9,10 +9,12 @@ import QuoteDraftListPage from "./pages/QuoteDraftListPage.jsx";
 import ConfirmedQuotesPage from "./pages/ConfirmedQuotesPage";
 import OrderDetailPage from "./pages/OrderDetailPage.jsx";
 import UpdatePrice from "./pages/UpdatePrice";
+import ProjectPrice from "./pages/ProjectPrice";
 import CustomerPerDay from "./pages/CustomerPerDay.jsx";
 import CustomerDetail from "./pages/CustomerDetail.jsx";
 import CustomerSearch from "./pages/CustomerSearch.jsx";
 import PromotionManagement from "./pages/PromotionManagement.jsx";
+import SpecialPriceApproval from "./pages/SpecialPriceApproval.jsx";
 
 // --- Layout 1 (สำหรับ Dashboard) ---
 const DashboardLayout = () => (
@@ -49,6 +51,7 @@ function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/update-price" element={<UpdatePrice />} />
+          <Route path="/project-price" element={<ProjectPrice />} />
           <Route path="/quote-drafts" element={<QuoteDraftListPage />} />
           <Route path="/confirmed-quotes" element={<ConfirmedQuotesPage />} />
           <Route path="/order/:id" element={<OrderDetailPage />} />
@@ -56,6 +59,7 @@ function App() {
           <Route path="/customer-search" element={<CustomerSearch />} />
           <Route path="/customer/:customerId" element={<CustomerDetail />} />
           <Route path="/promotions" element={<PromotionManagement />} />
+          <Route path="/special-price-approval" element={<SpecialPriceApproval />} />
         </Route>
 
         {/* 2.2: CreateQuote (ใช้ WizardLayout) */}

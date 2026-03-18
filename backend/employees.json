@@ -1,0 +1,179 @@
+{
+  "employees": [
+    {
+      "employee_id": "10027",
+      "branch": "12CM",
+      "region": "N",
+      "role": "RM"
+    },
+    {
+      "employee_id": "16725",
+      "branch": "11PL",
+      "region": "N",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "10011",
+      "branch": "12CM",
+      "region": "N",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20037",
+      "branch": "17CR",
+      "region": "N",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20084",
+      "branch": "23NS",
+      "region": "N",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "15487",
+      "branch": "13SR",
+      "region": "S",
+      "role": "RM"
+    },
+    {
+      "employee_id": "20040",
+      "branch": "13SR",
+      "region": "S",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "10254",
+      "branch": "14HY",
+      "region": "S",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "16702",
+      "branch": "16PK",
+      "region": "S",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "21560",
+      "branch": "10KK",
+      "region": "NE",
+      "role": "RM"
+    },
+    {
+      "employee_id": "20091",
+      "branch": "08NR",
+      "region": "NE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "16053",
+      "branch": "09UB",
+      "region": "NE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "16654",
+      "branch": "10KK",
+      "region": "NE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "16723",
+      "branch": "18UD",
+      "region": "NE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20129",
+      "branch": "20SK",
+      "region": "NE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "21751",
+      "branch": "21BS",
+      "region": "C",
+      "role": "RM"
+    },
+    {
+      "employee_id": "20686",
+      "branch": "05AY",
+      "region": "C",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20595",
+      "branch": "07RB",
+      "region": "C",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20974",
+      "branch": "19PC",
+      "region": "C",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "10073",
+      "branch": "21BS",
+      "region": "C",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20813",
+      "branch": "25SB",
+      "region": "C",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20054",
+      "branch": "90HO",
+      "region": "BE",
+      "role": "RM"
+    },
+    {
+      "employee_id": "20614",
+      "branch": "00TR",
+      "region": "BE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20194",
+      "branch": "01TJ",
+      "region": "BE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20785",
+      "branch": "03TS",
+      "region": "BE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "20093",
+      "branch": "04TP",
+      "region": "BE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "16647",
+      "branch": "06RY",
+      "region": "BE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "16646",
+      "branch": "15CB",
+      "region": "BE",
+      "role": "ZM"
+    },
+    {
+      "employee_id": "21094",
+      "branch": "24TL",
+      "region": "BE",
+      "role": "ZM"
+    }
+
+  ]
+}

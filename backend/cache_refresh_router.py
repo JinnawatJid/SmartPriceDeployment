@@ -3,7 +3,7 @@
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from datetime import datetime
-from jobs.customer_cache_refresh import run_customer_cache_refresh
+from jobs.customer_cache_refresh_standalone import run_customer_cache_refresh
 from config.cache_config import USE_DATABASE_CACHE
 
 router = APIRouter(

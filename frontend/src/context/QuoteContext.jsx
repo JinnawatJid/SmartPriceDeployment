@@ -130,6 +130,9 @@ function quoteReducer(state, action) {
         
         // ⭐ เก็บข้อมูล stock
         stock: newItem.stock ?? null,
+        
+        // ⭐ เก็บ flag isSoldByPack
+        isSoldByPack: newItem.isSoldByPack ?? false,
       };
 
       // 2) หา item ซ้ำ “ต้อง match ด้วย sku + variantCode + sqft”
@@ -218,7 +221,12 @@ function quoteReducer(state, action) {
           // ⭐ CASE 1: ปรับ qty จาก CartItemRow
           // =================================================
           if (from === "cart") {
-            const displayUnitPrice = isGlass
+            const isSoldByPack = it.isSoldByPack || false;  // ⭐ เช็ค flag
+            
+            // ⭐ สำหรับกระจกที่ขายยกแพ็ก ใช้ UnitPrice แทน price_per_sheet
+            const displayUnitPrice = isGlass && isSoldByPack
+              ? Number(it.UnitPrice ?? it.price ?? 0)
+              : isGlass
               ? Number(it.price_per_sheet ?? 0)
               : Number(it.price ?? 0);
 
@@ -274,6 +282,8 @@ function quoteReducer(state, action) {
     // UPDATE CART PRICE (MANUAL)
     // -------------------------
     case "UPDATE_CART_PRICE": {
+      console.log('🔧 [REDUCER] UPDATE_CART_PRICE triggered:', action.payload);
+      
       const { 
         sku, 
         variantCode = null, 
@@ -302,6 +312,16 @@ function quoteReducer(state, action) {
           const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
           const isGlass = cat === "G";
           const isAluminium = cat === "A";
+          
+          console.log('🔧 [REDUCER] Updating item:', {
+            sku,
+            category: cat,
+            isGlass,
+            isAluminium,
+            unitPrice,
+            pricePerSqft,
+            pricePerKg
+          });
 
           // -------------------------
           // 🔒 manual price wins
@@ -316,7 +336,7 @@ function quoteReducer(state, action) {
               price: undefined,
               lineTotal: pricePerSheet * qty,
               priceSource: "manual",        // ⭐ สำคัญ
-              needsPricing: false,          // ⭐ กัน pricing override
+              needsPricing: true,           // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
               unit: it.unit, // ⭐ เก็บ unit ไว้
               ...(pricePerSqft && { pricePerSqft }), // เก็บราคาต่อตร.ฟุต
             };
@@ -331,7 +351,7 @@ function quoteReducer(state, action) {
               price_per_sheet: undefined,
               lineTotal: unitPrice * qty,
               priceSource: "manual",
-              needsPricing: false,
+              needsPricing: true,           // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
               unit: it.unit, // ⭐ เก็บ unit ไว้
               ...(pricePerKg && { pricePerKg }), // เก็บราคาต่อกก.
               ...(weight !== undefined && { weight, product_weight: weight }), // เก็บน้ำหนัก
@@ -346,7 +366,7 @@ function quoteReducer(state, action) {
             price_per_sheet: undefined,
             lineTotal: unitPrice * qty,
             priceSource: "manual",          // ⭐ สำคัญ
-            needsPricing: false,
+            needsPricing: true,             // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
             unit: it.unit, // ⭐ เก็บ unit ไว้
           };
         }),

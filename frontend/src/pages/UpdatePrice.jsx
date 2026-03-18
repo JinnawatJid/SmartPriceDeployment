@@ -1,18 +1,57 @@
-import React, { useState } from "react";
-import { Tag, Building2 } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Tag } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth.js";
 import UploadPriceExcel from "../components/updatePrice/UploadPriceExcel";
 import PromotionManagement from "./PromotionManagement";
-import ProjectPriceManagement from "./ProjectPriceManagement";
+
+// รหัสพนักงานที่มีสิทธิ์เข้าถึงหน้า "เพิ่ม/อัปเดตราคา"
+const ALLOWED_PRICE_UPDATE_EMPLOYEES = ['90038', '20061', '11186', '21702', '21367', '20614', '20194', '20785', '20093', '20686', '16647', '20595', '20091', '16053', '16654', '16725', '10011', '20040', '10254', '16646', '16702', '20037', '16723', '20974', '20129', '10073', '20084', '21094', '20813'];
 
 export default function UpdatePrice() {
+  const { employee } = useAuth();
+  const navigate = useNavigate();
+  const [allowedEmployees, setAllowedEmployees] = useState(ALLOWED_PRICE_UPDATE_EMPLOYEES);
   const [uploadResult, setUploadResult] = useState(null);
   const [activeTab, setActiveTab] = useState("price"); // "price" | "promotion" | "project"
+
+  // ตรวจสอบสิทธิ์เข้าถึง
+  useEffect(() => {
+    const fetchEmployeeAccess = async () => {
+      try {
+        const res = await api.get("/api/admin/employee-access");
+        setAllowedEmployees(res.data.allowed_price_update_employees);
+      } catch (err) {
+        console.error("Failed to fetch employee access:", err);
+      }
+    };
+    fetchEmployeeAccess();
+  }, []);
+
+  useEffect(() => {
+    if (employee && !allowedEmployees.includes(employee.id)) {
+      // ถ้าไม่ใช่พนักงานที่อนุญาต ให้กลับไปที่ Dashboard
+      navigate("/dashboard", { replace: true });
+    }
+  }, [employee, allowedEmployees, navigate]);
 
   const handleUploadComplete = (result) => {
     setUploadResult(result);
     // Clear result after 5 seconds
     setTimeout(() => setUploadResult(null), 5000);
   };
+
+  // ถ้าไม่ใช่พนักงานที่อนุญาต ให้แสดงข้อความ
+  if (employee && !allowedEmployees.includes(employee.id)) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <h2 className="text-xl font-bold text-red-800 mb-2">ไม่มีสิทธิ์เข้าถึง</h2>
+          <p className="text-red-600">ขออภัย คุณไม่มีสิทธิ์เข้าถึงหน้านี้</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -45,18 +84,6 @@ export default function UpdatePrice() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
             </svg>
             จัดการโปรโมชั่น
-          </button>
-
-          <button
-            onClick={() => setActiveTab("project")}
-            className={`px-6 py-3 font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === "project"
-                ? "border-red-500 text-red-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <Building2 className="w-5 h-5" />
-            ราคาโครงการ
           </button>
         </div>
       </div>
@@ -109,10 +136,6 @@ export default function UpdatePrice() {
 
       {activeTab === "promotion" && (
         <PromotionManagement />
-      )}
-
-      {activeTab === "project" && (
-        <ProjectPriceManagement />
       )}
     </div>
   );

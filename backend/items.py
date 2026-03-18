@@ -84,6 +84,7 @@ def get_item_categories():
             COUNT(*) AS count
         FROM Item_Master
         WHERE LEFT(SKU, 1) IN ('G', 'A', 'C', 'Y', 'S', 'E')
+          AND Blocked = 0
         GROUP BY LEFT(SKU, 1)
         ORDER BY LEFT(SKU, 1)
     """)
@@ -117,7 +118,7 @@ def get_items_list_light(
     cursor = conn.cursor()
 
     # ⭐ สร้าง WHERE clause สำหรับ filter - ใช้อักษรตัวแรกของ SKU แทน Inventory_Posting_Group
-    where_clauses = ["LEFT(im.SKU, 1) = ?"]
+    where_clauses = ["LEFT(im.SKU, 1) = ?", "im.Blocked = 0"]
     params = [category_name.upper()]  # category first
 
     # ⭐ Filter by SKU pattern (Aluminium: ABBGGSSSCCTT)
@@ -220,7 +221,7 @@ def get_items_list_light(
         SELECT COUNT(*) AS total
         FROM Item_Master im
         LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-        WHERE {where_sql}
+        WHERE {where_sql} AND im.Blocked = 0
     """
     cursor.execute(count_sql, branch_code, *params)
     total = cursor.fetchone()[0]
@@ -237,7 +238,7 @@ def get_items_list_light(
             ip.AlternateName
         FROM Item_Master im
         LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-        WHERE {where_sql}
+        WHERE {where_sql} AND im.Blocked = 0
         ORDER BY im.SKU
         OFFSET ? ROWS
         FETCH NEXT ? ROWS ONLY
@@ -337,7 +338,7 @@ def get_items_paginated(
         SELECT COUNT(*) AS total
         FROM Item_Master im
         LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-        WHERE {where_sql}
+        WHERE {where_sql} AND im.Blocked = 0
     """
     cursor.execute(count_sql, branch_code, *params)
     total = cursor.fetchone()[0]
@@ -355,7 +356,7 @@ def get_items_paginated(
             LEFT(im.SKU, 1) AS category
         FROM Item_Master im
         LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-        WHERE {where_sql}
+        WHERE {where_sql} AND im.Blocked = 0
         ORDER BY im.SKU
         OFFSET ? ROWS
         FETCH NEXT ? ROWS ONLY
@@ -424,8 +425,9 @@ def full_text_search_items(
                     im.Product_Weight
                 FROM Item_Master im
                 LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-                WHERE CONTAINS((im.SKU, im.No_2, im.Description), ?)
-                   OR CONTAINS((ip.AlternateName), ?)
+                WHERE (CONTAINS((im.SKU, im.No_2, im.Description), ?)
+                   OR CONTAINS((ip.AlternateName), ?))
+                   AND im.Blocked = 0
                 ORDER BY 
                     CASE 
                         WHEN im.SKU LIKE ? THEN 1
@@ -448,9 +450,10 @@ def full_text_search_items(
                     im.Product_Weight
                 FROM Item_Master im
                 LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-                WHERE FREETEXT((im.Description), ?)
+                WHERE (FREETEXT((im.Description), ?)
                    OR FREETEXT((ip.AlternateName), ?)
-                   OR CONTAINS((im.SKU, im.No_2), ?)
+                   OR CONTAINS((im.SKU, im.No_2), ?))
+                   AND im.Blocked = 0
                 ORDER BY im.SKU
             """
             search_term = f'"{q_clean}*"'
@@ -467,11 +470,11 @@ def full_text_search_items(
                 im.Product_Weight
             FROM Item_Master im
             LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-            WHERE
-                im.SKU LIKE ?
+            WHERE (im.SKU LIKE ?
                 OR im.No_2 LIKE ?
                 OR im.Description LIKE ?
-                OR ip.AlternateName LIKE ?
+                OR ip.AlternateName LIKE ?)
+                AND im.Blocked = 0
             ORDER BY 
                 CASE 
                     WHEN im.SKU LIKE ? THEN 1
@@ -529,7 +532,7 @@ def get_item_detail(sku: str, branch_code: str = Depends(get_branch_code)):
             im.Product_Weight
         FROM Item_Master im
         LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-        WHERE im.SKU = ?
+        WHERE im.SKU = ? AND im.Blocked = 0
     """
 
     cursor.execute(sql, branch_code, sku)
@@ -546,7 +549,7 @@ def get_item_detail(sku: str, branch_code: str = Depends(get_branch_code)):
                 im.Product_Weight
             FROM Item_Master im
             LEFT JOIN Item_Price ip ON im.SKU = ip.SKU AND ip.BranchCode = ?
-            WHERE im.No_2 = ?
+            WHERE im.No_2 = ? AND im.Blocked = 0
         """
         cursor.execute(sql, branch_code, sku)
         row = cursor.fetchone()
@@ -636,7 +639,7 @@ def get_related_items(sku: str, limit: int = 50, branch_code: str = Depends(get_
     sql = """
         SELECT Product_Group
         FROM Item_Master
-        WHERE SKU = ? OR No_2 = ?
+        WHERE (SKU = ? OR No_2 = ?) AND Blocked = 0
     """
     cursor.execute(sql, sku, sku)
     row = cursor.fetchone()
@@ -660,6 +663,7 @@ def get_related_items(sku: str, limit: int = 50, branch_code: str = Depends(get_
         WHERE im.Product_Group = ?
           AND im.SKU != ?
           AND (im.No_2 IS NULL OR im.No_2 != ?)
+          AND im.Blocked = 0
         ORDER BY im.SKU
     """
     cursor.execute(sql, product_group, sku, sku)
@@ -704,7 +708,7 @@ def get_filter_options(
     cursor = conn.cursor()
 
     # ⭐ สร้าง WHERE clause สำหรับ filter (เหมือนกับ list endpoint) - ใช้อักษรตัวแรกของ SKU
-    where_clauses = ["LEFT(im.SKU, 1) = ?"]
+    where_clauses = ["LEFT(im.SKU, 1) = ?", "im.Blocked = 0"]
     params = [category_name.upper()]
 
     # Helper function สำหรับเพิ่ม filter

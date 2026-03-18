@@ -5,6 +5,8 @@ services:
     container_name: smart_pricing_backend
     ports:
       - "8000:8000"
+    environment:
+      - EMPLOYEES_JSON_PATH=employees.json
     # volumes:
       # Removed volume mount to ensure pre-seeded database (Quetung.db) inside the container is used.
       # Mounting an empty host directory (common in fresh deployments) would hide the internal data.

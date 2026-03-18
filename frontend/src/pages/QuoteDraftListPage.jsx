@@ -30,7 +30,29 @@ export default function QuoteDraftListPage() {
           ...(pendingRes.data || []),
           ...(draftRes.data || [])
         ];
-        setDrafts(allDrafts);
+        
+        // ⭐ ดึงสถานะ special price request สำหรับแต่ละ quote
+        const draftsWithSPR = await Promise.all(
+          allDrafts.map(async (draft) => {
+            try {
+              const sprRes = await api.get(`/api/special-price-requests/quote/${encodeURIComponent(draft.quoteNo)}`);
+              const sprList = sprRes.data || [];
+              // เอาใบล่าสุด (ถ้ามีหลายใบ)
+              const latestSPR = sprList.length > 0 ? sprList[0] : null;
+              console.log(`[SPR] Quote ${draft.quoteNo}:`, latestSPR);
+              return {
+                ...draft,
+                specialPriceRequest: latestSPR
+              };
+            } catch (err) {
+              // ถ้าไม่มี SPR ก็ไม่เป็นไร
+              console.log(`[SPR] Quote ${draft.quoteNo}: No SPR found`, err.response?.status);
+              return draft;
+            }
+          })
+        );
+        
+        setDrafts(draftsWithSPR);
       } catch (err) {
         console.error(err);
         setError("ไม่สามารถโหลดใบเสนอราคาแบบร่างได้");
@@ -216,6 +238,7 @@ export default function QuoteDraftListPage() {
                 dueDateText={q.createdAt ? new Date(q.createdAt).toLocaleString("th-TH") : "-"}
                 totalAmount={totalAmount || 0}
                 items={q.cart || []}
+                specialPriceRequest={q.specialPriceRequest}
                 onEdit={() => handleEditDraft(q)}
                 onDelete={() => handleDeleteDraft(q.quoteNo)}
               />

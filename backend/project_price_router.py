@@ -14,18 +14,22 @@ JWT_ALG = "HS256"
 def get_current_user_from_token(authorization: str = Header(None)) -> dict:
     """Extract user info from JWT token"""
     if not authorization:
-        return {"username": "anonymous", "id": None}
+        return {"username": "anonymous", "id": None, "employee_id": None}
     
     try:
         token = authorization.replace("Bearer ", "").strip()
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        # JWT token ใช้ "sub" สำหรับ employee ID
+        employee_id = payload.get("sub") or payload.get("id") or payload.get("employee_id")
         return {
-            "username": payload.get("username", "unknown"),
-            "id": payload.get("id"),
+            "username": payload.get("name", "unknown"),
+            "id": employee_id,
+            "employee_id": employee_id,
             "branchId": payload.get("branchId")
         }
-    except:
-        return {"username": "anonymous", "id": None}
+    except Exception as e:
+        print(f"❌ Error decoding JWT token: {e}")
+        return {"username": "anonymous", "id": None, "employee_id": None}
 
 class ProjectPriceLine(BaseModel):
     sku: str
@@ -63,8 +67,8 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
         cursor.execute("""
             INSERT INTO Project_Price_Header 
             (project_code, project_name, customer_code, customer_name, branch_code,
-             price_start_date, price_end_date, request_by, request_date, status, remark, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, GETDATE(), GETDATE())
+             price_start_date, price_end_date, request_by, request_date, status, remark, created_at, updated_at, CreatedByEmployeeCode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, GETDATE(), GETDATE(), ?)
         """, (
             project.project_code,
             project.project_name,
@@ -75,30 +79,18 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
             project.price_end_date,
             project.request_by,
             project.request_date or datetime.now().strftime('%Y-%m-%d'),
-            project.remark
+            project.remark,
+            current_user.get('employee_id') or current_user.get('id')  # บันทึกรหัสพนักงาน
         ))
         
         # ดึง ID ที่เพิ่งสร้าง
         cursor.execute("SELECT @@IDENTITY AS id")
         project_id = cursor.fetchone()[0]
         
-        print(f"✅ [CREATE PROJECT PRICE] Created project with ID: {project_id}")
+        print(f"✅ [CREATE PROJECT PRICE] Created project with ID: {project_id}, Created by: {current_user.get('employee_id') or current_user.get('id') or 'Unknown'}")
         
         # สร้าง Project Price Lines
         for item in project.items:
-            # ตัดสินใจว่าใช้ field ไหนตามประเภทสินค้า
-            category = item.sku[0].upper() if item.sku else ""
-            
-            if category == "G":  # Glass
-                price_value = item.price_per_sqft or item.price
-                price_type = "price_per_sqft"
-            elif category == "A":  # Aluminum
-                price_value = item.price_per_kg or item.price
-                price_type = "price_per_kg"
-            else:
-                price_value = item.price
-                price_type = "price"
-            
             cursor.execute("""
                 INSERT INTO Project_Price_Line 
                 (project_id, sku, product_name, unit, price, quantity)
@@ -108,10 +100,10 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
                 item.sku,
                 item.product_name,
                 item.unit,
-                price_value,
+                item.price,
                 item.quantity
             ))
-            print(f"  ➕ Added item: {item.sku} - {price_value} ({price_type})")
+            print(f"  ➕ Added item: {item.sku} - {item.price}")
         
         conn.commit()
         return {"success": True, "project_id": int(project_id)}
@@ -198,8 +190,14 @@ async def get_next_project_code(mode: str, branch_code: Optional[str] = None, cu
             conn.close()
 
 @router.get("/")
-async def get_project_prices(status: Optional[str] = None, branch: Optional[str] = None):
-    """ดึงรายการราคาโครงการทั้งหมด"""
+async def get_project_prices(status: Optional[str] = None, branch: Optional[str] = None, employee_code: Optional[str] = None):
+    """ดึงรายการราคาโครงการทั้งหมด
+    
+    Parameters:
+    - status: Filter by status (optional)
+    - branch: Filter by branch code (optional)
+    - employee_code: Filter by employee who created the project (optional)
+    """
     conn = None
     
     try:
@@ -216,6 +214,10 @@ async def get_project_prices(status: Optional[str] = None, branch: Optional[str]
         if branch:
             query += " AND branch_code = ?"
             params.append(branch)
+        
+        if employee_code:
+            query += " AND CreatedByEmployeeCode = ?"
+            params.append(employee_code)
         
         query += " ORDER BY created_at DESC"
         
@@ -247,6 +249,7 @@ async def get_project_prices(status: Optional[str] = None, branch: Optional[str]
                 "status": proj['status'],
                 "remark": proj['remark'],
                 "created_at": str(proj['created_at']),
+                "created_by_employee_code": proj.get('CreatedByEmployeeCode'),
                 "items": lines
             })
         
@@ -475,19 +478,6 @@ async def update_project_price(project_id: int, project: ProjectPriceCreate, aut
         
         # สร้าง Project Price Lines ใหม่
         for item in project.items:
-            # ตัดสินใจว่าใช้ field ไหนตามประเภทสินค้า
-            category = item.sku[0].upper() if item.sku else ""
-            
-            if category == "G":  # Glass
-                price_value = item.price_per_sqft or item.price
-                price_type = "price_per_sqft"
-            elif category == "A":  # Aluminum
-                price_value = item.price_per_kg or item.price
-                price_type = "price_per_kg"
-            else:
-                price_value = item.price
-                price_type = "price"
-            
             cursor.execute("""
                 INSERT INTO Project_Price_Line 
                 (project_id, sku, product_name, unit, price, quantity)
@@ -497,10 +487,10 @@ async def update_project_price(project_id: int, project: ProjectPriceCreate, aut
                 item.sku,
                 item.product_name,
                 item.unit,
-                price_value,
+                item.price,
                 item.quantity
             ))
-            print(f"  ➕ Added item: {item.sku} - {price_value} ({price_type})")
+            print(f"  ➕ Added item: {item.sku} - {item.price}")
         
         conn.commit()
         return {"success": True, "project_id": project_id}

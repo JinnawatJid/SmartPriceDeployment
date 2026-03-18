@@ -21,7 +21,7 @@ const TrashIcon = () => (
   <img src="/assets/delete.png" alt="delete" className="h-5 w-5 mr-4 mt-1 object-contain" />
 );
 
-export default function CartItemRow({ item, index, calculatedItem, dispatch, customerCode }) {
+export default function CartItemRow({ item, index, calculatedItem, dispatch, customerCode, activeSpecialPrices }) {
   
   // 🔍 Log เมื่อ calculatedItem เปลี่ยน
   useEffect(() => {
@@ -40,37 +40,79 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
   const cat = (item.category || String(item.sku || "").slice(0, 1)).toUpperCase();
   const isGlass = cat === "G";
 
+  // ⭐ ตรวจสอบว่ามีราคาพิเศษที่ใช้ได้หรือไม่
+  const activePrice = activeSpecialPrices?.items?.find(p => p.item_code === item.sku);
+  const hasActiveSpecialPrice = !!activePrice;
+
+  // 🔍 Debug log
+  if (activeSpecialPrices?.items?.length > 0) {
+    console.log(`🔍 [CartItemRow ${item.sku}] activeSpecialPrices:`, {
+      hasItems: activeSpecialPrices.items.length,
+      itemCodes: activeSpecialPrices.items.map(p => p.item_code),
+      currentSku: item.sku,
+      foundPrice: activePrice,
+      hasActiveSpecialPrice
+    });
+  }
+
   // ⭐ ตรวจสอบว่าใช้ราคาโครงการหรือไม่
   const isProjectPrice = calculatedItem?.priceSource === 'project' || calculatedItem?.price_source === 'project';
 
   // ✅ unit price to display
   // - glass: show บาท/แผ่น (price_per_sheet)
   // - others: show บาท/หน่วย (UnitPrice/price)
-  const displayUnitPrice =
-    item.priceSource === "manual"
-      ? isGlass
-        ? Number(
+  // ⭐ ถ้าขายยกแพ็ก ไม่คูณ sqft
+  // ⭐ ถ้ามีราคาพิเศษที่ใช้ได้ ให้แสดงราคาพิเศษแทน
+  let displayUnitPrice;
+  
+  if (hasActiveSpecialPrice && item.priceSource !== "manual") {
+    // ใช้ราคาพิเศษที่อนุมัติแล้ว
+    displayUnitPrice = Number(activePrice.special_price);
+    console.log(`💰 [CartItemRow] ใช้ราคาพิเศษ: ${displayUnitPrice} สำหรับ ${item.sku}`);
+  } else if (item.priceSource === "manual") {
+    displayUnitPrice = isGlass
+      ? item.isSoldByPack
+        ? Number(item.UnitPrice ?? item.price ?? 0) // ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+        : Number(
             item.price_per_sheet ??
               Number(item.UnitPrice ?? 0) * Number(item.sqft_sheet ?? item.sqft ?? 0)
           )
-        : Number(item.UnitPrice ?? item.price ?? 0)
-      : Number(
-          (isGlass
-            ? calculatedItem?.price_per_sheet ?? item.price_per_sheet
-            : calculatedItem?.UnitPrice ?? item.UnitPrice ?? item.price) ?? 0
-        );
+      : Number(item.UnitPrice ?? item.price ?? 0);
+  } else {
+    displayUnitPrice = Number(
+      (isGlass
+        ? item.isSoldByPack
+          ? calculatedItem?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0 // ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+          : calculatedItem?.price_per_sheet ?? item.price_per_sheet
+        : calculatedItem?.UnitPrice ?? item.UnitPrice ?? item.price) ?? 0
+    );
+  }
 
+  // 🔍 Debug log สำหรับราคาที่แสดง
+  console.log(`💰 [CartItemRow ${item.sku}] displayUnitPrice:`, {
+    displayUnitPrice,
+    hasActiveSpecialPrice,
+    priceSource: item.priceSource,
+    calculatedUnitPrice: calculatedItem?.UnitPrice,
+    itemPrice: item.price,
+    itemUnitPrice: item.UnitPrice
+  });
   // ✅ line total
   // - manual: trust item.lineTotal (set by reducer) else fallback compute
   // - non-manual: prefer pricing _LineTotal
-  const displayLineTotal =
-    item.priceSource === "manual"
-      ? Number(item.lineTotal ?? displayUnitPrice * Number(item.qty || 0))
-      : Number(
-          calculatedItem?._LineTotal ??
-            item.lineTotal ??
-            displayUnitPrice * Number(item.qty || 0)
-        );
+  // ⭐ สำหรับกระจกขายยกแพ็ก: คำนวณใหม่เพื่อให้แน่ใจว่าถูกต้อง
+  // ⭐ ถ้ามีราคาพิเศษ: คำนวณจากราคาพิเศษ
+  const displayLineTotal = hasActiveSpecialPrice && item.priceSource !== "manual"
+    ? displayUnitPrice * Number(item.qty || 0)  // ใช้ราคาพิเศษคำนวณ
+    : item.priceSource === "manual"
+    ? Number(item.lineTotal ?? displayUnitPrice * Number(item.qty || 0))
+    : isGlass && item.isSoldByPack
+    ? displayUnitPrice * Number(item.qty || 0)  // ⭐ ขายยกแพ็ก: คำนวณใหม่
+    : Number(
+        calculatedItem?._LineTotal ??
+          item.lineTotal ??
+          displayUnitPrice * Number(item.qty || 0)
+      );
 
 
 
@@ -143,6 +185,13 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
     const cat = (item.category || String(item.sku || "").slice(0, 1)).toUpperCase();
     const isAluminium = cat === "A";
 
+    console.log('🔄 [CART ITEM] Dispatching price update:', {
+      sku: item.sku,
+      category: cat,
+      isAluminium,
+      data
+    });
+
     dispatch({
       type: "UPDATE_CART_PRICE",
       payload: {
@@ -192,6 +241,13 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                         {item.name}
                       </p>
                       <p className="text-xs text-gray-500">{item.sku}</p>
+                      
+                      {/* ⭐ แสดง flag ขายยกแพ็ก */}
+                      {item.isSoldByPack && item.category === "G" && (
+                        <div className="mt-1 text-xs bg-orange-50 border border-orange-200 rounded px-2 py-1 text-orange-700 font-medium">
+                          📦 ขายยกแพ็ก/แผ่น
+                        </div>
+                      )}
                       
                       {/* แสดงสต๊อก */}
                       {item.stock && (
@@ -260,33 +316,28 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                 {Number(displayUnitPrice).toLocaleString("th-TH")}
               </span>
               
+              {/* ⭐ แสดงว่าใช้ราคาพิเศษที่อนุมัติแล้ว */}
+              {hasActiveSpecialPrice && item.priceSource !== "manual" && (
+                <div className="text-[9px] text-green-600 font-semibold bg-green-50 border border-green-200 px-2 py-0.5 rounded mt-1">
+                  ✓ ราคาพิเศษ (ถึง {new Date(activePrice.valid_to).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})
+                </div>
+              )}
+              
+              {/* ⭐ แสดงว่าแก้ไขราคาด้วยตนเอง */}
+              {hasActiveSpecialPrice && item.priceSource === "manual" && (
+                <div className="text-[9px] text-orange-600 font-semibold bg-orange-50 border border-orange-200 px-2 py-0.5 rounded mt-1">
+                  ✏️ แก้ไขแล้ว
+                </div>
+              )}
+              
               {/* ⭐ แสดงว่าใช้ราคาโครงการ */}
-              {isProjectPrice && (
+              {!hasActiveSpecialPrice && isProjectPrice && (
                 <span className="text-[9px] text-green-600 font-semibold bg-green-50 px-1 py-0.5 rounded">
                   ราคาโครงการ
                 </span>
               )}
-              
-              {/* ⭐ แสดงว่าใช้ราคาประวัติ */}
-              {(calculatedItem?.priceSource === 'history' || calculatedItem?.price_source === 'history') && (
-                <span className="text-[9px] text-orange-600 font-semibold bg-orange-50 px-1 py-0.5 rounded">
-                  ราคาประวัติ
-                </span>
-              )}
-              
-              {/* ⭐ แสดงว่าใช้ราคาระบบ */}
-              {(calculatedItem?.priceSource === 'system' || calculatedItem?.price_source === 'system') && (
-                <span className="text-[9px] text-blue-600 font-semibold bg-blue-50 px-1 py-0.5 rounded">
-                  ราคาระบบ
-                </span>
-              )}
-              
-              {/* ⭐ แสดงว่าเป็นราคาที่แก้ไขแล้ว */}
-              {item.priceSource === 'manual' && (
-                <span className="text-[9px] text-purple-600 font-semibold bg-purple-50 px-1 py-0.5 rounded">
-                  ✏️ แก้ไขแล้ว
-                </span>
-              )}
+  
+             
             </div>
 
             {/* ปุ่มดูประวัติ ชิดขวา */}

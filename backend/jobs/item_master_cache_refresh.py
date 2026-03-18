@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ItemMasterRecord:
-    """Item Master record structure"""
+    """Item Master record structure - only columns that exist in Item_Master table"""
     SKU: str
     No_2: Optional[str] = None
     Description: Optional[str] = None
@@ -26,14 +26,8 @@ class ItemMasterRecord:
     Product_Group: Optional[str] = None
     Product_Sub_Group: Optional[str] = None
     Variant_Mandatory: Optional[int] = None
-    R1: Optional[float] = None
-    R2: Optional[float] = None
-    W1: Optional[float] = None
-    W2: Optional[float] = None
-    PackageSize: Optional[int] = None
     Product_Weight: Optional[float] = None
-    AlternateName: Optional[str] = None
-    Last_Updated: datetime = field(default_factory=datetime.now)
+    Blocked: Optional[int] = None
 
 
 @dataclass
@@ -56,6 +50,8 @@ class ItemMasterJobResult:
 def parse_item_record(item_data: Dict) -> Optional[ItemMasterRecord]:
     """
     Parse item data from BC API response to ItemMasterRecord
+    Only maps fields that exist in Item_Master table.
+    Price fields (R1, R2, W1, W2) and AlternateName are stored in Item_Price table.
     
     Args:
         item_data: Item data from BC API
@@ -64,29 +60,23 @@ def parse_item_record(item_data: Dict) -> Optional[ItemMasterRecord]:
         ItemMasterRecord or None if parsing fails
     """
     try:
-        # Extract required fields
-        sku = item_data.get("No") or item_data.get("SKU")
+        # Extract required fields - NEW API field name: Item_No
+        sku = item_data.get("Item_No")
         if not sku:
-            logger.warning(f"Item missing SKU: {item_data}")
+            logger.warning(f"Item missing Item_No: {item_data}")
             return None
         
-        # Extract optional fields with defaults
+        # Extract only fields that exist in Item_Master table
         record = ItemMasterRecord(
             SKU=sku,
-            No_2=item_data.get("No_2") or item_data.get("Alternate_Item_No"),
+            No_2=item_data.get("Item_No_2"),
             Description=item_data.get("Description"),
-            Base_Unit_of_Measure=item_data.get("Base_Unit_of_Measure"),
-            Product_Group=item_data.get("Product_Group"),
-            Product_Sub_Group=item_data.get("Product_Sub_Group"),
-            Variant_Mandatory=item_data.get("Variant_Mandatory"),
-            R1=item_data.get("R1") or item_data.get("Unit_Price"),
-            R2=item_data.get("R2"),
-            W1=item_data.get("W1"),
-            W2=item_data.get("W2"),
-            PackageSize=item_data.get("PackageSize") or item_data.get("Package_Size") or 1,
-            Product_Weight=item_data.get("Product_Weight") or item_data.get("Weight"),
-            AlternateName=item_data.get("AlternateName") or item_data.get("Alternate_Name"),
-            Last_Updated=datetime.now()
+            Base_Unit_of_Measure=item_data.get("Base_Unit_Of_Measure"),
+            Product_Group=item_data.get("Product_Group_No"),
+            Product_Sub_Group=item_data.get("Product_Subgroup_No"),
+            Variant_Mandatory=item_data.get("Variant_Code"),
+            Product_Weight=item_data.get("Product_Weight"),
+            Blocked=item_data.get("Blocked")
         )
         
         return record
@@ -98,7 +88,7 @@ def parse_item_record(item_data: Dict) -> Optional[ItemMasterRecord]:
 
 def upsert_item_batch(items: List[ItemMasterRecord], conn: pyodbc.Connection) -> tuple[int, int]:
     """
-    Upsert items into Item_Master table (insert or update)
+    Upsert items into Item_Master table (insert or update) using batch operations
     
     Args:
         items: List of ItemMasterRecord to upsert
@@ -113,88 +103,95 @@ def upsert_item_batch(items: List[ItemMasterRecord], conn: pyodbc.Connection) ->
     cursor = conn.cursor()
     inserted = 0
     updated = 0
+    batch_size = 1000
     
     try:
-        for item in items:
-            # Check if item exists
-            cursor.execute(
-                "SELECT COUNT(*) FROM Item_Master WHERE SKU = ?",
-                (item.SKU,)
-            )
-            exists = cursor.fetchone()[0] > 0
-            
-            if exists:
-                # Update existing item
-                cursor.execute("""
-                    UPDATE Item_Master
-                    SET 
-                        No_2 = ?,
-                        Description = ?,
-                        Base_Unit_of_Measure = ?,
-                        Product_Group = ?,
-                        Product_Sub_Group = ?,
-                        Variant_Mandatory = ?,
-                        R1 = ?,
-                        R2 = ?,
-                        W1 = ?,
-                        W2 = ?,
-                        PackageSize = ?,
-                        Product_Weight = ?,
-                        AlternateName = ?,
-                        Last_Updated = ?
-                    WHERE SKU = ?
-                """, (
-                    item.No_2,
-                    item.Description,
-                    item.Base_Unit_of_Measure,
-                    item.Product_Group,
-                    item.Product_Sub_Group,
-                    item.Variant_Mandatory,
-                    item.R1,
-                    item.R2,
-                    item.W1,
-                    item.W2,
-                    item.PackageSize,
-                    item.Product_Weight,
-                    item.AlternateName,
-                    item.Last_Updated,
-                    item.SKU
-                ))
-                updated += 1
-            else:
-                # Insert new item
-                cursor.execute("""
-                    INSERT INTO Item_Master (
-                        SKU, No_2, Description, Base_Unit_of_Measure,
-                        Product_Group, Product_Sub_Group, Variant_Mandatory,
-                        R1, R2, W1, W2, PackageSize, Product_Weight,
-                        AlternateName, Last_Updated
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    item.SKU,
-                    item.No_2,
-                    item.Description,
-                    item.Base_Unit_of_Measure,
-                    item.Product_Group,
-                    item.Product_Sub_Group,
-                    item.Variant_Mandatory,
-                    item.R1,
-                    item.R2,
-                    item.W1,
-                    item.W2,
-                    item.PackageSize,
-                    item.Product_Weight,
-                    item.AlternateName,
-                    item.Last_Updated
-                ))
-                inserted += 1
+        # Get all existing SKUs in one query
+        cache_logger.info("   Fetching existing SKUs from database...")
+        cursor.execute("SELECT SKU FROM Item_Master")
+        existing_skus = set(row[0] for row in cursor.fetchall())
+        cache_logger.info(f"   Found {len(existing_skus)} existing items in database")
         
-        conn.commit()
-        logger.info(f"Upserted items: {inserted} inserted, {updated} updated")
+        # Separate items into insert and update lists
+        insert_items = []
+        update_items = []
+        
+        for item in items:
+            if item.SKU in existing_skus:
+                update_items.append(item)
+            else:
+                insert_items.append(item)
+        
+        # Batch insert new items
+        if insert_items:
+            cache_logger.info(f"   Inserting {len(insert_items)} new items...")
+            for batch_idx in range(0, len(insert_items), batch_size):
+                batch = insert_items[batch_idx:batch_idx + batch_size]
+                for item in batch:
+                    cursor.execute("""
+                        INSERT INTO Item_Master (
+                            SKU, No_2, Description, Base_Unit_of_Measure,
+                            Product_Group, Product_Sub_Group, Variant_Mandatory,
+                            Product_Weight, blocked
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        item.SKU,
+                        item.No_2,
+                        item.Description,
+                        item.Base_Unit_of_Measure,
+                        item.Product_Group,
+                        item.Product_Sub_Group,
+                        item.Variant_Mandatory,
+                        item.Product_Weight,
+                        item.Blocked
+                    ))
+                
+                conn.commit()
+                inserted += len(batch)
+                progress = batch_idx + len(batch)
+                cache_logger.info(f"   Progress: {progress}/{len(insert_items)} items inserted")
+        
+        # Batch update existing items
+        if update_items:
+            cache_logger.info(f"   Updating {len(update_items)} existing items...")
+            for batch_idx in range(0, len(update_items), batch_size):
+                batch = update_items[batch_idx:batch_idx + batch_size]
+                for item in batch:
+                    cursor.execute("""
+                        UPDATE Item_Master
+                        SET 
+                            No_2 = ?,
+                            Description = ?,
+                            Base_Unit_of_Measure = ?,
+                            Product_Group = ?,
+                            Product_Sub_Group = ?,
+                            Variant_Mandatory = ?,
+                            Product_Weight = ?,
+                            blocked = ?
+                        WHERE SKU = ?
+                    """, (
+                        item.No_2,
+                        item.Description,
+                        item.Base_Unit_of_Measure,
+                        item.Product_Group,
+                        item.Product_Sub_Group,
+                        item.Variant_Mandatory,
+                        item.Product_Weight,
+                        item.Blocked,
+                        item.SKU
+                    ))
+                
+                conn.commit()
+                updated += len(batch)
+                progress = batch_idx + len(batch)
+                cache_logger.info(f"   Progress: {progress}/{len(update_items)} items updated")
+        
+        cache_logger.info(f"✓ Upserted items: {inserted} inserted, {updated} updated")
         
     except Exception as e:
         conn.rollback()
         logger.error(f"Failed to upsert items: {e}", exc_info=True)
+        cache_logger.error(f"Failed to upsert items: {e}", exc_info=True)
         raise
     finally:
         cursor.close()
@@ -245,15 +242,19 @@ def run_item_master_cache_refresh() -> ItemMasterJobResult:
         # Parse items
         cache_logger.info("🔄 Parsing items...")
         parsed_items = []
-        for item_data in items_data:
+        for idx, item_data in enumerate(items_data, 1):
             parsed_item = parse_item_record(item_data)
             if parsed_item:
                 parsed_items.append(parsed_item)
                 result.items_processed += 1
             else:
                 result.items_failed += 1
+            
+            # Log progress every 1000 items
+            if idx % 1000 == 0:
+                cache_logger.info(f"   Progress: {idx}/{len(items_data)} items parsed")
         
-        cache_logger.info(f"   Parsed {result.items_processed} items, {result.items_failed} failed")
+        cache_logger.info(f"   ✓ Parsed {result.items_processed} items, {result.items_failed} failed")
         
         # Upsert items to database
         if parsed_items:

@@ -13,6 +13,8 @@ function Dashboard() {
   const { dispatch } = useQuote();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState("");
+  const [allowedPriceUpdateEmployees, setAllowedPriceUpdateEmployees] = useState([]);
+  const [allowedProjectPriceEmployees, setAllowedProjectPriceEmployees] = useState([]);
 
   // โหลดวันที่ปัจจุบัน (ภาษาไทย)
   useEffect(() => {
@@ -30,6 +32,24 @@ function Dashboard() {
       .toLocaleDateString("th-TH", { year: "numeric", timeZone: "Asia/Bangkok" })
       .split(" ")[0];
     setCurrentDate(thaiDate.replace(year, ` พ.ศ. ${year}`));
+  }, []);
+
+  // โหลดสิทธิ์พนักงานจาก backend
+  useEffect(() => {
+    const fetchEmployeeAccess = async () => {
+      try {
+        const res = await api.get("/api/admin/employee-access");
+        console.log("🔍 Employee Access from API:", res.data);
+        setAllowedPriceUpdateEmployees(res.data.allowed_price_update_employees);
+        setAllowedProjectPriceEmployees(res.data.allowed_project_price_employees);
+        console.log("✅ Price Update Employees:", res.data.allowed_price_update_employees);
+        console.log("✅ Project Price Employees:", res.data.allowed_project_price_employees);
+      } catch (err) {
+        console.error("Failed to fetch employee access:", err);
+        // ใช้ค่า default ถ้า fetch ล้มเหลว
+      }
+    };
+    fetchEmployeeAccess();
   }, []);
 
   const handleCreateQuote = () => {
@@ -55,6 +75,7 @@ function Dashboard() {
   const [todayCount, setTodayCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [contactCustomerCount, setContactCustomerCount] = useState(0);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -96,6 +117,15 @@ function Dashboard() {
             .map((q) => q.customer?.id)
         );
         setContactCustomerCount(uniqueCustomers.size);
+
+        // ---- 4) รอการอนุมัติราคาพิเศษ ----
+        try {
+          const resPendingApprovals = await api.get("/api/special-price-requests/pending/approvals");
+          setPendingApprovalCount((resPendingApprovals.data || []).length);
+        } catch (err) {
+          console.log("No pending approvals or not authorized:", err);
+          setPendingApprovalCount(0);
+        }
       } catch (err) {
         console.error("Dashboard load error:", err);
       }
@@ -185,17 +215,59 @@ function Dashboard() {
               </div>
             </div>
           </div>
+
         </div>
         <div className="mt-6 ">
-          {/* Update Price Card */}
-          <div
-            className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg"
-            onClick={() => navigate("/update-price")}
-          >
-            <img src="/assets/refresh.png" className="w-16 h-16 mb-4" />
-            <h2 className="text-4xl font-bold">เพิ่ม / อัปเดตราคา</h2>
-            <p className="mt-2 text-lg text-white/70">สำหรับผู้จัดการ</p>
-          </div>
+
+          {/* Special Price Approval Card - แสดงเฉพาะพนักงานที่อนุญาต (ใช้สิทธิ์เดียวกับราคาโครงการ) */}
+          {(() => {
+            const showSpecialPriceApproval = allowedProjectPriceEmployees.includes(employee?.id);
+            console.log("🔍 Show Special Price Approval?", showSpecialPriceApproval, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees);
+            return showSpecialPriceApproval;
+          })() && (
+            <div
+              className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#9333EA] hover:bg-[#7e22ce] p-8 text-white shadow-lg"
+              onClick={() => navigate("/special-price-approval")}
+            >
+              <img src="/assets/approve.png" className="w-16 h-16 mb-4" />
+              <h2 className="text-4xl font-bold">อนุมัติราคาพิเศษ</h2>
+              <p className="mt-2 text-lg text-white/70">
+                มี {pendingApprovalCount} รายการรอการอนุมัติ
+              </p>
+            </div>
+          )}
+
+          {/* Update Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
+          {(() => {
+            const showPriceUpdate = allowedPriceUpdateEmployees.includes(employee?.id);
+            console.log("🔍 Show Price Update?", showPriceUpdate, "Employee ID:", employee?.id, "Allowed:", allowedPriceUpdateEmployees);
+            return showPriceUpdate;
+          })() && (
+            <div
+              className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg mt-6"
+              onClick={() => navigate("/update-price")}
+            >
+              <img src="/assets/refresh.png" className="w-16 h-16 mb-4" />
+              <h2 className="text-4xl font-bold">เพิ่ม / อัปเดตราคา / จัดการโปรโมชั่น</h2>
+              <p className="mt-2 text-lg text-white/70">สำหรับผู้จัดการ</p>
+            </div>
+          )}
+
+          {/* Project Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
+          {(() => {
+            const showProjectPrice = allowedProjectPriceEmployees.includes(employee?.id);
+            console.log("🔍 Show Project Price?", showProjectPrice, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees);
+            return showProjectPrice;
+          })() && (
+            <div
+              className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#dd8901] hover:bg-[#cd7905] p-8 text-white shadow-lg mt-6"
+              onClick={() => navigate("/project-price")}
+            >
+              <img src="/assets/project.png" className="w-16 h-16 mb-4" />
+              <h2 className="text-4xl font-bold">ราคาโครงการ</h2>
+              <p className="mt-2 text-lg text-white/70">จัดการราคาโครงการ</p>
+            </div>
+          )}
         </div>
 
     

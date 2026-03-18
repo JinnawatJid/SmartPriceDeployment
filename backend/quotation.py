@@ -217,12 +217,13 @@ def create_quotation(payload: dict = Body(...)):
         "SubtotalAmount": payload.get("totals", {}).get("exVat", 0),
         "TotalAmount": payload.get("totals", {}).get("grandTotal", 0),
         "NeedsTax": "Y" if payload.get("needTaxInvoice") else "N",
-        "Remark": payload.get("note", ""),
+        "Remark": (payload.get("note", "") or "")[:255],  # ⭐ ตัดให้ไม่เกิน 255 ตัวอักษร
         "LastUpdate": now,
         "CustomerName": cust_name,
         "Tel": customer.get("phone", ""),
         "tax_no": customer.get("tax_no", ""),
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
+        "Pre_Order": payload.get("pre_order", 0),  # ⭐ เพิ่ม Pre_Order field
     }
 
     cursor.execute("""
@@ -232,8 +233,8 @@ def create_quotation(payload: dict = Body(...)):
             PaymentTerm, CreditTerm, ShippingMethod, ShippingCost,
             DiscountAmount, SubtotalAmount, TotalAmount,
             NeedsTax, Remark, LastUpdate,
-            CustomerName, Tel, tax_no, ShippingCustomerPay
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            CustomerName, Tel, tax_no, ShippingCustomerPay, Pre_Order
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, tuple(header.values()))
 
     cart = payload.get("cart", [])
@@ -248,17 +249,17 @@ def create_quotation(payload: dict = Body(...)):
         cursor.execute("""
             INSERT INTO Quote_Line (
                 QuoteID, ItemCode, ItemName, Category,
-                Unit, Quantity,Price_System, UnitPrice, TotalPrice,
+                Unit, Quantity, Price_System, UnitPrice, TotalPrice,
                 IsGlassCut, CutInfoJson, Remark,
                 Sqft_Sheet, VariantCode, ProductWeight
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             quote_no,
             line["ItemCode"], line["ItemName"], line["Category"],
-            line["Unit"], line["Quantity"],line["Price_System"], line["UnitPrice"],
+            line["Unit"], line["Quantity"], line["Price_System"], line["UnitPrice"],
             line["TotalPrice"], line["IsGlassCut"],
             line["CutInfoJson"], line["Remark"],
-            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"]
+            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"],
         ))
 
         lines_to_excel.append(line)
@@ -330,6 +331,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         "Tel": customer.get("phone", ""),
         "tax_no": customer.get("tax_no", ""),
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
+        "Pre_Order": payload.get("pre_order", 0),  # ⭐ เพิ่ม Pre_Order field
     }
 
     cursor.execute("""
@@ -339,7 +341,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
             PaymentTerm=?, CreditTerm=?, ShippingMethod=?, ShippingCost=?,
             DiscountAmount=?, SubtotalAmount=?, TotalAmount=?,
             NeedsTax=?, Remark=?, LastUpdate=?,
-            CustomerName=?, Tel=?, tax_no=?, ShippingCustomerPay=?
+            CustomerName=?, Tel=?, tax_no=?, ShippingCustomerPay=?, Pre_Order=?
         WHERE QuoteNo=?
     """, (
         header["Status"],
@@ -363,6 +365,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         header["Tel"],
         header["tax_no"],
         header["ShippingCustomerPay"],
+        header["Pre_Order"],
         quote_no
     ))
 
@@ -379,17 +382,17 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         cursor.execute("""
             INSERT INTO Quote_Line (
                 QuoteID, ItemCode, ItemName, Category,
-                Unit, Quantity,Price_System, UnitPrice, TotalPrice,
+                Unit, Quantity, Price_System, UnitPrice, TotalPrice,
                 IsGlassCut, CutInfoJson, Remark,
                 Sqft_Sheet, VariantCode, ProductWeight
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             quote_no,
             line["ItemCode"], line["ItemName"], line["Category"],
-            line["Unit"], line["Quantity"],line["Price_System"], line["UnitPrice"],
+            line["Unit"], line["Quantity"], line["Price_System"], line["UnitPrice"],
             line["TotalPrice"], line["IsGlassCut"],
             line["CutInfoJson"], line["Remark"],
-            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"]
+            line["Sqft_Sheet"], line["VariantCode"], line["ProductWeight"],
         ))
 
         lines_to_excel.append(line)
@@ -556,3 +559,10 @@ def cancel_quotation(quote_no: str):
     conn.close()
 
     return {"cancelled": quote_no}
+
+
+
+
+
+
+

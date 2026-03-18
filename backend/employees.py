@@ -1,76 +1,96 @@
-# employees.py — ใช้ SQLite 100%
-from pathlib import Path
+# employees.py — ดึงข้อมูลจาก API แทน SQLite
 from typing import Any, Dict, Optional, List
 import math
-import pandas as pd
+import httpx
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
-from config.db_sqlite import get_conn
-  # ← ใช้ SQLite
+from config.config_external_api import EMP_API_URL, EMP_API_HEADERS
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 
 # ============================
-#  Schema ของ Employees (SQLite)
+#  Schema ของ Employees (API)
 # ============================
-# No.
-# First Name
-# Last Name
-# Job Title
-# Company Phone No.
-# Branch Code
-# Department Code
-# Search Name
-# Comment
-# Petty Cash
-# Advance
+# EmpCode
+# EmpName
+# EmpPost
+# EmpBrchCode
 # ============================
 
 
-def load_employees_sqlite() -> pd.DataFrame:
-    conn = get_conn()
-    df = pd.read_sql_query('SELECT * FROM "Employees"', conn)
-    conn.close()
-
-    # --- CLEAN BLOCK (แก้เฉพาะส่วนนี้) ---
-    # ป้องกันไม่ให้ NaN / None กลายเป็น "None" หรือ "nan"
-    for col in df.columns:
-        df[col] = (
-            df[col]
-            .replace(["nan", "None"], pd.NA)   # ลบค่า nan/None (string) ให้กลับเป็น NaN
-            .fillna("")                         # แปลง NaN -> ""
-            .astype(str)
-            .str.strip()
+async def fetch_employees_from_api(
+    q: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> List[Dict]:
+    """
+    ดึงข้อมูล Employee จาก External API
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                EMP_API_URL,
+                headers=EMP_API_HEADERS,
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # API ส่งมาเป็น dict with 'data' key
+            if isinstance(data, dict) and 'data' in data:
+                employees = data['data']
+            elif isinstance(data, list):
+                employees = data
+            else:
+                employees = []
+            
+            # กรองข้อมูลตาม query และ branch
+            filtered = []
+            for emp in employees:
+                emp_code = str(emp.get("EmpCode", "")).strip()
+                emp_name = str(emp.get("EmpName", "")).strip()
+                emp_branch = str(emp.get("EmpBrchCode", "")).strip()
+                
+                # ข้าม record ที่ไม่มี EmpCode
+                if not emp_code:
+                    continue
+                
+                # กรองตาม branch
+                if branch and emp_branch.lower() != branch.lower():
+                    continue
+                
+                # กรองตาม search query
+                if q:
+                    key = q.strip().lower()
+                    if key not in emp_code.lower() and key not in emp_name.lower():
+                        continue
+                
+                filtered.append({
+                    "empCode": emp_code,
+                    "empName": emp_name,
+                    "empPost": str(emp.get("EmpPost", "")).strip(),
+                    "branchCode": emp_branch,
+                })
+            
+            return filtered
+            
+    except httpx.HTTPError as e:
+        print(f"❌ Error fetching employees from API: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"ไม่สามารถดึงข้อมูลพนักงานจาก API ได้: {str(e)}"
         )
-    # ----------------------------------------
-
-    # empCode = No.
-    df["empCode"] = df["No."]
-
-    # --- EMPNAME BLOCK (แก้เฉพาะส่วนนี้) ---
-    # ใช้เฉพาะ First Name 100% และล้าง None/nan ให้หมด
-    df["empName"] = (
-        df["First Name"]
-        .replace(["nan", "None"], "")   # ลบ "nan"/"None" ถ้าหลงเหลือ
-        .fillna("")
-        .astype(str)
-        .str.strip()
-    )
-    # -----------------------------------------
-
-    df["branchCode"] = df["Branch Code"]
-
-    # keep only 3 fields (same as old API)
-    df = df[["empCode", "empName", "branchCode"]]
-
-    df = df[df["empCode"] != ""].reset_index(drop=True)
-    return df
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"เกิดข้อผิดพลาด: {str(e)}"
+        )
 
 
 class EmployeeOut(BaseModel):
     id: str
     name: str
+    post: Optional[str] = None
     branchId: Optional[str] = None
 
 
@@ -90,37 +110,35 @@ class EmployeesResponse(BaseModel):
 #  GET /employees
 # =============================
 @router.get("", response_model=EmployeesResponse)
-def list_employees(
+async def list_employees(
     q: Optional[str] = Query(None, description="ค้นหาจากรหัสหรือชื่อพนักงาน"),
     branch: Optional[str] = Query(None, description="กรองตามรหัสสาขา"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
 ):
-    df = load_employees_sqlite()
-
-    # search
-    if q:
-        key = q.strip().lower()
-        df = df[
-            df["empCode"].str.lower().str.contains(key) |
-            df["empName"].str.lower().str.contains(key)
-        ]
-
-    # branch filter
-    if branch:
-        df = df[df["branchCode"].astype(str).str.lower() == branch.lower()]
-
-    total = len(df)
+    """
+    ดึงรายการพนักงานจาก External API
+    """
+    # ดึงข้อมูลจาก API
+    employees = await fetch_employees_from_api(q=q, branch=branch)
+    
+    # Pagination
+    total = len(employees)
     pages = max(1, math.ceil(total / page_size))
     start = (page - 1) * page_size
     end = start + page_size
-    df_page = df.iloc[start:end].copy()
-
+    page_data = employees[start:end]
+    
     data = [
-        {"id": r["empCode"], "name": r["empName"], "branchId": r["branchCode"] or None}
-        for _, r in df_page.iterrows()
+        {
+            "id": emp["empCode"],
+            "name": emp["empName"],
+            "post": emp["empPost"] or None,
+            "branchId": emp["branchCode"] or None,
+        }
+        for emp in page_data
     ]
-
+    
     return EmployeesResponse(
         meta=PageMeta(page=page, page_size=page_size, total=total, pages=pages),
         data=data,
@@ -131,16 +149,24 @@ def list_employees(
 #  GET /employees/{code}
 # =============================
 @router.get("/{code}", response_model=EmployeeOut)
-def get_employee(code: str):
-    df = load_employees_sqlite()
-    row = df[df["empCode"].str.lower() == code.lower()]
-    if row.empty:
-        raise HTTPException(status_code=404, detail=f"ไม่พบพนักงานรหัส {code}")
-
-    r = row.iloc[0].to_dict()
-
-    return {
-        "id": r["empCode"],
-        "name": r["empName"],
-        "branchId": r["branchCode"] or None
-    }
+async def get_employee(code: str):
+    """
+    ดึงข้อมูลพนักงานตามรหัส
+    """
+    # ดึงข้อมูลทั้งหมดจาก API
+    employees = await fetch_employees_from_api()
+    
+    # หาพนักงานที่ตรงกับ code
+    for emp in employees:
+        if emp["empCode"].lower() == code.lower():
+            return {
+                "id": emp["empCode"],
+                "name": emp["empName"],
+                "post": emp["empPost"] or None,
+                "branchId": emp["branchCode"] or None,
+            }
+    
+    raise HTTPException(
+        status_code=404,
+        detail=f"ไม่พบพนักงานรหัส {code}"
+    )

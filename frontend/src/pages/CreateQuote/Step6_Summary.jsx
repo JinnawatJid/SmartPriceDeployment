@@ -14,6 +14,8 @@ import CategoryCard from "../../components/wizard/CategoryCard.jsx";
 import CartItemRow from "../../components/wizard/CartItemRow.jsx";
 import OrderHistoryCard from "../../components/wizard/OrderHistoryCard.jsx";
 import DynamicsImportConfirmModal from "../../components/wizard/DynamicsImportConfirmModal.jsx";
+import SpecialPriceRequestModal from "../../components/wizard/SpecialPriceRequestModal.jsx";
+import PriceEditReasonModal from "../../components/wizard/PriceEditReasonModal.jsx";
 
 import ProductList from "../../components/products/ProductList.jsx";
 import ProductDetail from "../../components/products/ProductDetail.jsx";
@@ -92,9 +94,64 @@ function Step6_Summary({ state, dispatch }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [shippingOpen, setShippingOpen] = useState(false);
   const [glassOpen, setGlassOpen] = useState(false);
+  const [editingShippingCost, setEditingShippingCost] = useState(false);
+  const [tempShippingCost, setTempShippingCost] = useState(0);
 
   // Product browser state
   const [productFilters, setProductFilters] = useState({});
+  
+  // Special Price Request state
+  const [specialPriceRequest, setSpecialPriceRequest] = useState(null);
+  const [loadingSPR, setLoadingSPR] = useState(false);
+  
+  // Load special price request when quote is loaded
+  useEffect(() => {
+    const loadSpecialPriceRequest = async () => {
+      if (!state.quoteNo) return;
+      
+      try {
+        setLoadingSPR(true);
+        const response = await api.get(`/api/special-price-requests/quote/${encodeURIComponent(state.quoteNo)}`);
+        const sprList = response.data || [];
+        const latestSPR = sprList.length > 0 ? sprList[0] : null;
+        setSpecialPriceRequest(latestSPR);
+        console.log('[SPR] Loaded special price request:', latestSPR);
+      } catch (err) {
+        console.log('[SPR] No special price request found for this quote');
+        setSpecialPriceRequest(null);
+      } finally {
+        setLoadingSPR(false);
+      }
+    };
+    
+    loadSpecialPriceRequest();
+  }, [state.quoteNo]);
+
+  // Load active special prices for customer
+  const [activeSpecialPrices, setActiveSpecialPrices] = useState(null);
+  useEffect(() => {
+    const loadActiveSpecialPrices = async () => {
+      const customerCode = getCustomerCode(state.customer);
+      if (!customerCode) return;
+      
+      try {
+        console.log('[ACTIVE PRICES] Loading for customer:', customerCode);
+        const response = await api.get(`/api/special-price-requests/active-prices/${customerCode}`);
+        setActiveSpecialPrices(response.data);
+        console.log('[ACTIVE PRICES] Loaded:', response.data);
+        console.log('[ACTIVE PRICES] Items:', response.data?.items);
+        if (response.data?.items) {
+          console.log('[ACTIVE PRICES] Item codes:', response.data.items.map(i => i.item_code));
+        }
+      } catch (err) {
+        console.log('[ACTIVE PRICES] No active prices found:', err);
+        setActiveSpecialPrices(null);
+      }
+    };
+    
+    loadActiveSpecialPrices();
+  }, [state.customer]);
+
   const [productItems, setProductItems] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productLoading, setProductLoading] = useState(false);
@@ -121,6 +178,34 @@ function Step6_Summary({ state, dispatch }) {
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [sendingToBC, setSendingToBC] = useState(false);
   const [showDynamicsConfirm, setShowDynamicsConfirm] = useState(false);
+  const [showSpecialPriceModal, setShowSpecialPriceModal] = useState(false);
+  const [itemsBelowR1, setItemsBelowR1] = useState([]);
+  const [showPriceEditReasonModal, setShowPriceEditReasonModal] = useState(false);
+  const [priceEditReason, setPriceEditReason] = useState("");
+  const [pendingSaveStatus, setPendingSaveStatus] = useState(null);
+  const [shippingEdited, setShippingEdited] = useState(false);
+  const [isPreOrder, setIsPreOrder] = useState(false);
+
+  // โหลด pre_order จาก quote header เมื่อเป็น draft
+  useEffect(() => {
+    const loadPreOrderStatus = async () => {
+      if (!state.quoteNo) {
+        setIsPreOrder(false);
+        return;
+      }
+
+      try {
+        const res = await api.get(`/api/quotation/${state.quoteNo}`);
+        const preOrderValue = res.data?.header?.Pre_Order ?? res.data?.header?.pre_order ?? 0;
+        setIsPreOrder(preOrderValue === 1);
+      } catch (err) {
+        console.error('Error loading pre-order status:', err);
+        setIsPreOrder(false);
+      }
+    };
+
+    loadPreOrderStatus();
+  }, [state.quoteNo]);
 
   const sumCartLineTotal = (cart) =>
     cart.reduce((sum, it) => sum + Number(it.lineTotal ?? 0), 0);
@@ -204,6 +289,7 @@ function Step6_Summary({ state, dispatch }) {
 
   useEffect(() => {
     if (state.status === "open") {
+      // ⭐ ส่งสินค้าที่ต้องคำนวณราคา (รวมสินค้าที่แก้ราคาด้วย)
       const itemsNeedingPricing = (state.cart || []).filter(
         (it) => it.source === "ui" && it.needsPricing
       );
@@ -245,6 +331,16 @@ function Step6_Summary({ state, dispatch }) {
 
       const calcDraft = async () => {
         try {
+          console.log('📤 [STEP6] Sending pricing request to backend');
+          console.log('📤 [STEP6] Items needing pricing:', itemsNeedingPricing.length);
+          console.log('📤 [STEP6] Items details:', itemsNeedingPricing.map(it => ({
+            sku: it.sku,
+            priceSource: it.priceSource,
+            needsPricing: it.needsPricing,
+            UnitPrice: it.UnitPrice,
+            pricePerSqft: it.pricePerSqft
+          })));
+          
           const customerCode = getCustomerCode(state.customer);
 
           const res = await api.post("/api/pricing/calculate", {
@@ -287,11 +383,28 @@ function Step6_Summary({ state, dispatch }) {
               category: it.category,
               unit: it.unit ?? "",
               product_weight: it.product_weight ?? 0,
-              // ⭐ ลบ relevantSales ออก - ให้ backend คำนวณเองจาก product_group
+              isSoldByPack: it.isSoldByPack ?? false,
+              // ⭐ Include manual price info so backend can validate and create special price requests
+              priceSource: it.priceSource ?? "system",
+              UnitPrice: it.priceSource === "manual" ? Number(it.UnitPrice ?? 0) : undefined,
+              pricePerSqft: it.priceSource === "manual" ? Number(it.pricePerSqft ?? 0) : undefined,
+              pricePerKg: it.priceSource === "manual" ? Number(it.pricePerKg ?? 0) : undefined,
+              weight: it.priceSource === "manual" ? Number(it.weight ?? 0) : undefined,
             })),
           });
 
           const pricedItems = res.data.items || [];
+          
+          console.log('📥 [STEP6] Received pricing response from backend');
+          console.log('📥 [STEP6] Priced items count:', pricedItems.length);
+          console.log('📥 [STEP6] Priced items details:', pricedItems.map(pi => ({
+            sku: pi.sku,
+            UnitPrice: pi.UnitPrice,
+            price_source: pi.price_source,
+            priceR1: pi.priceR1,
+            priceW2: pi.priceW2,
+            priceW1: pi.priceW1
+          })));
 
           pricedItems.forEach((pi) => {
             const key = `${pi.sku}__${Number(pi.sqft_sheet ?? 0)}`;
@@ -309,7 +422,7 @@ function Step6_Summary({ state, dispatch }) {
           const total = grossBeforeVat;
 
           setCalculation({
-            cart: [],
+            cart: pricedItems,  // ⭐ เก็บข้อมูลจาก backend เพื่อใช้ใน calcMap
             totals: {
               exVat,
               vat,
@@ -397,8 +510,8 @@ function Step6_Summary({ state, dispatch }) {
             pkg_size: Number(it.pkg_size ?? 1),
             category: it.category,
             unit: it.unit ?? "",
+            isSoldByPack: it.isSoldByPack ?? false,
             DeliveryType: state.deliveryType,
-            // ⭐ ลบ relevantSales ออก - ให้ backend คำนวณเองจาก product_group
           })),
         });
 
@@ -896,6 +1009,17 @@ function Step6_Summary({ state, dispatch }) {
       }
 
       // not manual → ใช้ pricing ถ้ามี
+      const cat = (it.category || String(it.sku || "").slice(0, 1)).toUpperCase();
+      const isGlass = cat === "G";
+      const isSoldByPack = it.isSoldByPack || false;
+      
+      // ⭐ สำหรับกระจกขายยกแพ็ก: คำนวณใหม่
+      if (isGlass && isSoldByPack) {
+        const qty = Number(it.qty ?? 0);
+        const unitPrice = Number(priced?.UnitPrice ?? it.UnitPrice ?? it.price ?? 0);
+        return sum + unitPrice * qty;
+      }
+      
       const lt = Number(priced?._LineTotal ?? priced?.lineTotal ?? it.lineTotal ?? 0);
       if (lt > 0) return sum + lt;
 
@@ -936,10 +1060,221 @@ function Step6_Summary({ state, dispatch }) {
     }));
   }, [state.cart, state.deliveryType, state.shippingCustomerPay, calcMap]);
 
+  // ตรวจสอบสินค้าที่ราคาต่ำกว่า R1 หรืออยู่ในช่วงที่ต้องขออนุมัติ
+  const checkPricesBelowR1 = () => {
+    console.log('\n' + '='.repeat(80));
+    console.log('🔍 [CHECK PRICES] Starting price check for special price request');
+    console.log('='.repeat(80));
+    console.log('📊 [CHECK PRICES] Cart items:', state.cart?.length || 0);
+    console.log('📊 [CHECK PRICES] calcMap keys:', Object.keys(calcMap || {}).length);
+    
+    const belowR1Items = [];
+    
+    (state.cart || []).forEach((item) => {
+      const key = pricingKeyOf(item);
+      const calc = calcMap?.[key];
+      
+      console.log(`\n🔍 [CHECK PRICES] Checking item: ${item.sku}`);
+      console.log(`   priceSource: ${item.priceSource}`);
+      console.log(`   needsPricing: ${item.needsPricing}`);
+      console.log(`   calcMap key: ${key}`);
+      console.log(`   calc found: ${!!calc}`);
+      
+      if (calc) {
+        console.log(`   calc.priceR1: ${calc.priceR1}`);
+        console.log(`   calc.priceW2: ${calc.priceW2}`);
+        console.log(`   calc.priceW1: ${calc.priceW1}`);
+      }
+      
+      // ⭐ เช็คเฉพาะสินค้าที่มีการแก้ไขราคาด้วยตนเอง (manual)
+      if (item.priceSource !== 'manual') {
+        console.log(`   ⏭️ Skipping: not manual price`);
+        return; // ข้ามสินค้าที่ใช้ราคาจากระบบ
+      }
+      
+      console.log(`   ✅ Manual price detected, checking thresholds...`);
+      
+      // ดึงราคา threshold จาก calculation (เรียงจากมากไปน้อย)
+      const r2Price = Number(calc?.priceR2 || 0);
+      const r1Price = Number(calc?.priceR1 || 0);
+      const w2Price = Number(calc?.priceW2 || 0);
+      const w1Price = Number(calc?.priceW1 || 0);
+      const sdmPrice = Number(calc?.priceSDM || 0);
+      
+      // คำนวณราคาที่ขอ
+      const sqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
+      const weight = Number(item.weight ?? item.product_weight ?? 0);
+      const isGlass = (item.category || "").toUpperCase() === "G";
+      const isAluminium = (item.category || "").toUpperCase() === "A";
+      
+      // 🔍 LOG: แสดงราคาทั้ง 5 ระดับ (เรียงจากมากไปน้อย)
+      let priceUnit = "บาท";
+      if (isGlass) {
+        priceUnit = "บาท/ตร.ฟุต";
+      } else if (isAluminium) {
+        priceUnit = "บาท/กก.";
+      }
+      
+      console.log(`📊 [PRICE CHECK] SKU: ${item.sku} | ${item.name} (MANUAL PRICE) | Category: ${isGlass ? "Glass" : isAluminium ? "Aluminium" : "Other"}`);
+      console.log(`   R2:  ${r2Price.toFixed(2)} ${priceUnit} (ราคาสูงสุด)`);
+      console.log(`   R1:  ${r1Price.toFixed(2)} ${priceUnit} (ราคาขั้นต่ำ)`);
+      console.log(`   W2:  ${w2Price.toFixed(2)} ${priceUnit} (ขั้นกลาง)`);
+      console.log(`   W1:  ${w1Price.toFixed(2)} ${priceUnit} (ขั้นสูง)`);
+      console.log(`   SDM: ${sdmPrice.toFixed(2)} ${priceUnit} (ราคาต่ำสุด)`);
+      
+      if (r1Price === 0) {
+        console.log(`   ⚠️ ไม่มีข้อมูล threshold สำหรับสินค้านี้`);
+        return; // ไม่มีข้อมูล threshold
+      }
+      
+      let requestedPrice;
+      if (item.priceSource === "manual") {
+        if (isGlass && sqft > 0) {
+          // ⭐ กระจก: เทียบราคาต่อตารางฟุต
+          if (item.pricePerSqft) {
+            requestedPrice = Number(item.pricePerSqft);
+          } else {
+            const pricePerSheet = Number(item.price_per_sheet ?? Number(item.UnitPrice ?? 0));
+            requestedPrice = sqft > 0 ? pricePerSheet / sqft : 0;
+          }
+        } else if (isAluminium && weight > 0) {
+          // ⭐ อลูมิเนียม: เทียบราคาต่อกิโลกรัม (ไม่ใช่ราคารวม)
+          // ต้องใช้ pricePerKg โดยตรง ไม่ใช่ราคารวมต่อเส้น
+          if (item.pricePerKg) {
+            requestedPrice = Number(item.pricePerKg);
+          } else {
+            // ถ้าไม่มี pricePerKg ให้ใช้ UnitPrice ซึ่งควรเป็นราคาต่อกก.อยู่แล้ว
+            requestedPrice = Number(item.UnitPrice ?? item.price ?? 0);
+          }
+        } else {
+          requestedPrice = Number(item.UnitPrice ?? item.price ?? 0);
+        }
+      } else {
+        if (isGlass && sqft > 0) {
+          // ใช้ UnitPrice จาก pricing (ซึ่งเป็นราคาต่อตารางฟุต) โดยตรง
+          requestedPrice = Number(calc?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0);
+        } else if (isAluminium && weight > 0) {
+          // ⭐ อลูมิเนียม: ใช้ราคาต่อกิโลกรัมจาก pricing
+          requestedPrice = Number(calc?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0);
+        } else {
+          requestedPrice = Number(calc?.UnitPrice ?? item.UnitPrice ?? item.price ?? 0);
+        }
+      }
+      
+      // 🔍 LOG: แสดงราคาที่ขอ
+      console.log(`   💰 ราคาที่ขอ: ${requestedPrice.toFixed(2)} ${priceUnit}`);
+      
+      // ตรวจสอบว่าราคาอยู่ในช่วงที่ต้องขออนุมัติหรือไม่
+      // ลำดับราคา: R2 >= R1 > W2 > W1 > SDM (จากมากไปน้อย)
+      // เงื่อนไข:
+      // - R2 >= ราคา >= R1: ✅ OK ไม่ต้องขออนุมัติ (ราคาปกติ)
+      // - R1 > ราคา > W2: ต้องอนุมัติจาก ZM เท่านั้น (ส่วนลดน้อย)
+      // - W2 >= ราคา >= W1: ต้องอนุมัติจาก RM (ต้องผ่าน ZM ก่อน)
+      // - ราคา < W1: ❌ REJECTED (ราคาต่ำเกินไป)
+      
+      if (requestedPrice >= r1Price) {
+        // R2 >= ราคา >= R1 = ✅ OK ไม่ต้องขออนุมัติ
+        console.log(`   ✅ OK: ราคาปกติ ไม่ต้องขออนุมัติ (${requestedPrice.toFixed(2)} >= ${r1Price.toFixed(2)})`);
+        return; // ไม่ต้องขออนุมัติ
+      }
+
+      // ตรวจสอบว่ามีราคาพิเศษที่อนุมัติแล้วและยังใช้ได้หรือไม่
+      const activePrice = activeSpecialPrices?.items?.find(p => p.item_code === item.sku);
+      if (activePrice && requestedPrice >= activePrice.special_price) {
+        console.log(`   ✅ ใช้ราคาพิเศษที่อนุมัติแล้ว: ${activePrice.special_price.toFixed(2)} ${priceUnit}`);
+        console.log(`   📅 ระยะเวลา: ${new Date(activePrice.valid_from).toLocaleDateString('th-TH')} - ${new Date(activePrice.valid_to).toLocaleDateString('th-TH')}`);
+        return; // ใช้ราคาพิเศษที่มีอยู่แล้ว ไม่ต้องขออนุมัติใหม่
+      }
+      
+      if (requestedPrice >= w2Price) {
+        // R1 > ราคา >= W2 = ต้องอนุมัติจาก ZM เท่านั้น (single-level, ส่วนลดน้อย)
+        console.log(`   ⚠️ ZM_ONLY: ต้องอนุมัติจาก Zone Manager (${w2Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${r1Price.toFixed(2)})`);
+        belowR1Items.push({
+          sku: item.sku,
+          name: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          requested_price: requestedPrice,
+          r1_price: r1Price,
+          w2_price: w2Price,
+          w1_price: w1Price,
+          approval_level: 'ZM_ONLY', // Single-level
+        });
+      } else if (requestedPrice >= w1Price) {
+        // W2 > ราคา >= W1 = ต้องอนุมัติจาก RM (ต้องผ่าน ZM ก่อน)
+        console.log(`   ⚠️ ZM_THEN_RM: ต้องอนุมัติจาก ZM และ RM (${w1Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${w2Price.toFixed(2)})`);
+        belowR1Items.push({
+          sku: item.sku,
+          name: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          requested_price: requestedPrice,
+          r1_price: r1Price,
+          w2_price: w2Price,
+          w1_price: w1Price,
+          approval_level: 'ZM_THEN_RM', // Multi-level
+        });
+      } else {
+        // ราคา < W1 = ❌ REJECTED (ราคาต่ำเกินไป)
+        console.log(`   ❌ REJECTED: ราคาต่ำกว่า W1 (${requestedPrice.toFixed(2)} < ${w1Price.toFixed(2)})`);
+        belowR1Items.push({
+          sku: item.sku,
+          name: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          requested_price: requestedPrice,
+          r1_price: r1Price,
+          w2_price: w2Price,
+          w1_price: w1Price,
+          approval_level: 'REJECTED', // ต่ำกว่าหรือเท่ากับ W1
+        });
+      }
+    });
+    
+    if (belowR1Items.length > 0) {
+      console.log(`\n📋 สรุปผลการตรวจสอบราคา: พบ ${belowR1Items.length} รายการที่แก้ไขราคาและต้องขออนุมัติ`);
+      const zmOnly = belowR1Items.filter(i => i.approval_level === 'ZM_ONLY').length;
+      const zmThenRm = belowR1Items.filter(i => i.approval_level === 'ZM_THEN_RM').length;
+      const rejected = belowR1Items.filter(i => i.approval_level === 'REJECTED').length;
+      
+      console.log(`   ✅ ZM_ONLY: ${zmOnly} รายการ`);
+      console.log(`   ⚠️ ZM_THEN_RM: ${zmThenRm} รายการ`);
+      console.log(`   ❌ REJECTED: ${rejected} รายการ`);
+    } else {
+      const manualItems = (state.cart || []).filter(it => it.priceSource === 'manual').length;
+      if (manualItems > 0) {
+        console.log(`\n✅ มีสินค้าแก้ไขราคา ${manualItems} รายการ แต่ราคาอยู่ในช่วงที่ไม่ต้องขออนุมัติ (> R1)`);
+      } else {
+        console.log(`\n✅ ไม่มีสินค้าที่แก้ไขราคาด้วยตนเอง`);
+      }
+    }
+    console.log('─'.repeat(60));
+    
+    return belowR1Items;
+  };
+
+  // ตรวจสอบราคาเมื่อ cart หรือ calcMap หรือ activeSpecialPrices เปลี่ยน
+  useEffect(() => {
+    console.log('🔄 [EFFECT] Cart or calcMap or activeSpecialPrices changed, checking prices...');
+    console.log('🔄 [EFFECT] Cart length:', state.cart?.length || 0);
+    console.log('🔄 [EFFECT] calcMap keys:', Object.keys(calcMap || {}).length);
+    console.log('🔄 [EFFECT] Manual items in cart:', state.cart?.filter(it => it.priceSource === 'manual').length || 0);
+    console.log('🔄 [EFFECT] Active special prices:', activeSpecialPrices?.items?.length || 0);
+    
+    const items = checkPricesBelowR1();
+    setItemsBelowR1(items);
+    
+    console.log('🔄 [EFFECT] Items below R1:', items.length);
+  }, [state.cart, calcMap, activeSpecialPrices]);
+
+  // แยกรายการที่สามารถขออนุมัติได้ และที่ไม่สามารถขออนุมัติได้
+  const approvableItems = itemsBelowR1.filter(item => item.approval_level !== 'REJECTED');
+  const rejectedItems = itemsBelowR1.filter(item => item.approval_level === 'REJECTED');
+
 
   const [saving, setSaving] = useState(false);
 
-  const buildQuotationPayload = (status) => {
+  const buildQuotationPayload = (status, editReason = "") => {
     const isEditDraft = state.status === "open";
 
     const cartPayload = (state.cart || []).map((it) => {
@@ -1048,6 +1383,17 @@ function Step6_Summary({ state, dispatch }) {
     // ⭐ ใช้ logic เดียวกับ Summary หน้า Step6
     const effectiveTotals = computeEffectiveTotals(state.cart, calcMap);
 
+    // ⭐ สร้าง note โดยรวมเหตุผลการแก้ไขค่าขนส่ง (ถ้ามี)
+    let finalNote = state.remark || "";
+    if (editReason) {
+      const timestamp = new Date().toLocaleString('th-TH');
+      const reasonText = `[แก้ไขค่าขนส่ง ${timestamp}] ${editReason}`;
+      // ⭐ ตัดข้อความให้ไม่เกิน 500 ตัวอักษร (ป้องกัน truncation error)
+      const maxLength = 500;
+      const newNote = finalNote ? `${finalNote}\n${reasonText}` : reasonText;
+      finalNote = newNote.length > maxLength ? newNote.substring(0, maxLength) : newNote;
+    }
+
     return {
       id: state.id || null,
       quoteNo: state.quoteNo || null,
@@ -1067,8 +1413,10 @@ function Step6_Summary({ state, dispatch }) {
         vat: effectiveTotals.vat,
         grandTotal: effectiveTotals.total,
         shippingCustomerPay: state.shippingCustomerPay ?? 0,
+        shippingRaw: state.shippingCost ?? 0, // ⭐ ค่าขนส่งที่ระบบคิด
       },
-      note: state.remark || "",
+      note: finalNote,
+      pre_order: isPreOrder ? 1 : 0, // ⭐ เพิ่ม pre_order field
     };
   };
 
@@ -1291,15 +1639,22 @@ function Step6_Summary({ state, dispatch }) {
         category: item.category,
         unit: item.unit,
         product_weight: item.product_weight,
+        isSoldByPack: item.isSoldByPack ?? false, // ⭐ เพิ่ม flag สำหรับขายยกแพ็ก
       };
     });
+  };
+
+  // ตรวจสอบว่ามีการแก้ไขค่าขนส่งหรือไม่
+  const hasShippingEdits = () => {
+    // ถ้าเป็น DELIVERY และค่าขนส่งถูกแก้ไข
+    return state.deliveryType === "DELIVERY" && shippingEdited;
   };
 
   const handleSaveQuotation = async (status) => {
     try {
       setSaving(true);
 
-      const payload = buildQuotationPayload(status);
+      const payload = buildQuotationPayload(status, priceEditReason);
       const res = await saveQuotation(payload, state);
 
       // ⭐ สำคัญที่สุด
@@ -1314,6 +1669,11 @@ function Step6_Summary({ state, dispatch }) {
         });
       }
 
+      // ล้างเหตุผลการแก้ไขราคาและค่าขนส่งหลังบันทึกสำเร็จ
+      setPriceEditReason("");
+      setPendingSaveStatus(null);
+      setShippingEdited(false);
+
       if (status === "open") {
         navigate("/quote-drafts");
         return;
@@ -1326,6 +1686,18 @@ function Step6_Summary({ state, dispatch }) {
       alert("บันทึกใบเสนอราคาไม่สำเร็จ");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePriceEditReasonConfirm = (reason) => {
+    setPriceEditReason(reason);
+    setShowPriceEditReasonModal(false);
+    
+    // บันทึกต่อด้วย status ที่รอไว้
+    if (pendingSaveStatus) {
+      setTimeout(() => {
+        handleSaveQuotation(pendingSaveStatus);
+      }, 100);
     }
   };
 
@@ -1458,6 +1830,73 @@ function Step6_Summary({ state, dispatch }) {
     handleSendToBC();
   };
 
+  const handleSpecialPriceRequest = async (reason, validFrom, validTo) => {
+    try {
+      // ตรวจสอบว่ามีสินค้าที่ไม่สามารถขออนุมัติได้หรือไม่
+      const rejectedItems = itemsBelowR1.filter(item => item.approval_level === 'REJECTED');
+      if (rejectedItems.length > 0) {
+        alert('พบสินค้าที่ราคานอกช่วงที่อนุมัติได้ กรุณาแก้ไขราคาก่อนส่งขออนุมัติ');
+        return;
+      }
+      
+      // เฉพาะสินค้าที่สามารถขออนุมัติได้
+      const approvableItems = itemsBelowR1.filter(item => item.approval_level !== 'REJECTED');
+      
+      if (approvableItems.length === 0) {
+        alert('ไม่มีสินค้าที่ต้องขออนุมัติ');
+        return;
+      }
+      
+      // 1. บันทึกใบเสนอราคาเป็น Draft ก่อน
+      const payload = buildQuotationPayload("open");
+      const res = await saveQuotation(payload, state);
+
+      if (res?.data) {
+        dispatch({
+          type: "SET_QUOTE_META",
+          payload: {
+            id: res.data.id,
+            quoteNo: res.data.quoteNo,
+            status: res.data.status,
+          },
+        });
+      }
+
+      // 2. สร้างใบขอราคาพิเศษ
+      const customerCode = getCustomerCode(state.customer);
+      
+      const specialPricePayload = {
+        quote_no: res.data.quoteNo, // ⭐ ส่ง quote_no ที่ได้จากการบันทึก
+        customer_code: customerCode,
+        customer_name: state.customer?.name || "",
+        customer_type: state.customer?.gen_bus || null,
+        items: approvableItems.map(item => ({
+          sku: item.sku,
+          item_name: item.name,
+          quantity: Number(item.qty),
+          unit: item.unit,
+          normal_price: item.r1_price,
+          requested_price: item.requested_price,
+          approval_level: item.approval_level, // ส่ง approval_level ไปด้วย
+        })),
+        request_reason: reason,
+        valid_from: validFrom,
+        valid_to: validTo,
+      };
+
+      const specialPriceRes = await api.post('/api/special-price-requests', specialPricePayload);
+
+      // ไม่ต้องเรียก submit อีก เพราะ create API จะ submit ให้อัตโนมัติแล้ว
+      
+      setShowSpecialPriceModal(false);
+      alert('ส่งใบขอราคาพิเศษเรียบร้อยแล้ว\nใบเสนอราคาถูกบันทึกเป็น Draft และรอการอนุมัติ');
+      navigate("/quote-drafts");
+    } catch (err) {
+      console.error('Error creating special price request:', err);
+      alert('ไม่สามารถส่งใบขอราคาพิเศษได้: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
 
   const handleGoBack = () => dispatch({ type: "SET_STEP", payload: 3 });
   const handlePrint = async () => {
@@ -1492,11 +1931,17 @@ function Step6_Summary({ state, dispatch }) {
           original?.unit || // จาก cart
           "-";
         const isGlass = (original.category || it.category) === "G";
+        const isSoldByPack = original?.isSoldByPack || false; // ⭐ เช็ค flag ขายยกแพ็ก
 
+        // ⭐ สำหรับกระจกที่ขายยกแพ็ก ใช้ UnitPrice แทน price_per_sheet
         const price = Number(
           original?.priceSource === "manual"
-            ? original.price_per_sheet ?? original.price ?? original.UnitPrice ?? 0
-            : it.price_per_sheet ?? it.UnitPrice ?? it.price ?? original?.price ?? 0
+            ? (isGlass && isSoldByPack)
+              ? original.UnitPrice ?? original.price ?? 0  // ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+              : original.price_per_sheet ?? original.price ?? original.UnitPrice ?? 0
+            : (isGlass && isSoldByPack)
+              ? it.UnitPrice ?? it.price ?? original?.price ?? 0  // ⭐ ขายยกแพ็ก: ใช้ราคาต่อหน่วยตรงๆ
+              : it.price_per_sheet ?? it.UnitPrice ?? it.price ?? original?.price ?? 0
         );
 
 
@@ -1901,14 +2346,66 @@ function Step6_Summary({ state, dispatch }) {
 
               <div className="space-y-2 border-t border-gray-200 pt-4">
                 <h4 className="text-lg font-semibold text-gray-800">สรุปยอด</h4>
-                <SummaryRow
-                  label="ค่าขนส่ง"
-                  value={
-                    state.deliveryType === "DELIVERY"
-                      ? fmtTHB(Number(state.shippingCustomerPay || 0))
-                      : "รับเอง (ไม่มีค่าขนส่ง)"
-                  }
-                />
+                {editingShippingCost && state.deliveryType === "DELIVERY" ? (
+                  <div className="flex justify-between items-center py-2 gap-2">
+                    <span className="font-semibold text-gray-600 text-sm">ค่าขนส่ง</span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={tempShippingCost}
+                        onChange={(e) => setTempShippingCost(Number(e.target.value))}
+                        className="w-20 rounded-lg border border-blue-500 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      />
+                    <div className="flex flex-col  items-center gap-2">                     
+                      <button
+                        onClick={() => {
+                          dispatch({
+                            type: "SET_SHIPPING",
+                            payload: {
+                              distance: state.distance,
+                              cost: state.shippingCost,
+                              companyPay: state.shippingCompanyPay,
+                              customerPay: tempShippingCost,
+                              vehicleType: state.vehicleType,
+                              unloadHours: state.unloadHours,
+                              staffCount: state.staffCount,
+                            },
+                          });
+                          // ⭐ เปิด Modal ขอเหตุผลทันทีเมื่อกดบันทึกค่าขนส่ง
+                          setEditingShippingCost(false);
+                          setShowPriceEditReasonModal(true);
+                        }}
+                        className="px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded hover:bg-green-700"
+                      >
+                        บันทึก
+                      </button>
+                      <button
+                        onClick={() => setEditingShippingCost(false)}
+                        className="px-2 py-1 text-xs font-semibold text-gray-700 bg-gray-200 rounded hover:bg-gray-300"
+                      >
+                        ยกเลิก
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between py-2 cursor-pointer hover:bg-blue-50  rounded transition-colors" onDoubleClick={() => {
+                    if (state.deliveryType === "DELIVERY") {
+                      setTempShippingCost(Number(state.shippingCustomerPay || 0));
+                      setEditingShippingCost(true);
+                    }
+                  }}>
+                    <span className="font-semibold text-gray-600 ">ค่าขนส่ง</span>
+                    <span className="font-bold text-gray-800">
+                      {state.deliveryType === "DELIVERY"
+                        ? fmtTHB(Number(state.shippingCustomerPay || 0))
+                        : "รับเอง "}
+                    </span>                
+                  </div>
+                  
+                )}
+                <span className="text-[10px] font-semibold text-blue-600">"ระบบจะบันทึกค่าขนส่งที่แก้ไขเพื่อการเปรียบเทียบ"</span>
                 <SummaryRow
                   label="ราคารวมก่อนภาษี (ไม่รวม VAT)"
                   value={calculation.totals.exVatFmt || "..."}
@@ -1931,6 +2428,23 @@ function Step6_Summary({ state, dispatch }) {
               </div>
 
               <div className="space-y-3 border-t border-gray-200 pt-4">
+                {/* Pre-Order Checkbox */}
+                <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <input
+                    type="checkbox"
+                    id="preOrderCheckbox"
+                    checked={isPreOrder}
+                    onChange={(e) => setIsPreOrder(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <label
+                    htmlFor="preOrderCheckbox"
+                    className="text-sm font-medium text-gray-700 cursor-pointer select-none"
+                  >
+                    ใบเสนอราคานี้เป็น Pre-Order
+                  </label>
+                </div>
+
                 <button className="flex w-full items-center justify-center rounded-lg bg-[#c1c1c1] px-6 py-3 font-semibold text-white shadow-md  disabled:opacity-50">
                   <FileIcon />
                   แนบไฟล์
@@ -1949,13 +2463,81 @@ function Step6_Summary({ state, dispatch }) {
                 >
                   <PrintIcon /> Print Quotation
                 </button>
-                <button
-                  disabled={calculation.loading || !!calculation.error}
-                  onClick={() => handleSaveQuotation("complete")}
-                  className="flex w-full items-center justify-center rounded-lg bg-[#DC2626] px-6 py-3 font-semibold text-white shadow-md hover:bg-[#c42222] disabled:opacity-50"
-                >
-                  <SaveIcon /> ยืนยัน
-                </button>
+                
+                {/* แสดงปุ่มขอราคาพิเศษถ้ามีสินค้าที่ราคาต่ำกว่า R1 */}
+                {(() => {
+                  console.log('🎯 [RENDER] Checking if should show special price button');
+                  console.log('🎯 [RENDER] itemsBelowR1.length:', itemsBelowR1.length);
+                  console.log('🎯 [RENDER] itemsBelowR1:', itemsBelowR1);
+                  console.log('🎯 [RENDER] specialPriceRequest:', specialPriceRequest);
+                  return null;
+                })()}
+                {itemsBelowR1.length > 0 ? (
+                  <>
+                    {/* ถ้า special price request approved แล้ว แสดงปุ่มยืนยัน */}
+                    {specialPriceRequest?.status === 'APPROVED' ? (
+                      <>
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-3">
+                          <p className="text-sm font-semibold text-green-800">
+                            ✓ ราคาพิเศษได้รับการอนุมัติแล้ว
+                          </p>
+                          
+                        </div>
+                        <button
+                          disabled={calculation.loading || !!calculation.error}
+                          onClick={() => handleSaveQuotation("complete")}
+                          className="flex w-full items-center justify-center rounded-lg bg-[#DC2626] px-6 py-3 font-semibold text-white shadow-md hover:bg-[#c42222] disabled:opacity-50"
+                        >
+                          <SaveIcon /> ยืนยันใบเสนอราคา
+                        </button>
+                      </>
+                    ) : specialPriceRequest?.status && ['SUBMITTED', 'PENDING_ZM', 'PENDING_RM'].includes(specialPriceRequest.status) ? (
+                      <>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-3">
+                          <p className="text-sm font-semibold text-yellow-800">
+                            ⏳ รอการอนุมัติราคาพิเศษ
+                          </p>
+                          <p className="text-xs text-yellow-700 mt-1">
+                            สถานะ: {specialPriceRequest.status}
+                          </p>
+                        </div>
+                        <button
+                          disabled={true}
+                          className="flex w-full items-center justify-center rounded-lg bg-gray-400 px-6 py-3 font-semibold text-white shadow-md cursor-not-allowed"
+                        >
+                          <SaveIcon /> รอการอนุมัติ
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                            disabled={calculation.loading || !!calculation.error || rejectedItems.length > 0}
+                            onClick={() => setShowSpecialPriceModal(true)}
+                            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#9333EA] px-6 py-3 font-semibold text-white shadow-md hover:bg-[#7e22ce] disabled:opacity-50"
+                          >
+                            <img 
+                              src="/assets/rfq.png"
+                              alt="rfq"
+                              className="h-7 w-7"
+                            />
+
+                            {rejectedItems.length > 0 
+                              ? `ไม่สามารถขออนุมัติได้ (${rejectedItems.length} รายการนอกช่วง)`
+                              : `ขอราคาพิเศษ`
+                            }
+                          </button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    disabled={calculation.loading || !!calculation.error}
+                    onClick={() => handleSaveQuotation("complete")}
+                    className="flex w-full items-center justify-center rounded-lg bg-[#DC2626] px-6 py-3 font-semibold text-white shadow-md hover:bg-[#c42222] disabled:opacity-50"
+                  >
+                    <SaveIcon /> ยืนยัน
+                  </button>
+                )}
                 {state.status === "complete" && (
                   <button
                     disabled={sendingToBC}
@@ -2045,6 +2627,8 @@ function Step6_Summary({ state, dispatch }) {
           distanceKm: state.distance || "",
           unloadHours: state.unloadHours || "",
           staffCount: state.staffCount || "",
+          cost: state.shippingCost || 0, // ค่าขนส่งที่ระบบคิด
+          customerPay: state.shippingCustomerPay || 0, // ค่าขนส่งที่ user แก้ไข
         }}
         onClose={() => setShippingOpen(false)}
         onConfirm={async (data) => {
@@ -2061,9 +2645,9 @@ function Step6_Summary({ state, dispatch }) {
               type: "SET_SHIPPING",
               payload: {
                 distance: data.distanceKm,
-                cost: Number(res.data.shipping_cost || 0),
+                cost: Number(res.data.shipping_cost || 0), // ค่าขนส่งที่ระบบคิด
                 companyPay: Number(res.data.company_pay || 0),
-                customerPay: Number(res.data.customer_pay || 0),
+                customerPay: Number(data.customerPay || res.data.customer_pay || 0), // ค่าขนส่งที่ user แก้ไข
                 vehicleType: data.vehicleType,
                 unloadHours: data.unloadHours,
                 staffCount: data.staffCount,
@@ -2104,6 +2688,24 @@ function Step6_Summary({ state, dispatch }) {
         open={showDynamicsConfirm}
         onCancel={() => setShowDynamicsConfirm(false)}
         onConfirm={handleConfirmDynamicsImport}
+      />
+
+      {/* Special Price Request Modal */}
+      <SpecialPriceRequestModal
+        open={showSpecialPriceModal}
+        onClose={() => setShowSpecialPriceModal(false)}
+        onConfirm={handleSpecialPriceRequest}
+        itemsBelowR1={itemsBelowR1}
+      />
+
+      {/* Price Edit Reason Modal */}
+      <PriceEditReasonModal
+        isOpen={showPriceEditReasonModal}
+        onClose={() => {
+          setShowPriceEditReasonModal(false);
+          setPendingSaveStatus(null);
+        }}
+        onConfirm={handlePriceEditReasonConfirm}
       />
     </div>
   );

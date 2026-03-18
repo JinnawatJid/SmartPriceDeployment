@@ -12,7 +12,7 @@ export default function ShippingModal({ open = false, initial = {}, onClose, onC
   const [distanceKm, setDistanceKm] = useState(initial.distanceKm ?? "");
   const [unloadHours, setUnloadHours] = useState(initial.unloadHours ?? "");
   const [staffCount, setStaffCount] = useState(initial.staffCount ?? "");
-  const [profit, setProfit] = useState(initial.profit ?? ""); // เพิ่มกำไรของบิล
+  const [profit, setProfit] = useState(initial.profit ?? "");
 
   useEffect(() => {
     if (open) {
@@ -52,6 +52,8 @@ export default function ShippingModal({ open = false, initial = {}, onClose, onC
         distanceKm: distanceKm,
         unloadHours,
         staffCount,
+        cost: Number(res.data.shipping_cost || 0), // ค่าขนส่งที่ระบบคิด
+        customerPay: Number(res.data.customer_pay || 0), // ค่าขนส่งที่ระบบคิด
       });
       // ส่งผลลัพธ์ที่ได้กลับไปให้หน้า Step6
     } catch (err) {

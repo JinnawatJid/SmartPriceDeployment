@@ -63,7 +63,7 @@ async def search_customer_from_db(
         query = f"""
             SELECT TOP 1
                 customer_code, customer_name, phone, tax_no, gen_bus,
-                payment_terms, customer_date, accum_6m, frequency,
+                payment_terms, customer_date, blocked, accum_6m, frequency,
                 sales_g_cust, sales_a_cust, sales_s_cust, sales_y_cust,
                 sales_c_cust, sales_e_cust
             FROM Customer
@@ -111,6 +111,7 @@ async def search_customer_from_db(
             "gen_bus": row.gen_bus or "",
             "customer_date": str(row.customer_date) if row.customer_date else "",
             "payment_terms": row.payment_terms or "",
+            "blocked": row.blocked or "",
             
             "accum_6m": float(row.accum_6m or 0),
             "frequency": int(row.frequency or 0),
