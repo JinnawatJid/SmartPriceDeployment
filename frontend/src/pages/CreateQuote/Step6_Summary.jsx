@@ -89,6 +89,11 @@ function Step6_Summary({ state, dispatch }) {
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  
+  // สต๊อกสินค้า
+  const [selectedItemStock, setSelectedItemStock] = useState(null);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [selectedItemForStock, setSelectedItemForStock] = useState(null);
 
   // local UI state
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -286,6 +291,41 @@ function Step6_Summary({ state, dispatch }) {
       },
     });
   };
+  
+  // ⭐ ฟังก์ชันดึงสต๊อกสินค้า
+  const fetchItemStock = async (sku) => {
+    if (!sku) return;
+    
+    setStockLoading(true);
+    try {
+      const res = await api.get(`/api/items/${sku}/stock`);
+      setSelectedItemStock(res.data);
+      setSelectedItemForStock(sku);
+    } catch (err) {
+      console.error("Error fetching stock:", err);
+      setSelectedItemStock(null);
+    } finally {
+      setStockLoading(false);
+    }
+  };
+  
+  // ⭐ Auto-fetch สต๊อกเมื่อมีสินค้าในตะกร้า
+  useEffect(() => {
+    if (state.cart && state.cart.length > 0) {
+      // ถ้ายังไม่เคยเลือกสินค้า หรือสินค้าที่เลือกไว้ไม่อยู่ในตะกร้าแล้ว
+      const currentItemExists = state.cart.some(item => item.sku === selectedItemForStock);
+      
+      if (!selectedItemForStock || !currentItemExists) {
+        // ดึงสต๊อกของสินค้าตัวแรก หรือสินค้าตัวล่าสุดที่เพิ่มเข้ามา
+        const latestItem = state.cart[state.cart.length - 1];
+        fetchItemStock(latestItem.sku);
+      }
+    } else {
+      // ถ้าไม่มีสินค้าในตะกร้า ให้ clear สต๊อก
+      setSelectedItemStock(null);
+      setSelectedItemForStock(null);
+    }
+  }, [state.cart]);
 
   useEffect(() => {
     if (state.status === "open") {
@@ -2052,6 +2092,7 @@ function Step6_Summary({ state, dispatch }) {
   );
 
 
+
   return (
     <div className="rounded-lg bg-white p-6 shadow-lg flex flex-col animate-fadeIn">
       <h1 className="text-2xl font-bold text-gray-900 mb-4">สรุปใบเสนอราคา</h1>
@@ -2168,6 +2209,48 @@ function Step6_Summary({ state, dispatch }) {
                 </div>
               </div>
             )}
+            
+            {/* ⭐ แสดงสต๊อกสินค้า */}
+            <div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-3">สต๊อกสินค้า</h3>
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">             
+                <span className="block text-xs text-gray-500 font-normal">
+                  *ข้อมูลนี้ไม่ใช่แบบ Real-time ใช้เพื่อช่วยในการตัดสินใจเบื้องต้นเท่านั้น
+                </span>
+              </h3>
+              {state.cart && state.cart.length > 0 ? (
+                <div>
+                  {/* แสดงสต๊อก */}
+                  {stockLoading ? (
+                    <div className="rounded-2xl border-4 border-blue-400 bg-gray-100 p-6 text-center">
+                      <p className="text-sm text-gray-500">กำลังโหลด...</p>
+                    </div>
+                  ) : selectedItemStock ? (
+                    <div className="rounded-2xl border-4 border-blue-400 bg-gray-100 p-6">
+                      <div className="text-center">
+                        <p className="text-lg font-semibold text-gray-800 mb-2">สต๊อก</p>
+                        <p className="text-xs text-red-400 mb-2">กดที่สินค้าเพื่อดูสต๊อก</p>
+                        <p className="text-6xl font-bold text-red-600">
+                          {selectedItemStock.quantity || selectedItemStock.total_quantity || 0}
+                        </p>
+                        {selectedItemStock.Location_Code && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            สาขา: {selectedItemStock.Location_Code}
+                          </p>
+                          
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border-4 border-gray-300 bg-gray-100 p-6 text-center">
+                      <p className="text-sm text-gray-500">เลือกสินค้าในตะกร้าเพื่อดูสต๊อก</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">ยังไม่มีสินค้าในตะกร้า</p>
+              )}
+            </div>
 
             <div className="relative mb-4">
               <h3 className="text-xl font-semibold text-gray-800 mb-3">ค้นหาสินค้า</h3>
@@ -2292,6 +2375,7 @@ function Step6_Summary({ state, dispatch }) {
                           dispatch={dispatch}
                           calculatedItem={calculatedItem}
                           customerCode={customerCode}
+                          onItemClick={() => fetchItemStock(it.sku)}
                         />
                       );
                     })}
@@ -2342,6 +2426,14 @@ function Step6_Summary({ state, dispatch }) {
               
               <div>
                 <h4 className="mb-2 text-lg font-semibold text-gray-800">ข้อมูลใบเสนอราคา</h4>
+                {state.customer && state.customer.tier && (
+                  <div className="mb-3 inline-block">
+                    <span className=" font-medium text-gray-600">Tier ลูกค้า: </span>
+                    <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-md">
+                      {state.customer.tier}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2 border-t border-gray-200 pt-4">

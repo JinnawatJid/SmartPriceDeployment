@@ -21,7 +21,7 @@ const TrashIcon = () => (
   <img src="/assets/delete.png" alt="delete" className="h-5 w-5 mr-4 mt-1 object-contain" />
 );
 
-export default function CartItemRow({ item, index, calculatedItem, dispatch, customerCode, activeSpecialPrices }) {
+export default function CartItemRow({ item, index, calculatedItem, dispatch, customerCode, activeSpecialPrices, onItemClick }) {
   
   // 🔍 Log เมื่อ calculatedItem เปลี่ยน
   useEffect(() => {
@@ -212,7 +212,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
   return (
     <>
               {/* ===== MAIN ROW ===== */}
-              <tr className="border-b bg-white hover:bg-gray-50">
+              <tr className="border-b bg-white hover:bg-gray-50 cursor-pointer" onClick={onItemClick}>
                 <td className="w-[40px] px-4 py-3 text-sm text-gray-600">{index + 1}</td>
 
                 <td className="px-4 py-3 w-[240px]">

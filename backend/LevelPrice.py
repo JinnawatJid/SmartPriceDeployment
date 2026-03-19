@@ -202,6 +202,9 @@ def LevelPrice(df: pd.DataFrame) -> pd.DataFrame:
     
     # --- 4. Map คะแนนรวมเป็น Tier ---
     df["_Tier_Z"] = df["_Score_Z"].apply(map_score_to_price_band)
+    
+    # ⭐ เพิ่ม Tier column ที่ไม่มี underscore เพื่อให้ใช้ได้ง่าย
+    df["tier"] = df["_Tier_Z"]
 
     pd.set_option("display.max_columns", None)
     pd.set_option("display.width", None)

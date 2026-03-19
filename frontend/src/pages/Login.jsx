@@ -31,14 +31,14 @@ function Login() {
       <div className="w-full max-w-md rounded-3xl bg-white p-10 shadow-2xl">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <img src="/assets/favicon.png" alt="Smart Pricing Logo" className="h-24" />
+          <img src="/assets/favicon.png" alt="Smart Pricing Logo" className="h-64" />
         </div>
 
         {/* หัวข้อ */}
-        <h1 className="mb-3 text-center text-3xl font-bold text-gray-800">
+        <h1 className="mb-3 text-center text-4xl font-bold text-red-600">
           Smart Pricing
         </h1>
-        <p className="mb-8 text-center text-gray-600">
+        <p className="mb-8 text-center text-gray-600 font-semibold text-xl">
           ระบบจัดการใบเสนอราคา
         </p>
 

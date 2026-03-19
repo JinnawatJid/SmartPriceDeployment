@@ -137,6 +137,27 @@ async def search_customer_from_db(
         
         base["relevantSales"] = relevant_sales
         
+        # ⭐ คำนวณ Tier โดยใช้ LevelPrice
+        try:
+            from LevelPrice import LevelPrice
+            import pandas as pd
+            
+            # สร้าง DataFrame จากข้อมูลลูกค้า
+            customer_df = pd.DataFrame([{
+                "customer_date": row.customer_date,
+                "accum_6m": row.accum_6m or 0,
+                "frequency": row.frequency or 0,
+                "gen_bus": row.gen_bus or "",
+            }])
+            
+            # คำนวณ Tier
+            result_df = LevelPrice(customer_df)
+            tier = result_df["tier"].iloc[0] if "tier" in result_df.columns else "Unknown"
+            base["tier"] = tier
+        except Exception as e:
+            print(f"Warning: Could not calculate tier for {row.customer_code}: {e}")
+            base["tier"] = "Unknown"
+        
         # ดึงข้อมูล credit_terms จาก Credit API
         try:
             import httpx
@@ -254,6 +275,7 @@ def search_customer_list_from_db(query: str) -> list:
                         customer_name, 
                         phone, 
                         tax_no,
+                        blocked,
                         CASE
                             WHEN LOWER(customer_code) = ? THEN 1
                             WHEN LOWER(customer_code) LIKE ? THEN 2
@@ -290,6 +312,7 @@ def search_customer_list_from_db(query: str) -> list:
                         customer_name, 
                         phone, 
                         tax_no,
+                        blocked,
                         CASE
                             WHEN LOWER(customer_name) = ? THEN 1
                             WHEN LOWER(customer_name) LIKE ? THEN 2
@@ -325,6 +348,7 @@ def search_customer_list_from_db(query: str) -> list:
                     customer_name, 
                     phone, 
                     tax_no,
+                    blocked,
                     CASE
                         -- Exact match (highest priority)
                         WHEN LOWER(customer_code) = ? THEN 1
@@ -370,6 +394,7 @@ def search_customer_list_from_db(query: str) -> list:
                 "name": row.customer_name or "",
                 "phone": row.phone or "",
                 "tax_no": row.tax_no or "",
+                "blocked": row.blocked if hasattr(row, 'blocked') else 0,
             }
             for row in rows
         ]
