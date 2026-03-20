@@ -117,10 +117,9 @@ function Step6_Summary({ state, dispatch }) {
       try {
         setLoadingSPR(true);
         const response = await api.get(`/api/special-price-requests/quote/${encodeURIComponent(state.quoteNo)}`);
-        const sprList = response.data || [];
-        const latestSPR = sprList.length > 0 ? sprList[0] : null;
-        setSpecialPriceRequest(latestSPR);
-        console.log('[SPR] Loaded special price request:', latestSPR);
+        const spr = response.data;
+        setSpecialPriceRequest(spr);
+        console.log('[SPR] Loaded special price request:', spr);
       } catch (err) {
         console.log('[SPR] No special price request found for this quote');
         setSpecialPriceRequest(null);
@@ -1208,9 +1207,10 @@ function Step6_Summary({ state, dispatch }) {
       // ลำดับราคา: R2 >= R1 > W2 > W1 > SDM (จากมากไปน้อย)
       // เงื่อนไข:
       // - R2 >= ราคา >= R1: ✅ OK ไม่ต้องขออนุมัติ (ราคาปกติ)
-      // - R1 > ราคา > W2: ต้องอนุมัติจาก ZM เท่านั้น (ส่วนลดน้อย)
-      // - W2 >= ราคา >= W1: ต้องอนุมัติจาก RM (ต้องผ่าน ZM ก่อน)
-      // - ราคา < W1: ❌ REJECTED (ราคาต่ำเกินไป)
+      // - R1 > ราคา >= W2: ต้องอนุมัติจาก ZM เท่านั้น (ส่วนลดน้อย)
+      // - W2 > ราคา >= W1: ต้องอนุมัติจาก ZM และ RM (ส่วนลดปานกลาง)
+      // - W1 > ราคา >= SDM: ต้องอนุมัติจาก ZM, RM และ SDM (ส่วนลดมาก)
+      // - ราคา < SDM: ❌ REJECTED (ราคาต่ำเกินไป)
       
       if (requestedPrice >= r1Price) {
         // R2 >= ราคา >= R1 = ✅ OK ไม่ต้องขออนุมัติ
@@ -1238,10 +1238,11 @@ function Step6_Summary({ state, dispatch }) {
           r1_price: r1Price,
           w2_price: w2Price,
           w1_price: w1Price,
+          sdm_price: sdmPrice,
           approval_level: 'ZM_ONLY', // Single-level
         });
       } else if (requestedPrice >= w1Price) {
-        // W2 > ราคา >= W1 = ต้องอนุมัติจาก RM (ต้องผ่าน ZM ก่อน)
+        // W2 > ราคา >= W1 = ต้องอนุมัติจาก ZM และ RM (ส่วนลดปานกลาง)
         console.log(`   ⚠️ ZM_THEN_RM: ต้องอนุมัติจาก ZM และ RM (${w1Price.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${w2Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
@@ -1252,11 +1253,12 @@ function Step6_Summary({ state, dispatch }) {
           r1_price: r1Price,
           w2_price: w2Price,
           w1_price: w1Price,
+          sdm_price: sdmPrice,
           approval_level: 'ZM_THEN_RM', // Multi-level
         });
-      } else {
-        // ราคา < W1 = ❌ REJECTED (ราคาต่ำเกินไป)
-        console.log(`   ❌ REJECTED: ราคาต่ำกว่า W1 (${requestedPrice.toFixed(2)} < ${w1Price.toFixed(2)})`);
+      } else if (requestedPrice >= sdmPrice) {
+        // W1 > ราคา >= SDM = ต้องอนุมัติจาก ZM, RM และ SDM (ส่วนลดมาก)
+        console.log(`   ⚠️⚠️⚠️ SDM_APPROVAL: ต้องอนุมัติจาก ZM, RM และ SDM (${sdmPrice.toFixed(2)} ≤ ${requestedPrice.toFixed(2)} < ${w1Price.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
           name: item.name,
@@ -1266,7 +1268,23 @@ function Step6_Summary({ state, dispatch }) {
           r1_price: r1Price,
           w2_price: w2Price,
           w1_price: w1Price,
-          approval_level: 'REJECTED', // ต่ำกว่าหรือเท่ากับ W1
+          sdm_price: sdmPrice,
+          approval_level: 'SDM_APPROVAL', // Three-level
+        });
+      } else {
+        // ราคา < SDM = ❌ REJECTED (ราคาต่ำเกินไป)
+        console.log(`   ❌ REJECTED: ราคาต่ำกว่า SDM (${requestedPrice.toFixed(2)} < ${sdmPrice.toFixed(2)})`);
+        belowR1Items.push({
+          sku: item.sku,
+          name: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          requested_price: requestedPrice,
+          r1_price: r1Price,
+          w2_price: w2Price,
+          w1_price: w1Price,
+          sdm_price: sdmPrice,
+          approval_level: 'REJECTED', // ต่ำกว่า SDM
         });
       }
     });
@@ -1275,10 +1293,12 @@ function Step6_Summary({ state, dispatch }) {
       console.log(`\n📋 สรุปผลการตรวจสอบราคา: พบ ${belowR1Items.length} รายการที่แก้ไขราคาและต้องขออนุมัติ`);
       const zmOnly = belowR1Items.filter(i => i.approval_level === 'ZM_ONLY').length;
       const zmThenRm = belowR1Items.filter(i => i.approval_level === 'ZM_THEN_RM').length;
+      const sdmApproval = belowR1Items.filter(i => i.approval_level === 'SDM_APPROVAL').length;
       const rejected = belowR1Items.filter(i => i.approval_level === 'REJECTED').length;
       
       console.log(`   ✅ ZM_ONLY: ${zmOnly} รายการ`);
       console.log(`   ⚠️ ZM_THEN_RM: ${zmThenRm} รายการ`);
+      console.log(`   ⚠️⚠️⚠️ SDM_APPROVAL: ${sdmApproval} รายการ`);
       console.log(`   ❌ REJECTED: ${rejected} รายการ`);
     } else {
       const manualItems = (state.cart || []).filter(it => it.priceSource === 'manual').length;
@@ -1424,14 +1444,10 @@ function Step6_Summary({ state, dispatch }) {
     const effectiveTotals = computeEffectiveTotals(state.cart, calcMap);
 
     // ⭐ สร้าง note โดยรวมเหตุผลการแก้ไขค่าขนส่ง (ถ้ามี)
-    let finalNote = state.remark || "";
+    let shippingReasonNote = "";
     if (editReason) {
       const timestamp = new Date().toLocaleString('th-TH');
-      const reasonText = `[แก้ไขค่าขนส่ง ${timestamp}] ${editReason}`;
-      // ⭐ ตัดข้อความให้ไม่เกิน 500 ตัวอักษร (ป้องกัน truncation error)
-      const maxLength = 500;
-      const newNote = finalNote ? `${finalNote}\n${reasonText}` : reasonText;
-      finalNote = newNote.length > maxLength ? newNote.substring(0, maxLength) : newNote;
+      shippingReasonNote = `[แก้ไขค่าขนส่ง ${timestamp}] ${editReason}`;
     }
 
     return {
@@ -1455,7 +1471,8 @@ function Step6_Summary({ state, dispatch }) {
         shippingCustomerPay: state.shippingCustomerPay ?? 0,
         shippingRaw: state.shippingCost ?? 0, // ⭐ ค่าขนส่งที่ระบบคิด
       },
-      note: finalNote,
+      remark: state.remark || "",  // ⭐ หมายเหตุทั่วไป → Remark
+      note: shippingReasonNote,  // ⭐ เหตุผลการแก้ค่าขนส่ง → Remark_Shipping
       pre_order: isPreOrder ? 1 : 0, // ⭐ เพิ่ม pre_order field
     };
   };
@@ -2010,6 +2027,8 @@ function Step6_Summary({ state, dispatch }) {
       exVat: calculation.totals.exVat ?? 0,
       vat: calculation.totals.vat ?? 0,
       netTotal: grandTotal,
+      branchCode: state.branchCode || employee?.branchId || "00TR",  // ⭐ เพิ่ม branchCode
+      sales: employee?.name || "",  // ⭐ เพิ่มชื่อพนักงาน
     };
 
     // Use relative path for print endpoint to work in both Docker (Nginx proxy) and Native (Backend serve)
@@ -2210,48 +2229,6 @@ function Step6_Summary({ state, dispatch }) {
               </div>
             )}
             
-            {/* ⭐ แสดงสต๊อกสินค้า */}
-            <div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-3">สต๊อกสินค้า</h3>
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">             
-                <span className="block text-xs text-gray-500 font-normal">
-                  *ข้อมูลนี้ไม่ใช่แบบ Real-time ใช้เพื่อช่วยในการตัดสินใจเบื้องต้นเท่านั้น
-                </span>
-              </h3>
-              {state.cart && state.cart.length > 0 ? (
-                <div>
-                  {/* แสดงสต๊อก */}
-                  {stockLoading ? (
-                    <div className="rounded-2xl border-4 border-blue-400 bg-gray-100 p-6 text-center">
-                      <p className="text-sm text-gray-500">กำลังโหลด...</p>
-                    </div>
-                  ) : selectedItemStock ? (
-                    <div className="rounded-2xl border-4 border-blue-400 bg-gray-100 p-6">
-                      <div className="text-center">
-                        <p className="text-lg font-semibold text-gray-800 mb-2">สต๊อก</p>
-                        <p className="text-xs text-red-400 mb-2">กดที่สินค้าเพื่อดูสต๊อก</p>
-                        <p className="text-6xl font-bold text-red-600">
-                          {selectedItemStock.quantity || selectedItemStock.total_quantity || 0}
-                        </p>
-                        {selectedItemStock.Location_Code && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            สาขา: {selectedItemStock.Location_Code}
-                          </p>
-                          
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border-4 border-gray-300 bg-gray-100 p-6 text-center">
-                      <p className="text-sm text-gray-500">เลือกสินค้าในตะกร้าเพื่อดูสต๊อก</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">ยังไม่มีสินค้าในตะกร้า</p>
-              )}
-            </div>
-
             <div className="relative mb-4">
               <h3 className="text-xl font-semibold text-gray-800 mb-3">ค้นหาสินค้า</h3>
               <input
@@ -2311,6 +2288,20 @@ function Step6_Summary({ state, dispatch }) {
                     ))}
                 </div>
               )}
+
+              {/* ⭐ เพิ่มช่องพิมพ์หมายเหตุด้านล่างเลือกประเภทสินค้า */}
+              <div className="mt-4 p-3 bg-white border border-gray-300 rounded">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  หมายเหตุ
+                </label>
+                <textarea
+                  value={state.remark || ""}
+                  onChange={(e) => dispatch({ type: "SET_REMARK", payload: e.target.value })}
+                  placeholder="ใส่หมายเหตุเพิ่มเติม..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows="3"
+                />
+              </div>
 
             </div>
           </div>
@@ -2390,6 +2381,48 @@ function Step6_Summary({ state, dispatch }) {
 
           {/* ขวา: สรุปยอด */}
           <div className="col-span-2">
+
+            {/* ⭐ แสดงสต๊อกสินค้า */}
+              <div className="mb-4 rounded-lg bg-gray-50 p-4 mt-3">
+                <h3 className="text-base font-semibold text-gray-800 mb-2">สต๊อกสินค้า</h3>
+                <h3 className="text-xs font-semibold text-gray-800 mb-2">             
+                  <span className="block text-xs text-gray-500 font-normal">
+                    *ข้อมูลนี้ไม่ใช่แบบ Real-time ใช้เพื่อช่วยในการตัดสินใจเบื้องต้นเท่านั้น
+                  </span>
+                </h3>
+                {state.cart && state.cart.length > 0 ? (
+                  <div >
+                    {/* แสดงสต๊อก */}
+                    {stockLoading ? (
+                      <div className="rounded-xl border-2 border-blue-400 bg-gray-100 p-2 text-center">
+                        <p className="text-xs text-gray-500">กำลังโหลด...</p>
+                      </div>
+                    ) : selectedItemStock ? (
+                      <div className="rounded-xl border-2 border-blue-400 bg-white p-3 shadow-md">
+                        <div className="text-center">
+                          <p className="text-xs text-red-400 mb-1">กดที่สินค้าเพื่อดูสต๊อก</p>
+                          <p className="text-2xl font-bold text-red-600">
+                            {selectedItemStock.quantity || selectedItemStock.total_quantity || 0}
+                          </p>
+                          {selectedItemStock.Location_Code && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              สาขา: {selectedItemStock.Location_Code}
+                            </p>
+                            
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border-2 border-gray-300 bg-gray-100 p-3 text-center">
+                        <p className="text-xs text-gray-500">เลือกสินค้าในตะกร้าเพื่อดูสต๊อก</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">ยังไม่มีสินค้าในตะกร้า</p>
+                )}
+              </div>
+
             <div className="sticky top-28 space-y-6 rounded-lg bg-gray-50 p-6 shadow-sm mt-3">
               {/* แสดง Promotion Banner */}
               <PromotionBanner promotions={promotions} />
@@ -2423,6 +2456,7 @@ function Step6_Summary({ state, dispatch }) {
                   )}
                 </div>
               )}
+              
               
               <div>
                 <h4 className="mb-2 text-lg font-semibold text-gray-800">ข้อมูลใบเสนอราคา</h4>
@@ -2531,7 +2565,7 @@ function Step6_Summary({ state, dispatch }) {
                   />
                   <label
                     htmlFor="preOrderCheckbox"
-                    className="text-sm font-medium text-gray-700 cursor-pointer select-none"
+                    className="text-xs font-semibold text-gray-700 cursor-pointer select-none"
                   >
                     ใบเสนอราคานี้เป็น Pre-Order
                   </label>

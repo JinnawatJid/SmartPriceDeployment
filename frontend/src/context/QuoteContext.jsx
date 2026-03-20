@@ -89,6 +89,9 @@ function quoteReducer(state, action) {
     case "SET_VEHICLE":
       return { ...state, vehicle: action.payload };
 
+    case "SET_REMARK":  // ⭐ เพิ่ม SET_REMARK case
+      return { ...state, remark: action.payload };
+
     // -------------------------
     //ADD ITEM (รองรับ Variant + preserve meta ของ draft)
     // -------------------------

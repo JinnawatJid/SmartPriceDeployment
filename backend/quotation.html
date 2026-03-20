@@ -149,11 +149,11 @@ body {
 
 <!-- ===== HEADER ===== -->
 <div class="header">
-  บริษัท ห้างกระจกตังน้ำ จำกัด (สำนักงานใหญ่)
+  {{ q.branchName or "บริษัท ห้างกระจกตังน้ำ จำกัด (สำนักงานใหญ่)" }}
 </div>
 <div class="sub-header">
-  226 ถนนพระรามที่2 แขวงแสมดำ เขตบางขุนเทียน จังหวัดกรุงเทพฯ 10150<br>
-  Tel : 0-2416-5840-1 
+  {{ q.branchAddress or "226 ถนนพระรามที่2 แขวงแสมดำ เขตบางขุนเทียน จังหวัดกรุงเทพฯ 10150" }}<br>
+  {{ q.branchPhone or "Tel : 0-2416-5840-1" }}
 </div>
 
 <div class="center" style="margin-top:10px;font-weight:bold;">

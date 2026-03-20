@@ -3,6 +3,8 @@ from fastapi import Header, Request
 import jwt
 import os
 import logging
+from role_mapping import map_thai_role_to_code
+from branch_region_mapping import get_region_from_branch
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +56,17 @@ def get_branch_code(request: Request, authorization: str = Header(None)) -> str:
 def get_employee_info(request: Request, authorization: str = Header(None)) -> dict:
     """
     Extract employee information from JWT token in cookies or Authorization header.
+    Now uses role from token and maps Thai role names to internal codes.
     
     Returns:
-        Dictionary with employee_id, name, branch_code, role, and region
+        Dictionary with employee_id, name, branch_code, role (mapped), and region (derived from branch)
     """
     default_info = {
         "employee_id": "UNKNOWN",
         "name": "Unknown User",
         "branch_code": "00TR",
         "role": "Sales",
-        "region": "Unknown"
+        "region": "BE"  # Default region for 00TR
     }
     
     token = request.cookies.get("auth_token")
@@ -75,68 +78,73 @@ def get_employee_info(request: Request, authorization: str = Header(None)) -> di
         return default_info
     
     try:
-        
         # Decode JWT token
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
         
-        # Debug: print all payload keys
-        print(f"[JWT DEBUG] Payload keys: {list(payload.keys())}")
-        print(f"[JWT DEBUG] Payload: {payload}")
-        print(f"[JWT DEBUG] payload.get('sub') = {payload.get('sub')}")
-        print(f"[JWT DEBUG] Type of sub: {type(payload.get('sub'))}")
+        logger.debug(f"[JWT] Payload keys: {list(payload.keys())}")
         
-        # Extract employee information from token
-        # Try different possible field names
-        # Note: Use explicit None check to avoid issues with falsy values like 0 or empty string
-        employee_id = payload.get("sub")  # JWT standard field for user ID
+        # Extract employee_id from "sub" field (JWT standard)
+        employee_id = payload.get("sub")
         if not employee_id:
-            employee_id = payload.get("employeeId")
-        if not employee_id:
-            employee_id = payload.get("employee_id")
-        if not employee_id:
-            employee_id = payload.get("id")
-        if not employee_id:
-            employee_id = payload.get("userId")
-        if not employee_id:
-            employee_id = "UNKNOWN"
-        
-        # Convert to string if it's not already
+            employee_id = payload.get("employeeId") or payload.get("employee_id") or payload.get("id") or "UNKNOWN"
         employee_id = str(employee_id) if employee_id != "UNKNOWN" else "UNKNOWN"
         
-        name = (
-            payload.get("name") or 
-            payload.get("username") or 
-            payload.get("fullName") or 
-            "Unknown User"
-        )
+        # Extract name
+        name = payload.get("name") or payload.get("username") or payload.get("fullName") or "Unknown User"
         
-        branch_code = (
-            payload.get("branchId") or 
-            payload.get("branch_code") or 
-            payload.get("branch") or 
-            "00TR"
-        )
+        # Extract branchId
+        branch_code = payload.get("branchId") or payload.get("branch_code") or payload.get("branch") or "00TR"
         
-        role = (
-            payload.get("role") or 
-            payload.get("position") or 
-            "Sales"
-        )
+        # Extract role from token (NEW: supports nested role object)
+        role_internal = "Sales"  # Default
+        thai_role_name = None
         
-        region = (
-            payload.get("region") or 
-            "Unknown"
-        )
+        # Check if role is in nested object format: {"role": {"app": "Smart Quotation", "role": "พนักงานขาย"}}
+        role_obj = payload.get("role")
+        if isinstance(role_obj, dict):
+            # Nested role object
+            if role_obj.get("app") == "Smart Quotation":
+                thai_role_name = role_obj.get("role")
+                if thai_role_name:
+                    role_internal = map_thai_role_to_code(thai_role_name)
+                    logger.info(f"[JWT] Mapped Thai role '{thai_role_name}' to '{role_internal}'")
+        elif isinstance(role_obj, str):
+            # Direct string role (could be Thai or English)
+            thai_role_name = role_obj
+            role_internal = map_thai_role_to_code(thai_role_name)
+            logger.info(f"[JWT] Mapped role '{thai_role_name}' to '{role_internal}'")
+        
+        # Fallback: check old format (roles array or direct role field)
+        if not thai_role_name:
+            role_data = payload.get("roles") or payload.get("role")
+            if isinstance(role_data, list) and len(role_data) > 0:
+                if isinstance(role_data[0], dict):
+                    role_internal = role_data[0].get("role", "Sales")
+                else:
+                    role_internal = role_data[0]
+            elif isinstance(role_data, str):
+                role_internal = role_data
+            else:
+                role_internal = payload.get("position") or "Sales"
+        
+        # Derive region from branch code (NEW: using branch_region_mapping)
+        region = get_region_from_branch(branch_code)
+        logger.info(f"[JWT] Derived region '{region}' from branch '{branch_code}'")
         
         employee_info = {
             "employee_id": employee_id,
             "name": name,
             "branch_code": branch_code,
-            "role": role,
-            "region": region
+            "role": role_internal,  # Internal role code (Sales, ZM, RM, SDM, PM, CEO)
+            "region": region,  # Derived from branch
+            "thai_role_name": thai_role_name  # Keep original Thai name for reference
         }
         
-        print(f"[JWT DEBUG] Extracted employee_id={employee_info['employee_id']}, name={employee_info['name']}, branch={employee_info['branch_code']}, role={employee_info['role']}")
+        logger.info(
+            f"[JWT] Extracted: employee_id={employee_id}, name={name}, "
+            f"branch={branch_code}, role={role_internal}, region={region}"
+        )
+        
         return employee_info
     
     except jwt.ExpiredSignatureError:
@@ -147,4 +155,6 @@ def get_employee_info(request: Request, authorization: str = Header(None)) -> di
         return default_info
     except Exception as e:
         logger.error(f"Error extracting employee info: {e}, using default employee info")
+        import traceback
+        traceback.print_exc()
         return default_info

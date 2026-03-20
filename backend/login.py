@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 import jwt, os, httpx
 
 from config.config_external_api import EMP_API_URL, EMP_API_HEADERS
+from role_mapping import get_all_role_codes, get_role_display_name, get_thai_role_name
+from branch_region_mapping import BRANCH_REGION_MAP, get_region_from_branch
 
 router = APIRouter(prefix="/login", tags=["auth"])
 
@@ -19,10 +21,16 @@ class LoginRequest(BaseModel):
     employeeCode: str
 
 
+class ManualLoginRequest(BaseModel):
+    employeeCode: str
+    role: str
+    branchId: str
+
+
 # === HELPER ===
 async def load_employee(code: str):
     """
-    ดึงข้อมูลพนักงานจาก API
+    ดึงข้อมูลพนักงานจาก API และเพิ่มข้อมูล role จาก employees.json
     """
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -45,16 +53,46 @@ async def load_employee(code: str):
             for emp in employees:
                 emp_code = str(emp.get("EmpCode", "")).strip()
                 if emp_code.lower() == code.lower():
-                    return {
+                    emp_data = {
                         "id": emp_code,
                         "name": str(emp.get("EmpName", "")).strip(),
                         "branchId": str(emp.get("EmpBrchCode", "")).strip() or None,
                     }
+                    
+                    # เพิ่มข้อมูล role และ region จาก employees.json
+                    role_info = get_employee_role(emp_code)
+                    if role_info:
+                        emp_data["role"] = role_info.get("role")
+                        emp_data["region"] = role_info.get("region")
+                    
+                    return emp_data
             
             return None
             
     except Exception as e:
         print(f"❌ Error fetching employee from API: {e}")
+        return None
+
+
+def get_employee_role(employee_id: str):
+    """
+    ดึงข้อมูล role และ region จาก employees.json
+    """
+    import json
+    try:
+        with open("employees.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+            employees = data.get("employees", [])
+            
+            for emp in employees:
+                if str(emp.get("employee_id")) == str(employee_id):
+                    return {
+                        "role": emp.get("role"),
+                        "region": emp.get("region")
+                    }
+            return None
+    except Exception as e:
+        print(f"❌ Error reading employees.json: {e}")
         return None
 
 
@@ -101,13 +139,34 @@ async def init_from_uxp(request: Request, response: Response):
             raise HTTPException(status_code=401, detail=f"ไม่พบข้อมูลพนักงาน: {emp_code}")
         
         # สร้าง auth_token ของ Smart Pricing
+        token_payload = {
+            "sub": emp["id"],
+            "name": emp["name"],
+            "branchId": emp["branchId"],
+            "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+        }
+        
+        # เพิ่ม role และ region จาก UXP token ก่อน (ถ้ามี)
+        uxp_roles = payload.get("roles") or payload.get("role")
+        if uxp_roles:
+            # ถ้า roles เป็น array ให้เอาตัวแรก, ถ้าเป็น string ใช้เลย
+            if isinstance(uxp_roles, list) and len(uxp_roles) > 0:
+                token_payload["role"] = uxp_roles[0]
+            elif isinstance(uxp_roles, str):
+                token_payload["role"] = uxp_roles
+            print(f"✅ Extracted role from UXP token: {token_payload.get('role')}")
+        
+        # ถ้าไม่มี role จาก UXP token ให้ดึงจาก employees.json
+        if not token_payload.get("role") and emp.get("role"):
+            token_payload["role"] = emp["role"]
+            print(f"✅ Using role from employees.json: {token_payload['role']}")
+        
+        # เพิ่ม region ถ้ามี
+        if emp.get("region"):
+            token_payload["region"] = emp["region"]
+        
         token = jwt.encode(
-            {
-                "sub": emp["id"],
-                "name": emp["name"],
-                "branchId": emp["branchId"],
-                "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
-            },
+            token_payload,
             JWT_SECRET,
             algorithm=JWT_ALG,
         )
@@ -139,18 +198,89 @@ async def login(req: LoginRequest):
     if not emp:
         raise HTTPException(status_code=401, detail="รหัสพนักงานไม่ถูกต้อง")
 
+    token_payload = {
+        "sub": emp["id"],
+        "name": emp["name"],
+        "branchId": emp["branchId"],
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+    }
+    
+    # เพิ่ม role และ region ถ้ามี
+    if emp.get("role"):
+        token_payload["role"] = emp["role"]
+    if emp.get("region"):
+        token_payload["region"] = emp["region"]
+    
     token = jwt.encode(
-        {
-            "sub": emp["id"],
-            "name": emp["name"],
-            "branchId": emp["branchId"],
-            "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
-        },
+        token_payload,
         JWT_SECRET,
         algorithm=JWT_ALG,
     )
 
     return {"token": token, "employee": emp}
+
+
+# === MANUAL LOGIN ROUTE ===
+@router.post("/manual")
+async def manual_login(req: ManualLoginRequest, response: Response):
+    """
+    Manual login - ให้ผู้ใช้กรอกรหัสพนักงาน, role, และสาขาเอง
+    """
+    # ดึงข้อมูลพนักงานจาก API (เพื่อตรวจสอบว่ามีรหัสพนักงานนี้จริง)
+    emp = await load_employee(req.employeeCode)
+    
+    # ถ้าไม่เจอในระบบ ให้สร้างข้อมูลพื้นฐาน
+    if not emp:
+        emp = {
+            "id": req.employeeCode,
+            "name": f"Employee {req.employeeCode}",
+            "branchId": req.branchId,
+        }
+    else:
+        # ถ้าเจอในระบบ ให้ใช้ branchId ที่ผู้ใช้กรอก (override)
+        emp["branchId"] = req.branchId
+    
+    # ดึง region จาก branch
+    region = get_region_from_branch(req.branchId)
+    
+    # สร้าง token payload
+    token_payload = {
+        "sub": emp["id"],
+        "name": emp["name"],
+        "branchId": req.branchId,
+        "role": req.role,
+        "region": region,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+    }
+    
+    # สร้าง JWT token
+    token = jwt.encode(
+        token_payload,
+        JWT_SECRET,
+        algorithm=JWT_ALG,
+    )
+    
+    # สร้าง HttpOnly cookie
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        httponly=True,
+        secure=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+        samesite="lax",
+        max_age=JWT_EXPIRE_HOURS * 3600,
+        path="/",
+    )
+    
+    return {
+        "token": token,
+        "employee": {
+            "id": emp["id"],
+            "name": emp["name"],
+            "branchId": req.branchId,
+            "role": req.role,
+            "region": region,
+        }
+    }
 
 
 # === ME ROUTE ===
@@ -166,12 +296,20 @@ async def get_current_user(request: Request):
     
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        employee_data = {
+            "id": payload.get("sub"),
+            "name": payload.get("name"),
+            "branchId": payload.get("branchId"),
+        }
+        
+        # เพิ่ม role และ region ถ้ามี
+        if payload.get("role"):
+            employee_data["role"] = payload.get("role")
+        if payload.get("region"):
+            employee_data["region"] = payload.get("region")
+        
         return {
-            "employee": {
-                "id": payload.get("sub"),
-                "name": payload.get("name"),
-                "branchId": payload.get("branchId"),
-            }
+            "employee": employee_data
         }
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token หมดอายุ")
@@ -187,3 +325,45 @@ async def logout(response: Response):
     """
     response.delete_cookie(key="auth_token", path="/")
     return {"message": "ออกจากระบบสำเร็จ"}
+
+
+# === GET ROLES ROUTE ===
+@router.get("/roles")
+async def get_roles():
+    """
+    ดึงรายการ roles ทั้งหมดจาก role_mapping
+    """
+    role_codes = get_all_role_codes()
+    roles = []
+    
+    for code in role_codes:
+        thai_name = get_thai_role_name(code)
+        display_name = get_role_display_name(code)
+        roles.append({
+            "code": code,
+            "displayName": display_name,
+            "thaiName": thai_name
+        })
+    
+    return {"roles": roles}
+
+
+# === GET BRANCHES ROUTE ===
+@router.get("/branches")
+async def get_branches():
+    """
+    ดึงรายการสาขาทั้งหมดจาก branch_region_mapping
+    """
+    branches = []
+    
+    for branch_code, region_code in BRANCH_REGION_MAP.items():
+        branches.append({
+            "code": branch_code,
+            "region": region_code,
+            "displayName": f"{branch_code} ({region_code})"
+        })
+    
+    # เรียงตาม branch code
+    branches.sort(key=lambda x: x["code"])
+    
+    return {"branches": branches}

@@ -24,7 +24,13 @@ export default function QuoteDraftCard({
   // ตรวจสอบสถานะ special price request
   const sprStatus = specialPriceRequest?.status;
   const isApproved = sprStatus === 'APPROVED';
-  const isPending = sprStatus && ['SUBMITTED', 'PENDING_ZM', 'PENDING_RM'].includes(sprStatus);
+  const isPending = sprStatus && [
+    'SUBMITTED', 
+    'PENDING_ZM', 
+    'PENDING_RM', 
+    'PENDING_SDM',
+    'SDM_APPROVAL'  // เพิ่ม status นี้
+  ].includes(sprStatus);
   const isRejected = sprStatus === 'REJECTED';
   
   const getStatusBadge = () => {

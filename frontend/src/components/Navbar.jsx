@@ -32,7 +32,9 @@ function Navbar() {
           {/* ชื่อและรหัส */}
           <div className="hidden md:block">
             <div className="text-xs font-bold text-gray-800">{employee?.name || "Loading..."}</div>
-            <div className="text-xs font-bold text-gray-500">{employee?.id || "..."}</div>
+            <div className="text-xs font-bold text-gray-500">
+              {employee?.id || "..."}
+            </div>
           </div>
 
           {/* ปุ่ม Logout */}

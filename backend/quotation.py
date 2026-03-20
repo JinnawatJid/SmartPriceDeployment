@@ -217,7 +217,8 @@ def create_quotation(payload: dict = Body(...)):
         "SubtotalAmount": payload.get("totals", {}).get("exVat", 0),
         "TotalAmount": payload.get("totals", {}).get("grandTotal", 0),
         "NeedsTax": "Y" if payload.get("needTaxInvoice") else "N",
-        "Remark": (payload.get("note", "") or "")[:255],  # ⭐ ตัดให้ไม่เกิน 255 ตัวอักษร
+        "Remark": (payload.get("remark", "") or "")[:255],  # ⭐ หมายเหตุทั่วไป
+        "Remark_Shipping": (payload.get("note", "") or "")[:255],  # ⭐ เหตุผลการแก้ค่าขนส่ง
         "LastUpdate": now,
         "CustomerName": cust_name,
         "Tel": customer.get("phone", ""),
@@ -232,9 +233,9 @@ def create_quotation(payload: dict = Body(...)):
             CreateDate, ExpireDate, ApproveDate, BranchCode,
             PaymentTerm, CreditTerm, ShippingMethod, ShippingCost,
             DiscountAmount, SubtotalAmount, TotalAmount,
-            NeedsTax, Remark, LastUpdate,
+            NeedsTax, Remark, Remark_Shipping, LastUpdate,
             CustomerName, Tel, tax_no, ShippingCustomerPay, Pre_Order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, tuple(header.values()))
 
     cart = payload.get("cart", [])
@@ -325,7 +326,8 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         "SubtotalAmount": payload.get("totals", {}).get("exVat", 0),
         "TotalAmount": payload.get("totals", {}).get("grandTotal", 0),
         "NeedsTax": "Y" if payload.get("needTaxInvoice") else "N",
-        "Remark": payload.get("note", ""),
+        "Remark": payload.get("remark", ""),  # ⭐ หมายเหตุทั่วไป
+        "Remark_Shipping": payload.get("note", ""),  # ⭐ เหตุผลการแก้ค่าขนส่ง
         "LastUpdate": now,
         "CustomerName": cust_name,
         "Tel": customer.get("phone", ""),
@@ -340,7 +342,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
             ExpireDate=?, ApproveDate=?, BranchCode=?,
             PaymentTerm=?, CreditTerm=?, ShippingMethod=?, ShippingCost=?,
             DiscountAmount=?, SubtotalAmount=?, TotalAmount=?,
-            NeedsTax=?, Remark=?, LastUpdate=?,
+            NeedsTax=?, Remark=?, Remark_Shipping=?, LastUpdate=?,
             CustomerName=?, Tel=?, tax_no=?, ShippingCustomerPay=?, Pre_Order=?
         WHERE QuoteNo=?
     """, (
@@ -360,6 +362,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         header["TotalAmount"],
         header["NeedsTax"],
         header["Remark"],
+        header["Remark_Shipping"],
         header["LastUpdate"],
         header["CustomerName"],
         header["Tel"],
@@ -551,7 +554,7 @@ def cancel_quotation(quote_no: str):
 
     cursor.execute("""
         UPDATE Quote_Header
-        SET Status = 'cancelled', LastUpdate = ?
+        SET Status = 'canceled', LastUpdate = ?
         WHERE QuoteNo = ?
     """, (_now_iso(), quote_no))
 

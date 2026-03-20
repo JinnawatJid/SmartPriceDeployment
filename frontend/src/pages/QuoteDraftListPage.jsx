@@ -36,13 +36,11 @@ export default function QuoteDraftListPage() {
           allDrafts.map(async (draft) => {
             try {
               const sprRes = await api.get(`/api/special-price-requests/quote/${encodeURIComponent(draft.quoteNo)}`);
-              const sprList = sprRes.data || [];
-              // เอาใบล่าสุด (ถ้ามีหลายใบ)
-              const latestSPR = sprList.length > 0 ? sprList[0] : null;
-              console.log(`[SPR] Quote ${draft.quoteNo}:`, latestSPR);
+              const spr = sprRes.data;
+              console.log(`[SPR] Quote ${draft.quoteNo}:`, spr);
               return {
                 ...draft,
-                specialPriceRequest: latestSPR
+                specialPriceRequest: spr
               };
             } catch (err) {
               // ถ้าไม่มี SPR ก็ไม่เป็นไร

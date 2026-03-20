@@ -71,6 +71,32 @@ EMP_API_HEADERS = {
     "Content-Type": "application/json",
 }
 
+# Employee Query by Role API (UXP Auth Service)
+EMP_QUERY_API_URL = os.getenv(
+    "EMP_QUERY_API_URL",
+    "http://localhost:52683/auth/get-user-by-role",  # Default from your screenshot
+)
+EMP_QUERY_API_KEY = os.getenv("EMP_QUERY_API_KEY", "").strip()
+
+EMP_QUERY_API_HEADERS = {
+    "apikey": EMP_QUERY_API_KEY,
+    "Content-Type": "application/json",
+} if EMP_QUERY_API_KEY else {
+    "Content-Type": "application/json",
+}
+
+# ⭐ Location API (ดึงข้อมูลสาขา/location)
+LOCATION_API_URL = os.getenv(
+    "LOCATION_API_URL",
+    "http://192.192.0.37:8280/silver_location_/1.0.0",
+)
+LOCATION_API_KEY = os.getenv("LOCATION_API_KEY", "").strip()
+
+LOCATION_API_HEADERS = {
+    "apikey": LOCATION_API_KEY,
+    "Content-Type": "application/json",
+}
+
 
 # =========================
 # Item Cost API (D365)

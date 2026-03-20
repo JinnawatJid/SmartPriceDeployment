@@ -28,6 +28,7 @@ from chrome_debug_router import router as chrome_debug_router
 from promotion_router import router as promotion_router
 from project_price_router import router as project_price_router
 from special_price_request_router import router as special_price_request_router
+from approver_info_router import router as approver_info_router
 
 
 from config.config_external_api import CUSTOMER_API_KEY
@@ -132,6 +133,7 @@ app.include_router(chrome_debug_router)  # Chrome debug mode starter
 app.include_router(promotion_router)  # Promotion management
 app.include_router(project_price_router)  # Project price management
 app.include_router(special_price_request_router)  # Special price request management
+app.include_router(approver_info_router)  # Approver information
 
 
 
@@ -145,6 +147,105 @@ def print_quotation(payload: dict):
 
     net_total = payload.get("netTotal", 0)
     payload["amountText"] = baht_text(net_total)
+    
+    # ⭐ ดึงข้อมูลสาขาจาก API
+    try:
+        import requests
+        import gzip
+        import json as json_lib
+        from config.config_external_api import LOCATION_API_URL, LOCATION_API_HEADERS
+        
+        # ดึง branch code จาก payload (sales branch)
+        branch_code = payload.get("branchCode", "00TR")
+        
+        # Normalize 90HO เป็น 00TR
+        if branch_code == "90HO":
+            branch_code = "00TR"
+        
+        print(f"🔍 Fetching branch info for: {branch_code}")
+        print(f"   API URL: {LOCATION_API_URL}")
+        
+        data = None
+        
+        # ลองเรียก API ครั้งแรก (disable auto decompression)
+        try:
+            session = requests.Session()
+            session.headers.update({"Accept-Encoding": "identity"})  # ปิด auto-decompression
+            
+            response = session.get(
+                f"{LOCATION_API_URL}?Code={branch_code}",
+                headers=LOCATION_API_HEADERS,
+                timeout=10
+            )
+            response.raise_for_status()
+            data = response.json()
+            print(f"✅ Successfully fetched and parsed response")
+            print(f"   Response: {data}")
+        except Exception as e1:
+            print(f"⚠️ First attempt failed: {e1}")
+            # ลองครั้งที่สอง: ใช้ urllib3 ที่ disable decompression
+            try:
+                import urllib3
+                http = urllib3.PoolManager(decode_content=False)
+                
+                url = f"{LOCATION_API_URL}?Code={branch_code}"
+                headers = LOCATION_API_HEADERS.copy()
+                headers["Accept-Encoding"] = "identity"
+                
+                response = http.request("GET", url, headers=headers, timeout=10)
+                content = response.data
+                
+                # ลองแยก decompress เอง
+                if content[:2] == b'\x1f\x8b':  # gzip magic number
+                    print("📦 Detected gzip compression, decompressing...")
+                    content = gzip.decompress(content)
+                
+                data = json_lib.loads(content)
+                print(f"✅ Successfully parsed response via urllib3")
+                print(f"   Response: {data}")
+            except Exception as e2:
+                print(f"⚠️ Second attempt failed: {e2}")
+                data = {}
+        
+        # ดึงข้อมูลสาขาจาก response
+        if data and data.get("success") and data.get("data") and len(data.get("data", [])) > 0:
+            branch_info = data["data"][0]  # เอาตัวแรก
+            
+            print(f"📋 Branch info: {branch_info}")
+            
+            # ประกอบที่อยู่ตามรูปแบบ: Address+District+City+Country+Post_Code+Phone_No
+            address_parts = [
+                str(branch_info.get("Address", "")).strip(),
+                str(branch_info.get("District", "")).strip(),
+                str(branch_info.get("City", "")).strip(),
+                str(branch_info.get("Country", "")).strip(),
+                str(branch_info.get("Post_Code", "")).strip(),
+            ]
+            address_line = " ".join([p for p in address_parts if p])
+            phone_no = str(branch_info.get("Phone_No", "")).strip()
+            
+            # เพิ่มข้อมูลสาขาไปใน payload
+            payload["branchName"] = str(branch_info.get("Name", "")).strip()
+            payload["branchAddress"] = address_line
+            payload["branchPhone"] = phone_no
+            print(f"✅ Branch info loaded: {payload['branchName']}")
+            print(f"   Address: {payload['branchAddress']}")
+            print(f"   Phone: {payload['branchPhone']}")
+        else:
+            # ถ้า API ไม่ส่งข้อมูลมา ใช้ค่า default
+            print(f"⚠️ No branch data in response, using defaults")
+            print(f"   Response data: {data}")
+            payload["branchName"] = "บริษัท ห้างกระจกตังน้ำ จำกัด (สำนักงานใหญ่)"
+            payload["branchAddress"] = "226 ถนนพระรามที่2 แขวงแสมดำ เขตบางขุนเทียน จังหวัดกรุงเทพฯ 10150"
+            payload["branchPhone"] = "Tel : 0-2416-5840-1"
+    except Exception as e:
+        print(f"❌ Error fetching branch info: {e}")
+        import traceback
+        traceback.print_exc()
+        # ใช้ค่า default ถ้า API ล้มเหลว
+        payload["branchName"] = "บริษัท ห้างกระจกตังน้ำ จำกัด (สำนักงานใหญ่)"
+        payload["branchAddress"] = "226 ถนนพระรามที่2 แขวงแสมดำ เขตบางขุนเทียน จังหวัดกรุงเทพฯ 10150"
+        payload["branchPhone"] = "Tel : 0-2416-5840-1"
     
     template = env.get_template("quotation.html")
 

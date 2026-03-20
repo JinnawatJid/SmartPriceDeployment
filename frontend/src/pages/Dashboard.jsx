@@ -76,6 +76,7 @@ function Dashboard() {
   const [pendingCount, setPendingCount] = useState(0);
   const [contactCustomerCount, setContactCustomerCount] = useState(0);
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
+  const [specialPriceAvailable, setSpecialPriceAvailable] = useState(false);
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -122,9 +123,12 @@ function Dashboard() {
         try {
           const resPendingApprovals = await api.get("/api/special-price-requests/pending/approvals");
           setPendingApprovalCount((resPendingApprovals.data || []).length);
+          setSpecialPriceAvailable(true);
         } catch (err) {
-          console.log("No pending approvals or not authorized:", err);
+          // Special price request feature not available or not authorized
+          console.log("Special price requests not available:", err.response?.status);
           setPendingApprovalCount(0);
+          setSpecialPriceAvailable(false);
         }
       } catch (err) {
         console.error("Dashboard load error:", err);
@@ -221,8 +225,8 @@ function Dashboard() {
 
           {/* Special Price Approval Card - แสดงเฉพาะพนักงานที่อนุญาต (ใช้สิทธิ์เดียวกับราคาโครงการ) */}
           {(() => {
-            const showSpecialPriceApproval = allowedProjectPriceEmployees.includes(employee?.id);
-            console.log("🔍 Show Special Price Approval?", showSpecialPriceApproval, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees);
+            const showSpecialPriceApproval = allowedProjectPriceEmployees.includes(employee?.id) && specialPriceAvailable;
+            console.log("🔍 Show Special Price Approval?", showSpecialPriceApproval, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees, "Available:", specialPriceAvailable);
             return showSpecialPriceApproval;
           })() && (
             <div
