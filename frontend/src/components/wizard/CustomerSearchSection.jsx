@@ -168,7 +168,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
             >
               ลูกค้าใหม่
             </button>
-
+              
             {customer && (
               <button
                 type="button"

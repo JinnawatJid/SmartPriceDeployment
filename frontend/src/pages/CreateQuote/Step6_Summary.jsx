@@ -817,8 +817,38 @@ function Step6_Summary({ state, dispatch }) {
           _LineTotal: it._LineTotal
         })));
 
+        // ✅ ล็อกราคาโครงการ: ถ้าเลือกโครงการแล้ว ให้ใช้ราคาโครงการตลอด
+        // ไม่ว่าจะเปลี่ยนค่าขนส่ง เพิ่มจำนวน ใส่หมายเหตุ หรืออื่นๆ
+        const lockedItems = items.map(item => {
+          // ⭐ ตรวจสอบว่า item นี้ถูกล็อกไว้แล้วหรือไม่
+          const prevLockedItem = calculation.cart?.find(prev => prev.sku === item.sku);
+          const wasLocked = prevLockedItem?._locked === true;
+          
+          if (selectedProject && (item.price_source === 'project' || wasLocked)) {
+            // ✅ ล็อกราคาโครงการ: ตั้ง priceSource เป็น 'project' เพื่อไม่ให้เปลี่ยน
+            // ⭐ ถ้าเคยล็อกไว้แล้ว ให้คงราคาเดิมไว้ (เฉพาะเมื่อเปลี่ยนแค่ qty)
+            // และคำนวณ _LineTotal ใหม่จากราคาล็อก × qty ใหม่
+            const lockedUnitPrice = wasLocked ? prevLockedItem.UnitPrice : item.UnitPrice;
+            const lockedPricePerSheet = wasLocked ? prevLockedItem.price_per_sheet : item.price_per_sheet;
+            const currentQty = Number(state.cart.find(c => c.sku === item.sku)?.qty || 0);
+            
+            return {
+              ...item,
+              priceSource: 'project',
+              price_source: 'project',
+              // ✅ ป้องกันการแก้ไขราคา
+              _locked: true,
+              // ⭐ คงราคาล็อกไว้ แต่คำนวณ _LineTotal ใหม่จากราคาล็อก × qty ใหม่
+              UnitPrice: lockedUnitPrice,
+              price_per_sheet: lockedPricePerSheet,
+              _LineTotal: (lockedPricePerSheet || lockedUnitPrice) * currentQty,
+            };
+          }
+          return item;
+        });
+
         setCalculation({
-          cart: items,
+          cart: lockedItems,
           totals: {
             exVat: subtotal,
             vat,
@@ -846,7 +876,7 @@ function Step6_Summary({ state, dispatch }) {
     };
 
     recalculateWithProject();
-  }, [selectedProject, state.customer, state.cart]); // 🔥 เพิ่ม dependencies เพื่อให้คำนวณใหม่เมื่อมีการเปลี่ยนแปลง
+  }, [selectedProject, state.customer, state.cart, state.deliveryType, state.shippingCustomerPay]); // 🔥 เพิ่ม dependencies เพื่อให้คำนวณใหม่เมื่อมีการเปลี่ยนแปลง
 
   // โหลด Promotion ตาม SKU ที่เลือก
   useEffect(() => {
@@ -1490,6 +1520,7 @@ function Step6_Summary({ state, dispatch }) {
       note: shippingReasonNote,  // ⭐ เหตุผลการแก้ค่าขนส่ง → Remark_Shipping
       pre_order: isPreOrder ? 1 : 0, // ⭐ เพิ่ม pre_order field
       required_delivery_date: isPreOrder && requiredDeliveryDate ? requiredDeliveryDate : null, // ⭐ เพิ่ม required_delivery_date field
+      project_code: selectedProject ? customerProjects.find(p => p.project_id === selectedProject)?.project_code : null, // ⭐ เพิ่ม project_code field
     };
   };
 
@@ -1992,6 +2023,7 @@ function Step6_Summary({ state, dispatch }) {
       quoteNo: state.quoteNo || "",
       date: new Date().toLocaleDateString("th-TH"),
       sales: employee?.name || "",
+      salesId: employee?.id || "",  // ⭐ เพิ่ม salesId เพื่อให้ backend ดึงชื่อพนักงานได้
       customer: {
         code: state.customer?.id || state.customer?.code || "",
         name: state.customer?.name || "ผู้ไม่ประสงค์ออกนาม",
@@ -2046,6 +2078,15 @@ function Step6_Summary({ state, dispatch }) {
       branchCode: state.branchCode || employee?.branchId || "00TR",  // ⭐ เพิ่ม branchCode
       sales: employee?.name || "",  // ⭐ เพิ่มชื่อพนักงาน
     };
+
+    // ⭐ DEBUG: Log employee data
+    console.log('🔍 [PRINT] Employee object:', {
+      id: employee?.id,
+      name: employee?.name,
+      branchId: employee?.branchId,
+    });
+    console.log('🔍 [PRINT] Payload sales:', payload.sales);
+    console.log('🔍 [PRINT] Payload salesId:', payload.salesId);
 
     // Use relative path for print endpoint to work in both Docker (Nginx proxy) and Native (Backend serve)
     const res = await fetch("/api/print/quotation", {

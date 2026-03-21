@@ -43,6 +43,11 @@ def print_quotation(payload: dict):
     Returns:
         PDF file as response
     """
+    print("\n=== PRINT PAYLOAD ===")
+    print(f"Sales: {payload.get('sales')}")
+    print(f"SalesId: {payload.get('salesId')}")
+    print(f"Employee: {payload.get('employee')}")
+    
     print("\n=== PRINT PAYLOAD ITEMS ===")
     for it in payload.get("items", []):
         print(it.get("code"), it.get("unit"))

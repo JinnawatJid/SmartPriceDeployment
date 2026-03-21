@@ -49,14 +49,26 @@ async def load_employee(code: str):
             else:
                 employees = []
             
+            print(f"🔍 [LOAD_EMPLOYEE] Looking for employee code: {code}")
+            print(f"   Total employees from API: {len(employees)}")
+            
             # หาพนักงานที่ตรงกับ code
             for emp in employees:
                 emp_code = str(emp.get("EmpCode", "")).strip()
                 if emp_code.lower() == code.lower():
+                    emp_name = str(emp.get("EmpName", "")).strip()
+                    emp_brch = str(emp.get("EmpBrchCode", "")).strip() or None
+                    
+                    print(f"   ✅ Found employee:")
+                    print(f"      Code: {emp_code}")
+                    print(f"      Name: {emp_name}")
+                    print(f"      Branch: {emp_brch}")
+                    print(f"      Full emp object: {emp}")
+                    
                     emp_data = {
                         "id": emp_code,
-                        "name": str(emp.get("EmpName", "")).strip(),
-                        "branchId": str(emp.get("EmpBrchCode", "")).strip() or None,
+                        "name": emp_name,
+                        "branchId": emp_brch,
                     }
                     
                     # เพิ่มข้อมูล role และ region จาก employees.json
@@ -67,10 +79,13 @@ async def load_employee(code: str):
                     
                     return emp_data
             
+            print(f"   ❌ Employee code {code} not found in API response")
             return None
             
     except Exception as e:
         print(f"❌ Error fetching employee from API: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -316,6 +331,12 @@ async def get_current_user(request: Request):
             "name": payload.get("name"),
             "branchId": payload.get("branchId"),
         }
+        
+        # ⭐ DEBUG: Log employee data
+        print(f"🔍 [GET_CURRENT_USER] Employee data from JWT:")
+        print(f"   ID: {employee_data.get('id')}")
+        print(f"   Name: {employee_data.get('name')}")
+        print(f"   BranchId: {employee_data.get('branchId')}")
         
         # เพิ่ม role และ region ถ้ามี
         if payload.get("role"):

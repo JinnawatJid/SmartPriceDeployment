@@ -424,6 +424,8 @@ const ProjectPriceManagement = () => {
     try {
       const payload = {
         ...formData,
+        // ✅ เพิ่ม employee code
+        created_by_employee_code: employee?.id,
         items: items.map(item => ({
           sku: item.sku,
           product_name: item.product_name,

@@ -226,6 +226,7 @@ def create_quotation(payload: dict = Body(...)):
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
         "Pre_Order": payload.get("pre_order", 0),  # ⭐ เพิ่ม Pre_Order field
         "Required_Delivery_Date": payload.get("required_delivery_date") or None,  # ⭐ เพิ่ม Required_Delivery_Date field
+        "project_code": payload.get("project_code") or None,  # ⭐ เพิ่ม project_code field
     }
 
     cursor.execute("""
@@ -235,8 +236,8 @@ def create_quotation(payload: dict = Body(...)):
             PaymentTerm, CreditTerm, ShippingMethod, ShippingCost,
             DiscountAmount, SubtotalAmount, TotalAmount,
             NeedsTax, Remark, Remark_Shipping, LastUpdate,
-            CustomerName, Tel, tax_no, ShippingCustomerPay, Pre_Order, Required_Delivery_Date
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            CustomerName, Tel, tax_no, ShippingCustomerPay, Pre_Order, Required_Delivery_Date, project_code
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, tuple(header.values()))
 
     cart = payload.get("cart", [])

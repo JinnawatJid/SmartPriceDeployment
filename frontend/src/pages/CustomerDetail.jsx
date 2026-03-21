@@ -161,6 +161,7 @@ function CustomerDetail() {
         quoteNo: h.QuoteNo || "",
         date: new Date(h.CreateDate).toLocaleDateString("th-TH"),
         sales: h.SalesName || "",
+        salesId: h.SalesID || "",  // ⭐ เพิ่ม salesId เพื่อให้ backend ดึงชื่อพนักงานได้
         customer: {
           code: h.CustomerCode || "",
           name: h.CustomerName || "ผู้ไม่ประสงค์ออกนาม",

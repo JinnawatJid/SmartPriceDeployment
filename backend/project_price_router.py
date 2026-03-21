@@ -49,6 +49,7 @@ class ProjectPriceCreate(BaseModel):
     request_by: Optional[str] = None
     request_date: Optional[str] = None
     remark: Optional[str] = None
+    created_by_employee_code: Optional[str] = None  # ✅ เพิ่ม field นี้
     items: List[ProjectPriceLine]
 
 @router.post("/")
@@ -121,7 +122,8 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
             project.request_by,
             project.request_date or datetime.now().strftime('%Y-%m-%d'),
             project.remark,
-            current_user.get('employee_id') or current_user.get('id')  # บันทึกรหัสพนักงาน
+            # ✅ ลำดับความสำคัญ: created_by_employee_code จาก payload → employee_id จาก token → id จาก token
+            project.created_by_employee_code or current_user.get('employee_id') or current_user.get('id')
         ))
         
         # ดึง ID ที่เพิ่งสร้าง

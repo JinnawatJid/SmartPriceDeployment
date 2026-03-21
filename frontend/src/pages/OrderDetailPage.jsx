@@ -80,6 +80,7 @@ export default function OrderDetailPage() {
         quoteNo: order.quoteNo || "",
         date: new Date(order.createdAt).toLocaleDateString("th-TH"),
         sales: order.sales || "",
+        salesId: order.employee?.id || "",  // ⭐ เพิ่ม salesId เพื่อให้ backend ดึงชื่อพนักงานได้
         customer: {
           code: order.customer?.id || "",
           name: order.customer?.name || "ผู้ไม่ประสงค์ออกนาม",
