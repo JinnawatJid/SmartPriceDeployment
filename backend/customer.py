@@ -229,7 +229,42 @@ async def search_customer(
         )
     
     # ใช้ MSSQL Database เท่านั้น
-    return await search_customer_from_db(code=code, phone=phone, name=name, product_group=product_group)
+    try:
+        return await search_customer_from_db(code=code, phone=phone, name=name, product_group=product_group)
+    except HTTPException as e:
+        # ถ้าไม่พบลูกค้า และมี code ให้ return ข้อมูลลูกค้าใหม่ (temp customer)
+        if e.status_code == 404 and code:
+            return {
+                "id": code,
+                "name": "",
+                "phone": "",
+                "tax_no": "",
+                "gen_bus": "",
+                "customer_date": "",
+                "payment_terms": "",
+                "blocked": 0,
+                "accum_6m": 0,
+                "frequency": 0,
+                "sales_g_cust": 0,
+                "sales_a_cust": 0,
+                "sales_s_cust": 0,
+                "sales_y_cust": 0,
+                "sales_c_cust": 0,
+                "sales_e_cust": 0,
+                "price_level": 0,
+                "creditTerm": "",
+                "sales_g": 0,
+                "sales_a": 0,
+                "sales_s": 0,
+                "sales_y": 0,
+                "sales_c": 0,
+                "sales_e": 0,
+                "relevantSales": 0,
+                "tier": "Unknown",
+                "credit_terms": {},
+                "isTempCustomer": True,
+            }
+        raise
 
 def search_customer_list_from_db(query: str) -> list:
     """

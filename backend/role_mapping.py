@@ -10,8 +10,14 @@ Role Mappings:
 2. ผู้จัดการสาขา (R1-W2) → ZM (Zone Manager)
 3. ผู้จัดการภูมิภาค (R1-W2) → RM (Regional Manager)
 4. ผู้จัดการฝ่ายขาย (W1-SDM) → SDM (Sales Director Manager)
-5. ผู้จัดการผลิตภัณฑ์ (Below SDM) → PM (Product Manager)
-6. กรรมการผู้จัดการ → CEO
+5. ผู้จัดการผลิตภัณฑ์ (Below SDM) → PM (Product Manager - General)
+6. ผู้จัดการผลิตภัณฑ์โครงคร่าวฝ้าเพดานโครงผนัง → PM_CLINE (Product Manager - Cline)
+7. ผู้จัดการผลิตภัณฑ์กระจก → PM_GLASS (Product Manager - Glass)
+8. ผู้จัดการผลิตภัณฑ์อุปกรณ์และอื่นๆ → PM_EQUIPMENT (Product Manager - Equipment & Others)
+9. ผู้จัดการผลิตภัณฑ์อลูมิเนียม → PM_ALUMINIUM (Product Manager - Aluminium)
+10. ผู้จัดการผลิตภัณฑ์ยิปซัม → PM_GYPSUM (Product Manager - Gypsum)
+11. ผู้จัดการผลิตภัณฑ์ซีลแลนท์ → PM_SEALANT (Product Manager - Sealant)
+12. กรรมการผู้จัดการ → CEO
 """
 
 import logging
@@ -24,15 +30,32 @@ THAI_ROLE_TO_CODE = {
     "ผู้จัดการสาขา (R1-W2)": "ZM",  # Zone Manager
     "ผู้จัดการภูมิภาค (R1-W2)": "RM",  # Regional Manager
     "ผู้จัดการฝ่ายขาย (W1-SDM)": "SDM",  # Sales Director Manager
-    "ผู้จัดการผลิตภัณฑ์ (Below SDM)": "PM",  # Product Manager
+    "ผู้จัดการผลิตภัณฑ์ (Below SDM)": "PM",  # Product Manager - General
+    "ผู้จัดการผลิตภัณฑ์โครงคร่าวฝ้าเพดานโครงผนัง": "PM_CLINE",  # Product Manager - Cline
+    "ผู้จัดการผลิตภัณฑ์กระจก": "PM_GLASS",  # Product Manager - Glass
+    "ผู้จัดการผลิตภัณฑ์อุปกรณ์และอื่นๆ": "PM_EQUIPMENT",  # Product Manager - Equipment & Others
+    "ผู้จัดการผลิตภัณฑ์อลูมิเนียม": "PM_ALUMINIUM",  # Product Manager - Aluminium
+    "ผู้จัดการผลิตภัณฑ์ยิปซัม": "PM_GYPSUM",  # Product Manager - Gypsum
+    "ผู้จัดการผลิตภัณฑ์ซีลแลนท์": "PM_SEALANT",  # Product Manager - Sealant
     "กรรมการผู้จัดการ": "CEO",
 }
 
 # Valid role codes (for when role is already in English)
-VALID_ROLE_CODES = {"Sales", "ZM", "RM", "SDM", "PM", "CEO"}
+VALID_ROLE_CODES = {
+    "Sales", "ZM", "RM", "SDM", "PM", "CEO",
+    "PM_CLINE", "PM_GLASS", "PM_EQUIPMENT", "PM_ALUMINIUM", "PM_GYPSUM", "PM_SEALANT"
+}
 
 # Default role when mapping fails
 DEFAULT_ROLE = "Sales"
+
+# Product Manager roles (all PM variants)
+PM_ROLES = {
+    "PM", "PM_CLINE", "PM_GLASS", "PM_EQUIPMENT", "PM_ALUMINIUM", "PM_GYPSUM", "PM_SEALANT"
+}
+
+# Management roles (can manage prices and approve special prices)
+MANAGEMENT_ROLES = {"ZM", "RM", "SDM"} | PM_ROLES
 
 
 def map_thai_role_to_code(thai_role_name: str) -> str:
@@ -85,7 +108,7 @@ def get_role_display_name(role_code: str) -> str:
     Get display name for role code.
     
     Args:
-        role_code: Internal role code (Sales, ZM, RM, SDM, PM, CEO)
+        role_code: Internal role code (Sales, ZM, RM, SDM, PM, PM_CLINE, PM_GLASS, etc.)
         
     Returns:
         Human-readable role name in English
@@ -96,6 +119,12 @@ def get_role_display_name(role_code: str) -> str:
         "RM": "Regional Manager",
         "SDM": "Sales Director Manager",
         "PM": "Product Manager",
+        "PM_CLINE": "Product Manager - Cline",
+        "PM_GLASS": "Product Manager - Glass",
+        "PM_EQUIPMENT": "Product Manager - Equipment & Others",
+        "PM_ALUMINIUM": "Product Manager - Aluminium",
+        "PM_GYPSUM": "Product Manager - Gypsum",
+        "PM_SEALANT": "Product Manager - Sealant",
         "CEO": "Chief Executive Officer",
     }
     return role_display_names.get(role_code, role_code)
@@ -106,7 +135,7 @@ def get_thai_role_name(role_code: str) -> str:
     Get Thai role name from internal role code (reverse mapping).
     
     Args:
-        role_code: Internal role code (Sales, ZM, RM, SDM, PM, CEO)
+        role_code: Internal role code (Sales, ZM, RM, SDM, PM, PM_FRAME, PM_GLASS, etc.)
         
     Returns:
         Thai role name or empty string if not found

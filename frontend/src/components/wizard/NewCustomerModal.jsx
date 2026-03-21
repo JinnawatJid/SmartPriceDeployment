@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 export default function NewCustomerModal({ open, onClose, onConfirm }) {
+  const [customerId, setCustomerId] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [taxNo, setTaxNo] = useState("");
@@ -14,6 +15,14 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
         <h3 className="text-lg font-bold text-gray-800 mb-4">เพิ่มลูกค้าใหม่</h3>
 
         <div className="space-y-3">
+          <input
+            type="text"
+            placeholder="รหัสลูกค้า (Customer ID)"
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 p-3 text-sm"
+          />
+
           <input
             type="text"
             placeholder="ชื่อลูกค้า"
@@ -64,12 +73,13 @@ export default function NewCustomerModal({ open, onClose, onConfirm }) {
               }
               
               onConfirm({
-                id: "",
+                id: customerId || "",
                 name,
                 phone,
                 tax_no: taxNo,
                 isTempCustomer: true,
               });
+              setCustomerId("");
               setName("");
               setPhone("");
               setTaxNo("");

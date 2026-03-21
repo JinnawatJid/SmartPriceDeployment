@@ -225,6 +225,7 @@ def create_quotation(payload: dict = Body(...)):
         "tax_no": customer.get("tax_no", ""),
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
         "Pre_Order": payload.get("pre_order", 0),  # ⭐ เพิ่ม Pre_Order field
+        "Required_Delivery_Date": payload.get("required_delivery_date") or None,  # ⭐ เพิ่ม Required_Delivery_Date field
     }
 
     cursor.execute("""
@@ -234,8 +235,8 @@ def create_quotation(payload: dict = Body(...)):
             PaymentTerm, CreditTerm, ShippingMethod, ShippingCost,
             DiscountAmount, SubtotalAmount, TotalAmount,
             NeedsTax, Remark, Remark_Shipping, LastUpdate,
-            CustomerName, Tel, tax_no, ShippingCustomerPay, Pre_Order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            CustomerName, Tel, tax_no, ShippingCustomerPay, Pre_Order, Required_Delivery_Date
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, tuple(header.values()))
 
     cart = payload.get("cart", [])
@@ -334,6 +335,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         "tax_no": customer.get("tax_no", ""),
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
         "Pre_Order": payload.get("pre_order", 0),  # ⭐ เพิ่ม Pre_Order field
+        "Required_Delivery_Date": payload.get("required_delivery_date") or None,  # ⭐ เพิ่ม Required_Delivery_Date field
     }
 
     cursor.execute("""
@@ -343,7 +345,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
             PaymentTerm=?, CreditTerm=?, ShippingMethod=?, ShippingCost=?,
             DiscountAmount=?, SubtotalAmount=?, TotalAmount=?,
             NeedsTax=?, Remark=?, Remark_Shipping=?, LastUpdate=?,
-            CustomerName=?, Tel=?, tax_no=?, ShippingCustomerPay=?, Pre_Order=?
+            CustomerName=?, Tel=?, tax_no=?, ShippingCustomerPay=?, Pre_Order=?, Required_Delivery_Date=?
         WHERE QuoteNo=?
     """, (
         header["Status"],
@@ -369,6 +371,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         header["tax_no"],
         header["ShippingCustomerPay"],
         header["Pre_Order"],
+        header["Required_Delivery_Date"],
         quote_no
     ))
 

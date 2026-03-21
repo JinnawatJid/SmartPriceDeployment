@@ -149,7 +149,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                 ip.PackageSize AS pkg_size,
                 im.Product_Weight,
                 0 AS Sqft_Sheet,
-                ip.R1, ip.R2, ip.W1, ip.W2,
+                ip.R1, ip.R2, ip.W1, ip.W2, ip.SDM,
                 im.Product_Group,
                 im.Product_Sub_Group,
                 ip.AlternateName,
@@ -169,12 +169,12 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             return df
 
         # normalize price columns (เหมือนของเดิม)
-        for c in ["R1", "R2", "W1", "W2"]:
+        for c in ["R1", "R2", "W1", "W2", "SDM"]:
             df[f"price{c}"] = pd.to_numeric(df[c], errors="coerce").fillna(0)
         
         print(f"🔍 DEBUG: Loaded {len(df)} items, sample prices:")
         if not df.empty:
-            print(df[["sku", "R2", "R1", "W2", "W1", "priceR2", "priceR1", "priceW2", "priceW1"]].head(3).to_string(index=False))
+            print(df[["sku", "R2", "R1", "W2", "W1", "SDM", "priceR2", "priceR1", "priceW2", "priceW1", "priceSDM"]].head(3).to_string(index=False))
 
         df["pkg_size"] = pd.to_numeric(df.get("pkg_size"), errors="coerce").fillna(1)
         df["product_weight"] = pd.to_numeric(df.get("Product_Weight"), errors="coerce").fillna(0)
@@ -553,7 +553,12 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                    ["sku", "name", "Quantity", "priceR2", "priceR1", "priceW2", "priceW1", "priceSDM", "category"],
                    "AFTER MERGE ITEM DATA")
     
+    # ⭐ ตรวจสอบว่าลูกค้าชื่อขึ้นต้นด้วย "ขายสด" → ใช้ R2 ตลอด
+    customer_name = str(req.customerData.get("customerName", "")).strip()
+    is_khaai_sod = customer_name.startswith("ขายสด")
     
+    if is_khaai_sod:
+        print(f"\n>>> SPECIAL CUSTOMER: '{customer_name}' starts with 'ขายสด' → FORCE R2 PRICING\n")
 
     
     # Run LevelPrice
@@ -562,6 +567,15 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     df_lp["payment_terms"] = df_calc.get("payment_terms", "")
     df_lp["credit_terms"] = df_calc.get("credit_terms", {})
 
+    # ⭐ ถ้าลูกค้าชื่อขึ้นต้นด้วย "ขายสด" → บังคับให้ใช้ R2 โดยตรง
+    if is_khaai_sod:
+        # ตั้งค่า NewPrice เป็น priceR2 โดยตรง (ข้าม Price function)
+        df_lp["_ForceR2"] = True
+        df_lp["_Tier_Z"] = "R2->R1"  # ตั้งค่า tier เป็น R2
+        df_lp["tier"] = "R2->R1"
+    else:
+        df_lp["_ForceR2"] = False
+
     # 🔥 FIX: ส่ง column ที่ Price ต้องใช้ "ตั้งแต่ตรงนี้"
     price_input_cols = [
         "sku",
@@ -569,6 +583,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         "pkg_size",
         "_RelevantSales",
         "DeliveryType",
+        "_ForceR2",  # ⭐ เพิ่ม flag สำหรับลูกค้า "ขายสด"
     ]
 
     # กันพลาด: ถ้า col ไหนไม่มี ให้สร้าง default
@@ -580,6 +595,8 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                 df_lp[c] = 0
             elif c == "DeliveryType":
                 df_lp[c] = "0"
+            elif c == "_ForceR2":
+                df_lp[c] = False
 
     # 👉 ตอนนี้ df_lp schema ตรงกับที่ Price.py ต้องการแล้ว
     df_price = Price(df_lp)

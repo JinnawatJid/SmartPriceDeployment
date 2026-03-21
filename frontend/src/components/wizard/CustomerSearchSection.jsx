@@ -217,6 +217,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
         open={openNewCustomer}
         onClose={() => setOpenNewCustomer(false)}
         onConfirm={(cust) => {
+          // ✅ ถ้าเป็นลูกค้าใหม่ ให้ใช้ข้อมูลที่ส่งมาโดยตรง ไม่ต้องเรียก API
           onCustomerChange(cust);
 
           // ✅ ไม่ใส่ชื่อในช่อง search

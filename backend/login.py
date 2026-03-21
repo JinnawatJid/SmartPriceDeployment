@@ -151,10 +151,25 @@ async def init_from_uxp(request: Request, response: Response):
         if uxp_roles:
             # ถ้า roles เป็น array ให้เอาตัวแรก, ถ้าเป็น string ใช้เลย
             if isinstance(uxp_roles, list) and len(uxp_roles) > 0:
-                token_payload["role"] = uxp_roles[0]
+                role_data = uxp_roles[0]
             elif isinstance(uxp_roles, str):
-                token_payload["role"] = uxp_roles
-            print(f"✅ Extracted role from UXP token: {token_payload.get('role')}")
+                role_data = uxp_roles
+            else:
+                role_data = None
+            
+            if role_data:
+                # ถ้า role_data เป็น dict (nested format) ให้ดึง role field
+                if isinstance(role_data, dict):
+                    thai_role = role_data.get("role")
+                else:
+                    thai_role = role_data
+                
+                # แปลง Thai role เป็น English role code
+                if thai_role:
+                    from role_mapping import map_thai_role_to_code
+                    role_code = map_thai_role_to_code(thai_role)
+                    token_payload["role"] = role_code
+                    print(f"✅ Extracted role from UXP token: {thai_role} → {role_code}")
         
         # ถ้าไม่มี role จาก UXP token ให้ดึงจาก employees.json
         if not token_payload.get("role") and emp.get("role"):

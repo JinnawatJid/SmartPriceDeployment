@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useQuote } from "../hooks/useQuote";
+import { formatDateThai, formatDateThaiShort } from "../utils/dateFormatter";
 
 function CustomerDetail() {
   const { customerId } = useParams();
@@ -259,14 +260,7 @@ function CustomerDetail() {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("th-TH", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      timeZone: "Asia/Bangkok",
-    });
+    return formatDateThai(dateStr);
   };
 
   const formatCurrency = (amount) => {
@@ -449,6 +443,7 @@ function CustomerDetail() {
             </div>
 
             {/* Order History */}
+            {!(customer?.name || "").trim().startsWith("ขายสด") && (
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                 <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
@@ -488,6 +483,7 @@ function CustomerDetail() {
                 )}
               </div>
             </div>
+            )}
           </div>
 
           {/* Right Column */}

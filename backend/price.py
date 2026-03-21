@@ -98,6 +98,16 @@ def Price(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.concat([df.reset_index(drop=True), scores], axis=1)
 
     def _interp_price(row):
+        # ⭐ ถ้าลูกค้า "ขายสด" → ใช้ priceR2 โดยตรง
+        if row.get("_ForceR2", False):
+            try:
+                r2_price = float(row.get("priceR2", 0))
+                if pd.isna(r2_price):
+                    return row.get("price", 0)
+                return r2_price
+            except Exception:
+                return row.get("price", 0)
+        
         score = row["_Score01"]
         
         # normalize tier first

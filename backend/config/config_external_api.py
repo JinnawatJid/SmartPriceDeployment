@@ -111,13 +111,3 @@ ITEMCOST_API_HEADERS = {
     "apikey": ITEM_COST_API_KEY,
     "Content-Type": "application/json",
 }
-
-
-print("BASE_URL =", BASE_URL)
-print("CUSTOMER_API_KEY LOADED =", bool(CUSTOMER_API_KEY))
-print("INVOICE_API_KEY LOADED =", bool(INVOICE_API_KEY))
-print("CREDIT_API_KEY LOADED =", bool(CREDIT_API_KEY))
-print("EMP_API_KEY LOADED =", bool(EMP_API_KEY))
-print("ITEM_COST_API_KEY LOADED =", bool(ITEM_COST_API_KEY))
-print("CUSTOMER API HEADERS =", CUSTOMER_API_HEADERS)
-

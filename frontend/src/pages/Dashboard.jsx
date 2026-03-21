@@ -13,8 +13,18 @@ function Dashboard() {
   const { dispatch } = useQuote();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState("");
-  const [allowedPriceUpdateEmployees, setAllowedPriceUpdateEmployees] = useState([]);
-  const [allowedProjectPriceEmployees, setAllowedProjectPriceEmployees] = useState([]);
+  
+  // ⭐ สิทธิ์ขึ้นอยู่กับ role แทนที่จะ hard code employee ID
+  // 1. เพิ่ม/อัปเดตราคา/จัดการโปรโมชั่น: SDM, PM (ทั้งหมด)
+  // 2. ราคาโครงการ: ZM, RM, SDM, PM (ทั้งหมด)
+  // 3. อนุมัติราคาพิเศษ: ZM, RM, SDM, PM (ทั้งหมด)
+  // PM ทั้งหมด: PM, PM_CLINE, PM_GLASS, PM_EQUIPMENT, PM_ALUMINIUM, PM_GYPSUM, PM_SEALANT
+  const isPM = employee?.role && typeof employee.role === "string" && (
+    employee.role === "PM" || employee.role.startsWith("PM_")
+  );
+  const canUpdatePrice = ["SDM"].includes(employee?.role) || isPM;
+  const canManageProjectPrice = ["ZM", "RM", "SDM"].includes(employee?.role) || isPM;
+  const canApproveSpecialPrice = ["ZM", "RM", "SDM"].includes(employee?.role) || isPM;
 
   // โหลดวันที่ปัจจุบัน (ภาษาไทย)
   useEffect(() => {
@@ -32,24 +42,6 @@ function Dashboard() {
       .toLocaleDateString("th-TH", { year: "numeric", timeZone: "Asia/Bangkok" })
       .split(" ")[0];
     setCurrentDate(thaiDate.replace(year, ` พ.ศ. ${year}`));
-  }, []);
-
-  // โหลดสิทธิ์พนักงานจาก backend
-  useEffect(() => {
-    const fetchEmployeeAccess = async () => {
-      try {
-        const res = await api.get("/api/admin/employee-access");
-        console.log("🔍 Employee Access from API:", res.data);
-        setAllowedPriceUpdateEmployees(res.data.allowed_price_update_employees);
-        setAllowedProjectPriceEmployees(res.data.allowed_project_price_employees);
-        console.log("✅ Price Update Employees:", res.data.allowed_price_update_employees);
-        console.log("✅ Project Price Employees:", res.data.allowed_project_price_employees);
-      } catch (err) {
-        console.error("Failed to fetch employee access:", err);
-        // ใช้ค่า default ถ้า fetch ล้มเหลว
-      }
-    };
-    fetchEmployeeAccess();
   }, []);
 
   const handleCreateQuote = () => {
@@ -223,12 +215,8 @@ function Dashboard() {
         </div>
         <div className="mt-6 ">
 
-          {/* Special Price Approval Card - แสดงเฉพาะพนักงานที่อนุญาต (ใช้สิทธิ์เดียวกับราคาโครงการ) */}
-          {(() => {
-            const showSpecialPriceApproval = allowedProjectPriceEmployees.includes(employee?.id) && specialPriceAvailable;
-            console.log("🔍 Show Special Price Approval?", showSpecialPriceApproval, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees, "Available:", specialPriceAvailable);
-            return showSpecialPriceApproval;
-          })() && (
+          {/* Special Price Approval Card - แสดงเฉพาะ ZM, RM, SDM, PM */}
+          {canApproveSpecialPrice && specialPriceAvailable && (
             <div
               className="group relative cursor-pointer overflow-hidden rounded-[33px] bg-[#9333EA] hover:bg-[#7e22ce] p-8 text-white shadow-lg"
               onClick={() => navigate("/special-price-approval")}
@@ -241,12 +229,8 @@ function Dashboard() {
             </div>
           )}
 
-          {/* Update Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
-          {(() => {
-            const showPriceUpdate = allowedPriceUpdateEmployees.includes(employee?.id);
-            console.log("🔍 Show Price Update?", showPriceUpdate, "Employee ID:", employee?.id, "Allowed:", allowedPriceUpdateEmployees);
-            return showPriceUpdate;
-          })() && (
+          {/* Update Price Card - แสดงเฉพาะ SDM, PM */}
+          {canUpdatePrice && (
             <div
               className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#0f766e] hover:bg-[#0f6d65] p-8 text-white shadow-lg mt-6"
               onClick={() => navigate("/update-price")}
@@ -257,12 +241,8 @@ function Dashboard() {
             </div>
           )}
 
-          {/* Project Price Card - แสดงเฉพาะพนักงานที่อนุญาต */}
-          {(() => {
-            const showProjectPrice = allowedProjectPriceEmployees.includes(employee?.id);
-            console.log("🔍 Show Project Price?", showProjectPrice, "Employee ID:", employee?.id, "Allowed:", allowedProjectPriceEmployees);
-            return showProjectPrice;
-          })() && (
+          {/* Project Price Card - แสดงเฉพาะ ZM, RM, SDM, PM */}
+          {canManageProjectPrice && (
             <div
               className="group relative cursor-pointer overflow-hidden  rounded-[33px] bg-[#dd8901] hover:bg-[#cd7905] p-8 text-white shadow-lg mt-6"
               onClick={() => navigate("/project-price")}

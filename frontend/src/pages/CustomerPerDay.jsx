@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
+import { formatDateThai } from "../utils/dateFormatter";
 
 function CustomerPerDay() {
   const navigate = useNavigate();
@@ -109,14 +110,7 @@ function CustomerPerDay() {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("th-TH", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      timeZone: "Asia/Bangkok",
-    });
+    return formatDateThai(dateStr);
   };
 
   return (

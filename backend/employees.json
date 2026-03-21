@@ -179,6 +179,48 @@
       "branch": "90HO",
       "region": "ALL",
       "role": "SDM"
+    },
+    {
+      "employee_id": "10002",
+      "branch": "90HO",
+      "region": "ALL",
+      "role": "PM"
+    },
+    {
+      "employee_id": "10003",
+      "branch": "90HO",
+      "region": "ALL",
+      "role": "PM_CLINE"
+    },
+    {
+      "employee_id": "10004",
+      "branch": "90HO",
+      "region": "ALL",
+      "role": "PM_GLASS"
+    },
+    {
+      "employee_id": "10005",
+      "branch": "90HO",
+      "region": "ALL",
+      "role": "PM_EQUIPMENT"
+    },
+    {
+      "employee_id": "10006",
+      "branch": "90HO",
+      "region": "ALL",
+      "role": "PM_ALUMINIUM"
+    },
+    {
+      "employee_id": "10007",
+      "branch": "90HO",
+      "region": "ALL",
+      "role": "PM_GYPSUM"
+    },
+    {
+      "employee_id": "10008",
+      "branch": "90HO",
+      "region": "ALL",
+      "role": "PM_SEALANT"
     }
   ]
 }

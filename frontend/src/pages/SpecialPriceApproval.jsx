@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Check, X, AlertCircle } from 'lucide-react';
 import api from '../services/api';
+import { formatDateThai } from '../utils/dateFormatter';
 
 export default function SpecialPriceApproval() {
   const [requests, setRequests] = useState([]);
@@ -142,13 +143,7 @@ export default function SpecialPriceApproval() {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('th-TH', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatDateThai(dateString);
   };
 
   if (loading) {

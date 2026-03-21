@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../../hooks/useAuth.js";
 import api from "../../services/api.js";
 import { useNavigate } from "react-router-dom";
+import { formatDateThai } from "../../utils/dateFormatter.js";
 
 import ShippingModal from "../../components/wizard/ShippingModal.jsx";
 import CustomerSearchSection from "../../components/wizard/CustomerSearchSection.jsx";
@@ -189,22 +190,27 @@ function Step6_Summary({ state, dispatch }) {
   const [pendingSaveStatus, setPendingSaveStatus] = useState(null);
   const [shippingEdited, setShippingEdited] = useState(false);
   const [isPreOrder, setIsPreOrder] = useState(false);
+  const [requiredDeliveryDate, setRequiredDeliveryDate] = useState("");
 
-  // โหลด pre_order จาก quote header เมื่อเป็น draft
+  // โหลด pre_order และ required_delivery_date จาก quote header เมื่อเป็น draft
   useEffect(() => {
     const loadPreOrderStatus = async () => {
       if (!state.quoteNo) {
         setIsPreOrder(false);
+        setRequiredDeliveryDate("");
         return;
       }
 
       try {
         const res = await api.get(`/api/quotation/${state.quoteNo}`);
         const preOrderValue = res.data?.header?.Pre_Order ?? res.data?.header?.pre_order ?? 0;
+        const requiredDate = res.data?.header?.Required_Delivery_Date ?? res.data?.header?.required_delivery_date ?? "";
         setIsPreOrder(preOrderValue === 1);
+        setRequiredDeliveryDate(requiredDate ? requiredDate.split("T")[0] : "");
       } catch (err) {
         console.error('Error loading pre-order status:', err);
         setIsPreOrder(false);
+        setRequiredDeliveryDate("");
       }
     };
 
@@ -648,6 +654,15 @@ function Step6_Summary({ state, dispatch }) {
     const custCode = getCustomerCode(cust || "")
       .toString()
       .trim();
+    const custName = (cust?.name || "").trim();
+
+    // ⭐ ไม่แสดงประวัติการซื้อสำหรับลูกค้า "ขายสด"
+    if (custName.startsWith("ขายสด")) {
+      setHistoryOrders([]);
+      setHistoryError("");
+      setHistoryLoading(false);
+      return;
+    }
 
     if (!custCode || custCode.toUpperCase() === "N/A") {
       setHistoryOrders([]);
@@ -1161,7 +1176,7 @@ function Step6_Summary({ state, dispatch }) {
       console.log(`   W1:  ${w1Price.toFixed(2)} ${priceUnit} (ขั้นสูง)`);
       console.log(`   SDM: ${sdmPrice.toFixed(2)} ${priceUnit} (ราคาต่ำสุด)`);
       
-      if (r1Price === 0) {
+      if (r1Price === 0 || sdmPrice === 0) {
         console.log(`   ⚠️ ไม่มีข้อมูล threshold สำหรับสินค้านี้`);
         return; // ไม่มีข้อมูล threshold
       }
@@ -1474,6 +1489,7 @@ function Step6_Summary({ state, dispatch }) {
       remark: state.remark || "",  // ⭐ หมายเหตุทั่วไป → Remark
       note: shippingReasonNote,  // ⭐ เหตุผลการแก้ค่าขนส่ง → Remark_Shipping
       pre_order: isPreOrder ? 1 : 0, // ⭐ เพิ่ม pre_order field
+      required_delivery_date: isPreOrder && requiredDeliveryDate ? requiredDeliveryDate : null, // ⭐ เพิ่ม required_delivery_date field
     };
   };
 
@@ -2205,7 +2221,7 @@ function Step6_Summary({ state, dispatch }) {
         <div className="grid gap-4 grid-cols-9 flex-1 border-t-4 border-t-gray-200">
           {/* ซ้าย: ประวัติ+Category */}
           <div className="col-span-2 mt-6 space-y-4">
-            {customerCode && customerCode.toUpperCase() !== "N/A" && (
+            {customerCode && customerCode.toUpperCase() !== "N/A" && !(state.customer?.name || "").trim().startsWith("ขายสด") && (
               <div>
                 <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-3">
                   ประวัติการซื้อสินค้า
@@ -2460,7 +2476,7 @@ function Step6_Summary({ state, dispatch }) {
               
               <div>
                 <h4 className="mb-2 text-lg font-semibold text-gray-800">ข้อมูลใบเสนอราคา</h4>
-                {state.customer && state.customer.tier && (
+                {state.customer && state.customer.tier && !(state.customer?.name || "").trim().startsWith("ขายสด") && (
                   <div className="mb-3 inline-block">
                     <span className=" font-medium text-gray-600">Tier ลูกค้า: </span>
                     <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-md">
@@ -2570,6 +2586,31 @@ function Step6_Summary({ state, dispatch }) {
                     ใบเสนอราคานี้เป็น Pre-Order
                   </label>
                 </div>
+
+                {/* Required Delivery Date - แสดงเฉพาะเมื่อเลือก Pre-Order */}
+                {isPreOrder && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <label htmlFor="requiredDeliveryDate" className="block text-xs font-semibold text-gray-700 mb-2">
+                      วันที่ลูกค้าต้องการของ <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      id="requiredDeliveryDate"
+                      value={requiredDeliveryDate}
+                      onChange={(e) => setRequiredDeliveryDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min={new Date().toISOString().split("T")[0]}
+                    />
+                    {requiredDeliveryDate && (
+                      <p className="text-xs text-blue-600 mt-2">
+                        วันที่ที่เลือก: <strong>{formatDateThai(requiredDeliveryDate)}</strong>
+                      </p>
+                    )}
+                    {!requiredDeliveryDate && isPreOrder && (
+                      <p className="text-xs text-red-500 mt-1">กรุณาเลือกวันที่ลูกค้าต้องการของ</p>
+                    )}
+                  </div>
+                )}
 
                 <button className="flex w-full items-center justify-center rounded-lg bg-[#c1c1c1] px-6 py-3 font-semibold text-white shadow-md  disabled:opacity-50">
                   <FileIcon />
