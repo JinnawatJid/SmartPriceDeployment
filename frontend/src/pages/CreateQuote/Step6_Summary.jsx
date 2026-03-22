@@ -332,6 +332,17 @@ function Step6_Summary({ state, dispatch }) {
     }
   }, [state.cart]);
 
+  // ⭐ Track cart items ที่ต้องคำนวณ (ป้องกัน infinite loop)
+  const cartItemsKey = useMemo(() => {
+    if (!state.cart || state.cart.length === 0) return 'empty';
+    
+    // สร้าง key จาก SKU + qty + needsPricing เท่านั้น
+    return state.cart
+      .map(it => `${it.sku}:${it.qty}:${it.needsPricing ? '1' : '0'}:${it.priceSource || 'system'}`)
+      .sort()
+      .join('|');
+  }, [state.cart]);
+
   useEffect(() => {
     if (state.status === "open") {
       // ⭐ ส่งสินค้าที่ต้องคำนวณราคา (รวมสินค้าที่แก้ราคาด้วย)
@@ -592,7 +603,7 @@ function Step6_Summary({ state, dispatch }) {
     };
 
     calc();
-  }, [state.status, state.cart, state.customer, state.deliveryType, state.shippingCustomerPay]);
+  }, [state.status, cartItemsKey, state.customer, state.deliveryType, state.shippingCustomerPay]); // ⭐ ใช้ cartItemsKey แทน state.cart
 
   // ===============================
   // AUTO RECALC SHIPPING (AFTER PRICING)
@@ -745,8 +756,19 @@ function Step6_Summary({ state, dispatch }) {
   }, [state.customer]);
 
   // โหลดราคาโครงการเมื่อเลือกโครงการ และคำนวณราคาใหม่
+  const prevProjectRef = React.useRef(selectedProject);
+  
   useEffect(() => {
     console.log('🔄 [PROJECT CHANGE] useEffect triggered, selectedProject:', selectedProject);
+    console.log('🔄 [PROJECT CHANGE] prevProject:', prevProjectRef.current);
+    
+    // ⭐ ป้องกันการ trigger ซ้ำ: ถ้า project ไม่เปลี่ยน ไม่ต้องคำนวณใหม่
+    if (prevProjectRef.current === selectedProject) {
+      console.log('❌ [PROJECT CHANGE] Project unchanged, skipping calculation');
+      return;
+    }
+    
+    prevProjectRef.current = selectedProject;
     
     // ถ้าไม่มีสินค้าในตะกร้า ไม่ต้องคำนวณ
     if (!state.cart || state.cart.length === 0) {
@@ -876,7 +898,7 @@ function Step6_Summary({ state, dispatch }) {
     };
 
     recalculateWithProject();
-  }, [selectedProject, state.customer, state.cart, state.deliveryType, state.shippingCustomerPay]); // 🔥 เพิ่ม dependencies เพื่อให้คำนวณใหม่เมื่อมีการเปลี่ยนแปลง
+  }, [selectedProject]); // ⭐ เรียกเฉพาะเมื่อเปลี่ยน project เท่านั้น (ไม่ใช่ cart)
 
   // โหลด Promotion ตาม SKU ที่เลือก
   useEffect(() => {
@@ -1317,8 +1339,8 @@ function Step6_Summary({ state, dispatch }) {
           approval_level: 'SDM_APPROVAL', // Three-level
         });
       } else {
-        // ราคา < SDM = ❌ REJECTED (ราคาต่ำเกินไป)
-        console.log(`   ❌ REJECTED: ราคาต่ำกว่า SDM (${requestedPrice.toFixed(2)} < ${sdmPrice.toFixed(2)})`);
+        // ราคา < SDM = ต้องอนุมัติจาก PM (Product Manager) ตามหมวดหมู่สินค้า
+        console.log(`   ⚠️⚠️⚠️⚠️ PM_APPROVAL: ต้องอนุมัติจาก PM (${requestedPrice.toFixed(2)} < ${sdmPrice.toFixed(2)})`);
         belowR1Items.push({
           sku: item.sku,
           name: item.name,
@@ -1329,7 +1351,7 @@ function Step6_Summary({ state, dispatch }) {
           w2_price: w2Price,
           w1_price: w1Price,
           sdm_price: sdmPrice,
-          approval_level: 'REJECTED', // ต่ำกว่า SDM
+          approval_level: 'PM_APPROVAL', // ต่ำกว่า SDM ต้องให้ PM อนุมัติ
         });
       }
     });
@@ -1339,12 +1361,12 @@ function Step6_Summary({ state, dispatch }) {
       const zmOnly = belowR1Items.filter(i => i.approval_level === 'ZM_ONLY').length;
       const zmThenRm = belowR1Items.filter(i => i.approval_level === 'ZM_THEN_RM').length;
       const sdmApproval = belowR1Items.filter(i => i.approval_level === 'SDM_APPROVAL').length;
-      const rejected = belowR1Items.filter(i => i.approval_level === 'REJECTED').length;
+      const pmApproval = belowR1Items.filter(i => i.approval_level === 'PM_APPROVAL').length;
       
       console.log(`   ✅ ZM_ONLY: ${zmOnly} รายการ`);
       console.log(`   ⚠️ ZM_THEN_RM: ${zmThenRm} รายการ`);
       console.log(`   ⚠️⚠️⚠️ SDM_APPROVAL: ${sdmApproval} รายการ`);
-      console.log(`   ❌ REJECTED: ${rejected} รายการ`);
+      console.log(`   ⚠️⚠️⚠️⚠️ PM_APPROVAL: ${pmApproval} รายการ (ราคา < SDM)`);
     } else {
       const manualItems = (state.cart || []).filter(it => it.priceSource === 'manual').length;
       if (manualItems > 0) {
@@ -1372,9 +1394,9 @@ function Step6_Summary({ state, dispatch }) {
     console.log('🔄 [EFFECT] Items below R1:', items.length);
   }, [state.cart, calcMap, activeSpecialPrices]);
 
-  // แยกรายการที่สามารถขออนุมัติได้ และที่ไม่สามารถขออนุมัติได้
-  const approvableItems = itemsBelowR1.filter(item => item.approval_level !== 'REJECTED');
-  const rejectedItems = itemsBelowR1.filter(item => item.approval_level === 'REJECTED');
+  // แยกรายการที่สามารถขออนุมัติได้ (ทุกรายการสามารถขออนุมัติได้)
+  const approvableItems = itemsBelowR1;
+  const rejectedItems = []; // ไม่มีรายการที่ reject แล้ว เพราะราคา < SDM จะส่งให้ PM
 
 
   const [saving, setSaving] = useState(false);

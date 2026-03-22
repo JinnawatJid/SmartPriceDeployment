@@ -31,12 +31,13 @@ THAI_ROLE_TO_CODE = {
     "ผู้จัดการภูมิภาค (R1-W2)": "RM",  # Regional Manager
     "ผู้จัดการฝ่ายขาย (W1-SDM)": "SDM",  # Sales Director Manager
     "ผู้จัดการผลิตภัณฑ์ (Below SDM)": "PM",  # Product Manager - General
-    "ผู้จัดการผลิตภัณฑ์โครงคร่าวฝ้าเพดานโครงผนัง": "PM_CLINE",  # Product Manager - Cline
-    "ผู้จัดการผลิตภัณฑ์กระจก": "PM_GLASS",  # Product Manager - Glass
-    "ผู้จัดการผลิตภัณฑ์อุปกรณ์และอื่นๆ": "PM_EQUIPMENT",  # Product Manager - Equipment & Others
-    "ผู้จัดการผลิตภัณฑ์อลูมิเนียม": "PM_ALUMINIUM",  # Product Manager - Aluminium
-    "ผู้จัดการผลิตภัณฑ์ยิปซัม": "PM_GYPSUM",  # Product Manager - Gypsum
-    "ผู้จัดการผลิตภัณฑ์ซีลแลนท์": "PM_SEALANT",  # Product Manager - Sealant
+    "ผู้จัดการแผนก": "PM",  # Product Manager - Department Manager (from UXP API)
+    "ผู้จัดการผลิตภัณฑ์โครงคร่าวฝ้าเพดานโครงผนัง": "PM",  # Product Manager - Cline
+    "ผู้จัดการผลิตภัณฑ์กระจก": "PM",  # Product Manager - Glass
+    "ผู้จัดการผลิตภัณฑ์อุปกรณ์และอื่นๆ": "PM",  # Product Manager - Equipment & Others
+    "ผู้จัดการผลิตภัณฑ์อลูมิเนียม": "PM",  # Product Manager - Aluminium
+    "ผู้จัดการผลิตภัณฑ์ยิปซัม": "PM",  # Product Manager - Gypsum
+    "ผู้จัดการผลิตภัณฑ์ซีลแลนท์": "PM",  # Product Manager - Sealant
     "กรรมการผู้จัดการ": "CEO",
 }
 
@@ -56,6 +57,11 @@ PM_ROLES = {
 
 # Management roles (can manage prices and approve special prices)
 MANAGEMENT_ROLES = {"ZM", "RM", "SDM"} | PM_ROLES
+
+
+def is_pm_role(role_code: str) -> bool:
+    """Check if role is any PM variant"""
+    return role_code == "PM" or role_code.startswith("PM_")
 
 
 def map_thai_role_to_code(thai_role_name: str) -> str:

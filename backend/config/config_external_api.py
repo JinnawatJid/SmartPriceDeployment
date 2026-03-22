@@ -111,3 +111,11 @@ ITEMCOST_API_HEADERS = {
     "apikey": ITEM_COST_API_KEY,
     "Content-Type": "application/json",
 }
+
+
+# =========================
+# Special Price Request Configuration
+# =========================
+SDM_THRESHOLD_PRICE = float(os.getenv("SDM_THRESHOLD_PRICE", "50000"))
+# ราคาขั้นต่ำที่ต้องส่งให้ SDM อนุมัติ
+# ถ้าราคา < SDM_THRESHOLD_PRICE จะส่งให้ PM แทน

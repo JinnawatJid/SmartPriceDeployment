@@ -11,6 +11,7 @@ function Login() {
     employeeCode: "",
     role: "",
     branchId: "",
+    password: "",
   });
   const [roles, setRoles] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -60,7 +61,7 @@ function Login() {
     setLoading(true);
 
     // Validate
-    if (!formData.employeeCode || !formData.role || !formData.branchId) {
+    if (!formData.employeeCode || !formData.role || !formData.branchId || !formData.password) {
       setError("กรุณากรอกข้อมูลให้ครบถ้วน");
       setLoading(false);
       return;
@@ -152,12 +153,28 @@ function Login() {
               )}
             </button>
             <p className="mt-8 text-center text-sm text-gray-500">
-              กดปุ่มเพื่อเข้าสู่ระบบผ่าน UXP Portal
+              กดปุ่มเพื่อเข้าสู่ระบบ
             </p>
           </>
         ) : (
           // Manual Login Mode
           <form onSubmit={handleManualLogin} className="space-y-4">
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                รหัสผ่าน
+              </label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                value={formData.password}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                placeholder="กรอกรหัสผ่าน"
+                disabled={loading}
+              />
+            </div>
+
             <div>
               <label htmlFor="employeeCode" className="block text-sm font-medium text-gray-700 mb-2">
                 รหัสพนักงาน

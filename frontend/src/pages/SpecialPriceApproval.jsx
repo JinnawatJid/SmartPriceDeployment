@@ -338,19 +338,24 @@ export default function SpecialPriceApproval() {
                 <div className="space-y-3">
                   {/* Check approval flow based on status and approval level */}
                   {(() => {
-                    // ตรวจสอบว่าต้องผ่าน RM หรือ SDM หรือไม่
+                    // ตรวจสอบว่าต้องผ่าน RM, SDM, หรือ PM หรือไม่
+                    const needsPmApproval = selectedRequest.items?.some(item => 
+                      item.approval_level === 'PM_APPROVAL'
+                    );
                     const needsRmApproval = selectedRequest.items?.some(item => 
                       item.approval_level === 'ZM_THEN_RM' || 
                       item.approval_level === 'RM' ||
                       item.approval_level === 'SDM' ||
                       item.approval_level === 'SDM_APPROVAL' ||
-                      item.approval_level === 'ZM_THEN_RM_THEN_SDM'
+                      item.approval_level === 'ZM_THEN_RM_THEN_SDM' ||
+                      item.approval_level === 'PM_APPROVAL'
                     );
                     const isPendingRm = selectedRequest.status === 'PENDING_RM';
                     const isPendingSdm = selectedRequest.status === 'PENDING_SDM' || selectedRequest.status === 'SDM_APPROVAL';
+                    const isPendingPm = selectedRequest.status === 'PENDING_PM';
                     
-                    // If status is PENDING_SDM or SDM_APPROVAL, this is SDM's turn to approve (final)
-                    if (isPendingSdm) {
+                    // If status is PENDING_PM, this is PM's turn to approve (final for PM)
+                    if (isPendingPm) {
                       return (
                         <>
                           <button
@@ -358,25 +363,62 @@ export default function SpecialPriceApproval() {
                             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                           >
                             <Check className="w-5 h-5" />
-                            อนุมัติ (SDM - ขั้นสุดท้าย)
+                            อนุมัติ (PM - ขั้นสุดท้าย)
                           </button>
                           <p className="text-xs text-gray-600 text-center">
-                            ขั้นตอนสุดท้าย - อนุมัติโดย Sales Director Manager
+                            ขั้นตอนสุดท้าย - อนุมัติโดย Product Manager
                           </p>
                         </>
                       );
                     }
                     
+                    // If status is PENDING_SDM or SDM_APPROVAL, this is SDM's turn
+                    if (isPendingSdm) {
+                      // ตรวจสอบว่าต้องส่งต่อ PM หรือไม่
+                      if (needsPmApproval) {
+                        return (
+                          <>
+                            <button
+                              onClick={() => setActionType('approve')}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                            >
+                              <Check className="w-5 h-5" />
+                              ส่งต่อ PM
+                            </button>
+                            <p className="text-xs text-gray-600 text-center">
+                              ใบนี้ต้องผ่านการอนุมัติจาก Product Manager (เกินอำนาจ SDM)
+                            </p>
+                          </>
+                        );
+                      } else {
+                        return (
+                          <>
+                            <button
+                              onClick={() => setActionType('approve')}
+                              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                            >
+                              <Check className="w-5 h-5" />
+                              อนุมัติ (SDM - ขั้นสุดท้าย)
+                            </button>
+                            <p className="text-xs text-gray-600 text-center">
+                              ขั้นตอนสุดท้าย - อนุมัติโดย Sales Director Manager
+                            </p>
+                          </>
+                        );
+                      }
+                    }
+                    
                     // If status is PENDING_RM, this is RM's turn to approve
                     if (isPendingRm) {
-                      // ตรวจสอบว่าต้องส่งต่อ SDM หรือไม่
-                      const needsSdmApproval = selectedRequest.items?.some(item => 
+                      // ตรวจสอบว่าต้องส่งต่อ SDM หรือ PM หรือไม่
+                      const needsSdmOrPmApproval = selectedRequest.items?.some(item => 
                         item.approval_level === 'SDM' ||
                         item.approval_level === 'SDM_APPROVAL' ||
-                        item.approval_level === 'ZM_THEN_RM_THEN_SDM'
+                        item.approval_level === 'ZM_THEN_RM_THEN_SDM' ||
+                        item.approval_level === 'PM_APPROVAL'
                       );
                       
-                      if (needsSdmApproval) {
+                      if (needsSdmOrPmApproval) {
                         return (
                           <>
                             <button
@@ -387,7 +429,7 @@ export default function SpecialPriceApproval() {
                               ส่งต่อ SDM
                             </button>
                             <p className="text-xs text-gray-600 text-center">
-                              ใบนี้ต้องผ่านการอนุมัติจาก Sales Director Manager
+                              ใบนี้ต้องผ่านการอนุมัติจาก Sales Director Manager (เกินอำนาจ RM)
                             </p>
                           </>
                         );
@@ -406,8 +448,8 @@ export default function SpecialPriceApproval() {
                       }
                     }
                     
-                    // If needs RM/SDM approval but status is PENDING_ZM, this is ZM's turn
-                    if (needsRmApproval) {
+                    // If needs RM/SDM/PM approval but status is PENDING_ZM, this is ZM's turn
+                    if (needsRmApproval || needsPmApproval) {
                       return (
                         <>
                           <button
@@ -418,7 +460,7 @@ export default function SpecialPriceApproval() {
                             ส่งต่อ RM
                           </button>
                           <p className="text-xs text-gray-600 text-center">
-                            ใบนี้ต้องผ่านการอนุมัติจาก Regional Manager
+                            ใบนี้ต้องผ่านการอนุมัติจาก Regional Manager (เกินอำนาจ ZM)
                           </p>
                         </>
                       );
@@ -446,31 +488,43 @@ export default function SpecialPriceApproval() {
               ) : actionType === 'approve' ? (
                 <div className="space-y-3">
                   {(() => {
+                    const needsPmApproval = selectedRequest.items?.some(item => 
+                      item.approval_level === 'PM_APPROVAL'
+                    );
                     const needsRmApproval = selectedRequest.items?.some(item => 
                       item.approval_level === 'ZM_THEN_RM' || 
                       item.approval_level === 'RM' ||
                       item.approval_level === 'SDM' ||
                       item.approval_level === 'SDM_APPROVAL' ||
-                      item.approval_level === 'ZM_THEN_RM_THEN_SDM'
+                      item.approval_level === 'ZM_THEN_RM_THEN_SDM' ||
+                      item.approval_level === 'PM_APPROVAL'
                     );
                     const isPendingRm = selectedRequest.status === 'PENDING_RM';
                     const isPendingSdm = selectedRequest.status === 'PENDING_SDM' || selectedRequest.status === 'SDM_APPROVAL';
+                    const isPendingPm = selectedRequest.status === 'PENDING_PM';
                     
-                    if (isPendingSdm) {
-                      return <p className="text-sm text-gray-600">ยืนยันการอนุมัติราคาพิเศษนี้? (SDM - ขั้นสุดท้าย)</p>;
+                    if (isPendingPm) {
+                      return <p className="text-sm text-gray-600">ยืนยันการอนุมัติราคาพิเศษนี้? (PM - ขั้นสุดท้าย)</p>;
+                    } else if (isPendingSdm) {
+                      if (needsPmApproval) {
+                        return <p className="text-sm text-gray-600">ยืนยันการส่งต่อไปยัง Product Manager? (เกินอำนาจ SDM)</p>;
+                      } else {
+                        return <p className="text-sm text-gray-600">ยืนยันการอนุมัติราคาพิเศษนี้? (SDM - ขั้นสุดท้าย)</p>;
+                      }
                     } else if (isPendingRm) {
-                      const needsSdmApproval = selectedRequest.items?.some(item => 
+                      const needsSdmOrPmApproval = selectedRequest.items?.some(item => 
                         item.approval_level === 'SDM' ||
                         item.approval_level === 'SDM_APPROVAL' ||
-                        item.approval_level === 'ZM_THEN_RM_THEN_SDM'
+                        item.approval_level === 'ZM_THEN_RM_THEN_SDM' ||
+                        item.approval_level === 'PM_APPROVAL'
                       );
-                      if (needsSdmApproval) {
-                        return <p className="text-sm text-gray-600">ยืนยันการส่งต่อไปยัง Sales Director Manager?</p>;
+                      if (needsSdmOrPmApproval) {
+                        return <p className="text-sm text-gray-600">ยืนยันการส่งต่อไปยัง Sales Director Manager? (เกินอำนาจ RM)</p>;
                       } else {
                         return <p className="text-sm text-gray-600">ยืนยันการอนุมัติราคาพิเศษนี้? (RM - ขั้นสุดท้าย)</p>;
                       }
-                    } else if (needsRmApproval) {
-                      return <p className="text-sm text-gray-600">ยืนยันการส่งต่อไปยัง Regional Manager?</p>;
+                    } else if (needsRmApproval || needsPmApproval) {
+                      return <p className="text-sm text-gray-600">ยืนยันการส่งต่อไปยัง Regional Manager? (เกินอำนาจ ZM)</p>;
                     } else {
                       return <p className="text-sm text-gray-600">ยืนยันการอนุมัติราคาพิเศษนี้? (ZM - ขั้นสุดท้าย)</p>;
                     }

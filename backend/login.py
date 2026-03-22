@@ -25,6 +25,7 @@ class ManualLoginRequest(BaseModel):
     employeeCode: str
     role: str
     branchId: str
+    password: str
 
 
 # === HELPER ===
@@ -254,8 +255,13 @@ async def login(req: LoginRequest):
 @router.post("/manual")
 async def manual_login(req: ManualLoginRequest, response: Response):
     """
-    Manual login - ให้ผู้ใช้กรอกรหัสพนักงาน, role, และสาขาเอง
+    Manual login - ให้ผู้ใช้กรอกรหัสพนักงาน, role, สาขา และรหัสผ่าน
     """
+    # ⭐ เช็ค password
+    MANUAL_LOGIN_PASSWORD = os.getenv("MANUAL_LOGIN_PASSWORD", "Tng#kmitl2")
+    if req.password != MANUAL_LOGIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="รหัสผ่านไม่ถูกต้อง")
+    
     # ดึงข้อมูลพนักงานจาก API (เพื่อตรวจสอบว่ามีรหัสพนักงานนี้จริง)
     emp = await load_employee(req.employeeCode)
     
@@ -273,12 +279,20 @@ async def manual_login(req: ManualLoginRequest, response: Response):
     # ดึง region จาก branch
     region = get_region_from_branch(req.branchId)
     
+    # แปลง Thai role name เป็น internal role code
+    from role_mapping import map_thai_role_to_code
+    role_code = map_thai_role_to_code(req.role)
+    
+    print(f"🔍 [MANUAL_LOGIN] Mapping role:")
+    print(f"   Selected role (Thai): {req.role}")
+    print(f"   Mapped role (Code): {role_code}")
+    
     # สร้าง token payload
     token_payload = {
         "sub": emp["id"],
         "name": emp["name"],
         "branchId": req.branchId,
-        "role": req.role,
+        "role": role_code,  # ใช้ role code ที่แปลงแล้ว
         "region": region,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
     }
@@ -307,7 +321,7 @@ async def manual_login(req: ManualLoginRequest, response: Response):
             "id": emp["id"],
             "name": emp["name"],
             "branchId": req.branchId,
-            "role": req.role,
+            "role": role_code,  # ส่ง role code กลับไปด้วย
             "region": region,
         }
     }

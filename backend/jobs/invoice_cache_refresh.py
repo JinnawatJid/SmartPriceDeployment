@@ -133,11 +133,11 @@ def parse_invoice_record(invoice_data: Dict, calculation_date: date) -> Optional
         InvoiceCacheRecord หรือ None ถ้าข้อมูลไม่ครบ
     """
     try:
-        # ข้อมูลที่จำเป็น
+        # ข้อมูลที่จำเป็น (ใช้ field names ใหม่)
         document_no = invoice_data.get('Document No.') or invoice_data.get('document_no')
-        customer_code = invoice_data.get('customer_code') or invoice_data.get('Sell-to Customer No.')
+        customer_code = invoice_data.get('customer_code')  # ✅ NEW
         posting_date_str = invoice_data.get('Posting Date') or invoice_data.get('posting_date')
-        sku = invoice_data.get('sku') or invoice_data.get('No.') or ""
+        sku = invoice_data.get('sku')  # ✅ NEW
         
         if not document_no or not customer_code or not posting_date_str:
             return None
@@ -151,33 +151,32 @@ def parse_invoice_record(invoice_data: Dict, calculation_date: date) -> Optional
         except:
             return None
         
-        # ข้อมูลเพิ่มเติม
+        # ข้อมูลเพิ่มเติม (ใช้ field names ใหม่)
         order_no = invoice_data.get('Order No.') or invoice_data.get('order_no') or ""
-        sell_to_customer_name = invoice_data.get('Sell-to Customer Name') or invoice_data.get('customer_name') or ""
+        sell_to_customer_name = invoice_data.get('Sell_to_Customer_Name') or ""  # ✅ NEW
         description = invoice_data.get('Description') or invoice_data.get('description') or ""
-        variant_code = invoice_data.get('Variant Code') or invoice_data.get('variant_code') or ""
+        variant_code = invoice_data.get('Variant_Code') or invoice_data.get('variant_code') or ""  # ✅ NEW
         unit_of_measure = invoice_data.get('Unit of Measure') or invoice_data.get('unit_of_measure') or ""
         
-        # ตัวเลข
+        # ตัวเลข (ใช้ field names ใหม่)
         try:
             quantity = float(invoice_data.get('Quantity') or invoice_data.get('quantity') or 0)
         except:
             quantity = 0.0
         
         try:
-            unit_price = float(invoice_data.get('Unit Price') or invoice_data.get('unit_price') or 0)
+            unit_price = float(invoice_data.get('Unit_Price') or invoice_data.get('unit_price') or 0)  # ✅ NEW
         except:
             unit_price = 0.0
         
         try:
-            line_amount = float(invoice_data.get('Line Amount') or invoice_data.get('line_amount') or 0)
+            line_amount = float(invoice_data.get('Line_Amount') or invoice_data.get('line_amount') or 0)  # ✅ NEW
         except:
             line_amount = 0.0
         
         try:
-            line_amount_vat = float(invoice_data.get('Amount Including VAT') or 
-                                   invoice_data.get('Line_Amount_Include_VAT') or 
-                                   invoice_data.get('amount_including_vat') or 0)
+            line_amount_vat = float(invoice_data.get('Line_Amount_Include_VAT') or 
+                                   invoice_data.get('amount_including_vat') or 0)  # ✅ NEW
         except:
             line_amount_vat = 0.0
         

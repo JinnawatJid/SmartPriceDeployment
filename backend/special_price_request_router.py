@@ -4,10 +4,14 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from auth_dependency import get_employee_info
-from employee_position_mapper import find_zm_at_branch, find_rm_in_region, find_sdm
+from employee_position_mapper import (
+    find_zm_at_branch, find_rm_in_region, find_sdm,
+    find_pm_by_category, find_all_pms_by_categories
+)
 from branch_region_mapping import get_region_from_branch
 from config.db_mssql import get_mssql_conn
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +40,116 @@ class SpecialPriceRequestCreate(BaseModel):
     valid_to: str
 
 
+# === HELPER FUNCTIONS ===
+
+def extract_product_categories(items: List[SpecialPriceItem]) -> set:
+    """Extract unique product categories from items based on SKU first letter"""
+    categories = set()
+    for item in items:
+        if item.sku and len(item.sku) > 0:
+            category = item.sku[0].upper()
+            if category in ['G', 'A', 'C', 'Y', 'S', 'E']:
+                categories.add(category)
+    return categories
+
+
+def calculate_request_total(items: List[SpecialPriceItem]) -> float:
+    """Calculate total requested amount"""
+    return sum(float(item.requested_price) * float(item.quantity) for item in items)
+
+
+def is_price_below_sdm(requested_total: float) -> bool:
+    """Check if requested total is below SDM threshold"""
+    sdm_threshold = float(os.getenv("SDM_THRESHOLD_PRICE", "50000"))
+    return requested_total < sdm_threshold
+
+
 # === ENDPOINTS ===
+
+@router.get("/approver-info")
+async def get_approver_info(employee_info: dict = Depends(get_employee_info)):
+    """Get approver information for current user"""
+    try:
+        employee_id = employee_info.get('employee_id')
+        name = employee_info.get('name', 'Unknown')
+        role = employee_info.get('role', 'Sales')
+        branch_code = employee_info.get('branch_code')
+        region = employee_info.get('region')
+        
+        logger.info(f"Getting approver info for: {employee_id} ({name}), Role: {role}")
+        
+        return {
+            "employee_id": employee_id,
+            "name": name,
+            "role": role,
+            "branch_code": branch_code,
+            "region": region,
+            "can_approve": role in ['ZM', 'RM', 'SDM', 'PM']
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting approver info: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get approver info: {str(e)}"
+        )
+
+
+@router.get("/pm-by-categories")
+async def get_pm_by_categories(categories: str):
+    """
+    Get PM information for given product categories
+    
+    Query params:
+        categories: Comma-separated list of categories (e.g., "A,G,C")
+    
+    Returns:
+        Dictionary mapping category to PM info
+    """
+    try:
+        category_list = [c.strip().upper() for c in categories.split(',') if c.strip()]
+        
+        if not category_list:
+            raise HTTPException(status_code=400, detail="No categories provided")
+        
+        logger.info(f"Getting PMs for categories: {category_list}")
+        
+        pms = await find_all_pms_by_categories(category_list)
+        
+        # Format response
+        result = {}
+        for category in category_list:
+            pm = pms.get(category)
+            if pm:
+                result[category] = {
+                    "employee_id": pm['employee_id'],
+                    "name": pm['name'],
+                    "role": pm['role'],
+                    "category": pm['category'],
+                    "found": True
+                }
+            else:
+                result[category] = {
+                    "employee_id": None,
+                    "name": None,
+                    "role": None,
+                    "category": category,
+                    "found": False
+                }
+        
+        logger.info(f"PM lookup result: {result}")
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting PMs by categories: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get PMs: {str(e)}"
+        )
+
+
 @router.get("/quote/{quote_no:path}")
 async def get_special_price_request_by_quote(quote_no: str):
     """Get special price request by quote number"""
@@ -128,10 +241,17 @@ async def get_pending_approvals(employee_info: dict = Depends(get_employee_info)
         current_role = employee_info.get('role', 'Sales')
         current_branch = employee_info.get('branch_code')
         
+        print(f"🔍 [PENDING_APPROVALS] Getting pending approvals for:")
+        print(f"  Employee ID: {current_employee_id}")
+        print(f"  Role: {current_role}")
+        print(f"  Branch: {current_branch}")
+        print(f"  Full employee_info: {employee_info}")
+        
         logger.info(f"Getting pending approvals for:")
         logger.info(f"  Employee ID: {current_employee_id}")
         logger.info(f"  Role: {current_role}")
         logger.info(f"  Branch: {current_branch}")
+        logger.info(f"  Full employee_info: {employee_info}")  # ⭐ เพิ่ม log
         
         conn = get_mssql_conn()
         cursor = conn.cursor()
@@ -173,6 +293,18 @@ async def get_pending_approvals(employee_info: dict = Depends(get_employee_info)
             cursor.execute("""
                 SELECT * FROM special_price_requests
                 WHERE status = 'PENDING_SDM'
+                ORDER BY created_at DESC
+            """)
+            
+        elif current_role == 'PM' or current_role.startswith('PM_'):
+            # PM ดูคำขอที่ status = PENDING_PM
+            # PM ไม่ต้อง check branch - ดูได้ทุกคำขอที่ status = PENDING_PM
+            # PM ทุกคนอยู่ที่ 90HO และอนุมัติได้ทุก category
+            logger.info(f"  Looking for requests with status = PENDING_PM (all PMs at 90HO can see all categories)")
+            
+            cursor.execute("""
+                SELECT * FROM special_price_requests
+                WHERE status = 'PENDING_PM'
                 ORDER BY created_at DESC
             """)
             
@@ -287,7 +419,14 @@ async def create_special_price_request(
         logger.info(f"  Customer: {request_data.customer_code} - {request_data.customer_name}")
         logger.info(f"  Items: {len(request_data.items)}")
         
-        # 3. หาผู้อนุมัติโดยใช้ employee_position_mapper
+        # 3. คำนวณยอดรวมและตรวจสอบว่า < SDM threshold
+        requested_total = calculate_request_total(request_data.items)
+        below_sdm = is_price_below_sdm(requested_total)
+        
+        logger.info(f"  Requested Total: {requested_total}")
+        logger.info(f"  Below SDM Threshold: {below_sdm}")
+        
+        # 4. หาผู้อนุมัติโดยใช้ employee_position_mapper
         logger.info("Finding approvers...")
         
         zm = await find_zm_at_branch(branch_code)
@@ -296,10 +435,29 @@ async def create_special_price_request(
         rm = await find_rm_in_region(region)
         logger.info(f"  RM: {rm}")
         
-        sdm = await find_sdm()
-        logger.info(f"  SDM: {sdm}")
+        # หา PM ถ้าราคา < SDM
+        pm_approver = None
+        product_categories = None
+        if below_sdm:
+            product_categories = extract_product_categories(request_data.items)
+            logger.info(f"  Product Categories: {product_categories}")
+            
+            if product_categories:
+                pms = await find_all_pms_by_categories(list(product_categories))
+                if pms:
+                    # ใช้ PM ตัวแรก (ถ้ามีหลายหมวดหมู่)
+                    pm_approver = list(pms.values())[0]
+                    logger.info(f"  PM Approver: {pm_approver}")
+                else:
+                    logger.warning(f"  ⚠️ PM not found for categories: {product_categories}")
+                    logger.warning(f"  ⚠️ Request will be created but PM routing may fail during approval")
+            else:
+                logger.warning(f"  ⚠️ No product categories found in items")
+        else:
+            sdm = await find_sdm()
+            logger.info(f"  SDM: {sdm}")
         
-        # 4. สร้าง request object (ยังไม่บันทึกลงฐานข้อมูล - ต้องสร้างตารางก่อน)
+        # 5. สร้าง request object (ยังไม่บันทึกลงฐานข้อมูล - ต้องสร้างตารางก่อน)
         special_price_request = {
             "quote_no": request_data.quote_no,
             "requester_id": requester_id,
@@ -331,11 +489,17 @@ async def create_special_price_request(
             "rm_approver_name": rm['name'] if rm else None,
             "rm_approver_region": rm.get('region') if rm else None,
             
-            "sdm_approver_id": sdm['employee_id'] if sdm else None,
-            "sdm_approver_name": sdm['name'] if sdm else None,
+            # PM approver (ถ้าราคา < SDM)
+            "pm_approver_id": pm_approver['employee_id'] if pm_approver else None,
+            "pm_approver_name": pm_approver['name'] if pm_approver else None,
+            "pm_category": pm_approver['category'] if pm_approver else None,
+            
+            # SDM approver (ถ้าราคา >= SDM)
+            "sdm_approver_id": None,  # จะกำหนดในภายหลัง
+            "sdm_approver_name": None,
             
             # สถานะ
-            "status": "pending_zm",  # เริ่มที่ ZM
+            "status": "pending_zm",  # เริ่มที่ ZM เสมอ
             "created_at": datetime.now().isoformat(),
         }
         
@@ -347,7 +511,6 @@ async def create_special_price_request(
         
         # คำนวณยอดรวม
         original_total = sum(float(item.normal_price) * float(item.quantity) for item in request_data.items)
-        requested_total = sum(float(item.requested_price) * float(item.quantity) for item in request_data.items)
         discount_percentage = ((original_total - requested_total) / original_total * 100) if original_total > 0 else 0
         
         # กำหนด status และ approver_employee_id เริ่มต้น
@@ -355,7 +518,17 @@ async def create_special_price_request(
         initial_status = 'PENDING_ZM'
         approver_id = f"ZM_{branch_code}"
         
-        # Insert special_price_requests (ใช้เฉพาะคอลัมน์ที่มีในตาราง)
+        # ⭐ Log PM info for debugging (ไม่บันทึกลง database ตอนสร้าง)
+        # PM routing จะใช้ approver_employee_id = 'PM_{category}' เหมือนระดับอื่น
+        if pm_approver:
+            logger.info(f"  📝 PM Routing Info (will be used when SDM approves):")
+            logger.info(f"     PM Category: {pm_approver['category']}")
+            logger.info(f"     PM Name: {pm_approver['name']}")
+            logger.info(f"     PM Employee ID: {pm_approver['employee_id']}")
+            logger.info(f"     PM Branch: 90HO (all PMs)")
+            logger.info(f"     Will route to: PM_{pm_approver['category']}")
+        
+        # Insert special_price_requests (ใช้คอลัมน์เดิมเหมือนระดับอื่น)
         cursor.execute("""
             INSERT INTO special_price_requests (
                 request_number, quote_no, customer_code, customer_name, customer_type,
@@ -511,6 +684,21 @@ async def approve_request(request_id: int, employee_info: dict = Depends(get_emp
             if current_status != 'PENDING_SDM':
                 raise HTTPException(status_code=403, detail="This request is not pending SDM approval")
         
+        elif current_role == 'PM' or current_role.startswith('PM_'):
+            # ⭐ PM approval (ไม่ต้อง check branch - PM ดูแลทั้งบริษัท)
+            if current_status != 'PENDING_PM':
+                raise HTTPException(status_code=403, detail="This request is not pending PM approval")
+            
+            # เช็คว่า PM นี้เป็น PM ของ category ที่ถูกต้องหรือไม่
+            if not approver_employee_id or not approver_employee_id.startswith('PM_'):
+                raise HTTPException(status_code=400, detail="Invalid approver employee ID for PM")
+            
+            request_category = approver_employee_id.split('_')[1]  # PM_A → A
+            logger.info(f"  Request category: {request_category}")
+            
+            # ⭐ PM ทุกคนอนุมัติได้ทุก category (เพราะ PM ดูแลทั้งบริษัท และอยู่ที่ 90HO)
+            logger.info(f"  ✅ PM approval for category: {request_category} (no branch/category restriction - all PMs at 90HO can approve)")
+        
         else:
             raise HTTPException(status_code=403, detail="You do not have permission to approve requests")
         
@@ -523,12 +711,17 @@ async def approve_request(request_id: int, employee_info: dict = Depends(get_emp
         item_rows = cursor.fetchall()
         approval_levels = [row[0] for row in item_rows]
         
+        # ⭐ DEBUG: แสดง approval_level ทั้งหมด
+        logger.info(f"  📋 Approval levels in request: {approval_levels}")
+        
         # ตรวจสอบว่าต้องส่งต่อหรือไม่
-        needs_rm = any(level in ['ZM_THEN_RM', 'RM', 'SDM_APPROVAL', 'ZM_THEN_RM_THEN_SDM'] for level in approval_levels)
+        needs_rm = any(level in ['ZM_THEN_RM', 'RM', 'SDM_APPROVAL', 'ZM_THEN_RM_THEN_SDM', 'PM_APPROVAL'] for level in approval_levels)
         needs_sdm = any(level in ['SDM', 'SDM_APPROVAL', 'ZM_THEN_RM_THEN_SDM'] for level in approval_levels)
+        needs_pm = any(level == 'PM_APPROVAL' for level in approval_levels)
         
         logger.info(f"  Needs RM: {needs_rm}")
         logger.info(f"  Needs SDM: {needs_sdm}")
+        logger.info(f"  Needs PM: {needs_pm} ⭐")
         
         # 4. กำหนด status ใหม่และ approver ใหม่
         new_status = None
@@ -536,12 +729,15 @@ async def approve_request(request_id: int, employee_info: dict = Depends(get_emp
         
         if current_status in ['PENDING_ZM', 'SDM_APPROVAL']:
             # ZM อนุมัติแล้ว
-            if needs_rm or needs_sdm:
-                # ส่งต่อ RM
+            if needs_rm or needs_sdm or needs_pm:
+                # ส่งต่อ RM (ทุกกรณีที่ไม่ใช่ ZM_ONLY)
                 new_status = 'PENDING_RM'
-                region = request.get('requester_region') or employee_info.get('region')
+                # คำนวณ region จาก branch ของคำขอ
+                request_branch = request.get('branch')
+                from branch_region_mapping import get_region_from_branch
+                region = get_region_from_branch(request_branch) if request_branch else employee_info.get('region')
                 new_approver_id = f"RM_{region}"
-                logger.info(f"  → Forwarding to RM: {new_approver_id}")
+                logger.info(f"  → Forwarding to RM: {new_approver_id} (Branch: {request_branch}, Region: {region})")
             else:
                 # อนุมัติเลย (ZM_ONLY)
                 new_status = 'APPROVED'
@@ -550,22 +746,51 @@ async def approve_request(request_id: int, employee_info: dict = Depends(get_emp
         
         elif current_status == 'PENDING_RM':
             # RM อนุมัติแล้ว
-            if needs_sdm:
-                # ส่งต่อ SDM
+            # เช็คว่าต้องส่ง SDM หรือ PM (PM ต้องผ่าน SDM ก่อน)
+            if needs_pm or needs_sdm:
+                # ส่งต่อ SDM (SDM จะเป็นคนส่งต่อให้ PM ถ้าจำเป็น)
                 new_status = 'PENDING_SDM'
                 new_approver_id = 'SDM_GLOBAL'
-                logger.info(f"  → Forwarding to SDM")
+                logger.info(f"  → Forwarding to SDM (needs_pm={needs_pm}, needs_sdm={needs_sdm})")
             else:
-                # อนุมัติเลย
+                # อนุมัติเลย (ZM_THEN_RM)
                 new_status = 'APPROVED'
                 new_approver_id = None
                 logger.info(f"  → Approved by RM (final)")
         
         elif current_status == 'PENDING_SDM':
-            # SDM อนุมัติแล้ว (ขั้นสุดท้าย)
+            # SDM อนุมัติแล้ว
+            # เช็คว่าต้องส่ง PM หรือไม่ (ใช้ needs_pm ที่คำนวณไว้แล้ว)
+            if needs_pm:
+                # ส่งต่อ PM (ดึง category จาก items)
+                cursor.execute("""
+                    SELECT DISTINCT LEFT(item_code, 1) as category
+                    FROM special_price_request_items
+                    WHERE request_id = ? AND approval_level = 'PM_APPROVAL'
+                """, (request_id,))
+                
+                category_rows = cursor.fetchall()
+                if category_rows:
+                    pm_category = category_rows[0][0]  # ใช้ category แรก
+                    new_status = 'PENDING_PM'
+                    new_approver_id = f'PM_{pm_category}'
+                    logger.info(f"  → SDM forwarding to PM: {new_approver_id} (Category: {pm_category}, Branch: 90HO)")
+                else:
+                    # ไม่มี category ให้อนุมัติเลย
+                    new_status = 'APPROVED'
+                    new_approver_id = None
+                    logger.info(f"  → No PM category found, approved by SDM (final)")
+            else:
+                # อนุมัติเลย (ไม่ต้องส่ง PM)
+                new_status = 'APPROVED'
+                new_approver_id = None
+                logger.info(f"  → Approved by SDM (final)")
+        
+        elif current_status == 'PENDING_PM':
+            # ⭐ PM อนุมัติแล้ว (ขั้นสุดท้าย)
             new_status = 'APPROVED'
             new_approver_id = None
-            logger.info(f"  → Approved by SDM (final)")
+            logger.info(f"  → Approved by PM (final)")
         
         # 5. อัปเดตฐานข้อมูล
         update_query = """
