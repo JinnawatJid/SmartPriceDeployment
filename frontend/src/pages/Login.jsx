@@ -114,16 +114,19 @@ function Login() {
           >
             UXP Login
           </button>
-          <button
-            onClick={() => setLoginMode("manual")}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-              loginMode === "manual"
-                ? "bg-blue-500 text-white shadow-md"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            Manual Login
-          </button>
+          {/* ปุ่ม Manual Login */}
+          {/*
+            <button
+              onClick={() => setLoginMode("manual")}
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+                loginMode === "manual"
+                  ? "bg-blue-500 text-white shadow-md"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Manual Login
+            </button>
+            */}
         </div>
 
         {error && (
@@ -153,7 +156,7 @@ function Login() {
               )}
             </button>
             <p className="mt-8 text-center text-sm text-gray-500">
-              กดปุ่มเพื่อเข้าสู่ระบบ
+              กดปุ่มเริ่มใช้งานเพื่อเข้าสู่ระบบ
             </p>
           </>
         ) : (

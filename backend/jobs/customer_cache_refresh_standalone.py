@@ -116,8 +116,8 @@ MSSQL_CONFIG = {
 }
 
 # API Configuration - Customer API
-DEFAULT_CUSTOMER_API_URL = "http://192.192.0.37:8280/customer/1.0.0"
-DEFAULT_CUSTOMER_API_KEY = "eyJ4NXQjUzI1NiI6Ik16QXpNVEZqT0RRMU1ETmpPVFUxWkRBNE5HUTVNRGt6WXpFM01XSTRNbVJsWkdVM1l6WmpZams0WkdSa00yUmhNbUl3TWpBeFl6SmxNR0pqTmpkbU53PT0iLCJraWQiOiJnYXRld2F5X2NlcnRpZmljYXRlX2FsaWFzIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ==.eyJzdWIiOiJkZXZVc2VyQGNhcmJvbi5zdXBlciIsImFwcGxpY2F0aW9uIjp7ImlkIjo2OSwidXVpZCI6ImNlODcxN2I0LTUwOTQtNDBlMy1hNzdjLWY2M2UyNWQwNWNjNSJ9LCJpc3MiOiJodHRwczpcL1wvbG9jYWxob3N0Ojk0NDNcL29hdXRoMlwvdG9rZW4iLCJrZXl0eXBlIjoiUFJPRFVDVElPTiIsInRva2VuX3R5cGUiOiJhcGlLZXkiLCJpYXQiOjE3NjkxNzg2NDgsImp0aSI6IjU1NDBiNGQyLTA0MjktNGUxMS05ZTgyLWI5M2RmNzRkNDk4YyJ9.NgYg91ZJDaGvi0T7JhNjgBmArzpkO9raqweOCI8jrDpNMa8RwvTcdA6GFIOS7H8RFt0ozXm57LqakYRkWWDmkbuVlF5wjwNPpnMOsYQLYRBjKr8bD-7jP35AiGBoHINWT8obauMmjbiaZc1W8_KrXuQYosulxTFLZUt6ytD6vLQ0vLqDHY7tJo3HHcB21amxo8l0GnqcmStTkWixwwpxFcNHdI6dof2pq6By5MuDeC2KqXSX4Uk8MNwUnT0GZTwveEDWLKqr3Nvl8HyO1PjMJ43hUqY9OkS68XMY8PwDxApB_O92vZgK4p1MKb_xdDW-Mr9e2BcdlJzxBsJGIRbifA=="
+DEFAULT_CUSTOMER_API_URL = "http://192.192.0.37:8280/customer-silver/1.0.0"
+DEFAULT_CUSTOMER_API_KEY = "eyJ4NXQjUzI1NiI6Ik16QXpNVEZqT0RRMU1ETmpPVFUxWkRBNE5HUTVNRGt6WXpFM01XSTRNbVJsWkdVM1l6WmpZams0WkdSa00yUmhNbUl3TWpBeFl6SmxNR0pqTmpkbU53PT0iLCJraWQiOiJnYXRld2F5X2NlcnRpZmljYXRlX2FsaWFzIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ==.eyJzdWIiOiJhZG1pbkBjYXJib24uc3VwZXIiLCJhcHBsaWNhdGlvbiI6eyJpZCI6MzQsInV1aWQiOiIzNTU5OGQ4NS1jM2VlLTQ3ODktOGViMC03MGM5YzEwNGJiMmYifSwiaXNzIjoiaHR0cHM6XC9cL2xvY2FsaG9zdDo5NDQzXC9vYXV0aDJcL3Rva2VuIiwia2V5dHlwZSI6IlBST0RVQ1RJT04iLCJ0b2tlbl90eXBlIjoiYXBpS2V5IiwiaWF0IjoxNzc0MjMyOTYyLCJqdGkiOiJkNTlhYTdiZC1hODNkLTQyMzItYTY3Mi0yMzQ2ODZhNWUwMDUifQ==.am4fKoaQhW-n1NMg2Rr29MyO4NjbOw3R1_M7RGQnOtgWt-ZMuC3pKXuVWgYCGVYngh2OiAXeVwFQ9GC4rToy_zdq0bXQ3kjey1_QSYi6H-PLl2DYRpxhaYRLqQF8DlIAHtFAGAa_PWTgqh2y2DoI_MUc6UwEcHOnYV59_y1BXWaeghyRa_Ziyaq-0HWwGoKZCJPuTlitXrdGMOara6noi2rGLn5bmI_xI9g-KGIEf47dWDLfubv-zfZPWZlnsAAjxSNSeOXrGkehvnOTJm-CuO84PGa6ID867arQb775mMtAEu4ci3K7Yj_1kUi67lz3rDLZSjHR9M_9pe3Bthqukg=="
 
 # API Configuration - Invoice API
 DEFAULT_INVOICE_API_URL = "http://192.192.0.37:8280/invoice-sp681/1.0.0"
@@ -227,6 +227,8 @@ def load_all_customers_from_d365() -> List[Dict]:
     page = 1
     
     logger.info("📥 Loading customers from D365 API...")
+    logger.info(f"   API URL: {customer_api_url}")
+    logger.info(f"   API Key: {customer_api_key[:50]}..." if len(customer_api_key) > 50 else f"   API Key: {customer_api_key}")
     
     while True:
         payload = {"page": page, "size": API_PAGE_SIZE}
@@ -258,6 +260,8 @@ def load_all_customers_from_d365() -> List[Dict]:
             
         except Exception as e:
             logger.error(f"  ❌ Error on page={page}: {e}")
+            logger.error(f"     Response Status: {resp.status_code if 'resp' in locals() else 'N/A'}")
+            logger.error(f"     Response Body: {resp.text if 'resp' in locals() else 'N/A'}")
             break
     
     logger.info(f"📊 Total customers loaded: {len(rows)}")
