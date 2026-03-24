@@ -119,10 +119,6 @@ MSSQL_CONFIG = {
 DEFAULT_CUSTOMER_API_URL = "http://192.192.0.37:8280/customer-silver/1.0.0"
 DEFAULT_CUSTOMER_API_KEY = "eyJ4NXQjUzI1NiI6Ik16QXpNVEZqT0RRMU1ETmpPVFUxWkRBNE5HUTVNRGt6WXpFM01XSTRNbVJsWkdVM1l6WmpZams0WkdSa00yUmhNbUl3TWpBeFl6SmxNR0pqTmpkbU53PT0iLCJraWQiOiJnYXRld2F5X2NlcnRpZmljYXRlX2FsaWFzIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ==.eyJzdWIiOiJhZG1pbkBjYXJib24uc3VwZXIiLCJhcHBsaWNhdGlvbiI6eyJpZCI6MzQsInV1aWQiOiIzNTU5OGQ4NS1jM2VlLTQ3ODktOGViMC03MGM5YzEwNGJiMmYifSwiaXNzIjoiaHR0cHM6XC9cL2xvY2FsaG9zdDo5NDQzXC9vYXV0aDJcL3Rva2VuIiwia2V5dHlwZSI6IlBST0RVQ1RJT04iLCJ0b2tlbl90eXBlIjoiYXBpS2V5IiwiaWF0IjoxNzc0MjMyOTYyLCJqdGkiOiJkNTlhYTdiZC1hODNkLTQyMzItYTY3Mi0yMzQ2ODZhNWUwMDUifQ==.am4fKoaQhW-n1NMg2Rr29MyO4NjbOw3R1_M7RGQnOtgWt-ZMuC3pKXuVWgYCGVYngh2OiAXeVwFQ9GC4rToy_zdq0bXQ3kjey1_QSYi6H-PLl2DYRpxhaYRLqQF8DlIAHtFAGAa_PWTgqh2y2DoI_MUc6UwEcHOnYV59_y1BXWaeghyRa_Ziyaq-0HWwGoKZCJPuTlitXrdGMOara6noi2rGLn5bmI_xI9g-KGIEf47dWDLfubv-zfZPWZlnsAAjxSNSeOXrGkehvnOTJm-CuO84PGa6ID867arQb775mMtAEu4ci3K7Yj_1kUi67lz3rDLZSjHR9M_9pe3Bthqukg=="
 
-# API Configuration - Invoice API
-DEFAULT_INVOICE_API_URL = "http://192.192.0.37:8280/invoice-sp681/1.0.0"
-DEFAULT_INVOICE_API_KEY = "eyJ4NXQjUzI1NiI6Ik16QXpNVEZqT0RRMU1ETmpPVFUxWkRBNE5HUTVNRGt6WXpFM01XSTRNbVJsWkdVM1l6WmpZams0WkdSa00yUmhNbUl3TWpBeFl6SmxNR0pqTmpkbU53PT0iLCJraWQiOiJnYXRld2F5X2NlcnRpZmljYXRlX2FsaWFzIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ==.eyJzdWIiOiJkZXZVc2VyQGNhcmJvbi5zdXBlciIsImFwcGxpY2F0aW9uIjp7ImlkIjo2OSwidXVpZCI6ImNlODcxN2I0LTUwOTQtNDBlMy1hNzdjLWY2M2UyNWQwNWNjNSJ9LCJpc3MiOiJodHRwczpcL1wvbG9jYWxob3N0Ojk0NDNcL29hdXRoMlwvdG9rZW4iLCJrZXl0eXBlIjoiUFJPRFVDVElPTiIsInRva2VuX3R5cGUiOiJhcGlLZXkiLCJpYXQiOjE3NjkxNzcyMDIsImp0aSI6IjYyZjhlNWEzLWUxYjktNDYwMS1iMDk0LWIwYjNhM2I2YTU1YyJ9.gNjVXzh-q9ITNMybUmrdL8Vuvptxvm3zLUKX5DXqK98qzhfSmP2dwWGteviBQLGOOlmYws0zoqf0DLzlswcT08gYhQIzXNPHTMek47w127DWHdp97lcBFNEGDBlRVxuzRq_Y9_gkwugNI7vDhu41SE7nj0tEy15-iDmGH8RNrUZEp_tML8nCjTpBs0jPcar7dIbJxyP94O63pjdSN2GXW6TTMOCRlKUsMO5EiAjJKCzHFgvFabmFZNrk12jvmLXyh7QnqXCQF1o3UNmKS7--GS3qie2mpHWyaQxP1Qa6kNWdPbHlzIp27eA208Az6XAlq2s6iaXLdcvAfZKPWcbRGQ=="
-
 # Job Configuration
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "100"))
 API_PAGE_SIZE = int(os.getenv("API_PAGE_SIZE", "500"))
@@ -269,59 +265,50 @@ def load_all_customers_from_d365() -> List[Dict]:
 
 
 def load_invoices_for_customer(customer_code: str, calculation_date: date) -> List[Dict]:
-    """Load invoices for specific customer"""
-    invoice_api_url = os.getenv("INVOICE_API_URL", "").strip() or DEFAULT_INVOICE_API_URL
-    invoice_api_key = os.getenv("INVOICE_API_KEY", "").strip() or DEFAULT_INVOICE_API_KEY
-    
-    headers = {
-        "apikey": invoice_api_key,
-        "Content-Type": "application/json",
-    }
-    
-    rows = []
-    page = 1
-    max_page = 10
-    
-    date_to = calculation_date.isoformat()
-    date_from = (calculation_date - timedelta(days=180)).isoformat()
-    
-    while True:
-        payload = {
-            "page": page,
-            "size": API_PAGE_SIZE,
-            "customer_code": {"$eq": customer_code},
-            "Posting Date": {"$gte": date_from, "$lte": date_to},
-        }
+    """Load invoices for specific customer from MSSQL database"""
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
         
-        try:
-            resp = requests.post(
-                invoice_api_url,
-                json=payload,
-                headers=headers,
-                timeout=API_TIMEOUT,
-            )
-            resp.raise_for_status()
-            
-            data = resp.json()
-            items = data.get("data") or []
-            
-            if not items:
-                break
-            
-            rows.extend(items)
-            
-            if len(items) < API_PAGE_SIZE:
-                break
-            
-            page += 1
-            if page > max_page:
-                break
-                
-        except Exception as e:
-            logger.warning(f"  ⚠️ Failed to load invoices for {customer_code}: {e}")
-            break
-    
-    return rows
+        date_to = calculation_date.isoformat()
+        date_from = (calculation_date - timedelta(days=180)).isoformat()
+        
+        logger.debug(f"  Loading invoices for {customer_code} from {date_from} to {date_to}")
+        
+        # Query invoices from MSSQL
+        query = """
+            SELECT 
+                [Document_No],
+                [customer_code],
+                [Posting_Date],
+                [sku],
+                [Line_Amount_Include_VAT],
+                [Quantity]
+            FROM Invoice
+            WHERE [customer_code] = ?
+            AND [Posting_Date] >= ?
+            AND [Posting_Date] <= ?
+            ORDER BY [Posting_Date] DESC
+        """
+        
+        cursor.execute(query, (customer_code, date_from, date_to))
+        rows = cursor.fetchall()
+        
+        # Convert to list of dicts
+        columns = [desc[0] for desc in cursor.description]
+        invoices = []
+        for row in rows:
+            invoices.append(dict(zip(columns, row)))
+        
+        cursor.close()
+        conn.close()
+        
+        logger.debug(f"  Loaded {len(invoices)} invoices for {customer_code}")
+        return invoices
+        
+    except Exception as e:
+        logger.warning(f"  ⚠️ Failed to load invoices for {customer_code} from MSSQL: {e}")
+        return []
 
 
 def calculate_analytics(invoices: List[Dict], calculation_date: date) -> Dict[str, float]:
@@ -340,16 +327,17 @@ def calculate_analytics(invoices: List[Dict], calculation_date: date) -> Dict[st
     
     inv = pd.DataFrame(invoices)
     
-    if "sku" in inv.columns and "No." not in inv.columns:
+    # Normalize column names for sku
+    if "sku" in inv.columns:
         inv["No."] = inv["sku"]
     
     # Convert dates and remove timezone
-    inv["Posting Date"] = pd.to_datetime(inv["Posting Date"], errors="coerce", utc=True).dt.tz_localize(None)
+    inv["Posting_Date"] = pd.to_datetime(inv["Posting_Date"], errors="coerce", utc=True).dt.tz_localize(None)
     
     # Filter by date range
     cutoff = calculation_date - timedelta(days=180)
     cutoff_timestamp = pd.Timestamp(cutoff)
-    inv6 = inv[inv["Posting Date"] >= cutoff_timestamp]
+    inv6 = inv[inv["Posting_Date"] >= cutoff_timestamp]
     
     if inv6.empty:
         return {
@@ -363,17 +351,18 @@ def calculate_analytics(invoices: List[Dict], calculation_date: date) -> Dict[st
             "sales_e_cust": 0.0,
         }
     
-    # Handle missing amount column
+    # Handle missing amount column - try multiple column names
     amount_col = None
-    for col_name in ["Line_Amount_Include_VAT", "Amount Including VAT", "Amount", "Total Amount"]:
+    for col_name in ["Line_Amount_Include_VAT", "Line Amount Including VAT", "Amount Including VAT", "Amount", "Total Amount"]:
         if col_name in inv6.columns:
             amount_col = col_name
             break
     
     if not amount_col:
+        logger.warning(f"  ⚠️ No amount column found. Available columns: {list(inv6.columns)}")
         return {
             "accum_6m": 0.0,
-            "frequency": int(inv6["Document No."].nunique()) if "Document No." in inv6.columns else 0,
+            "frequency": int(inv6["Document_No"].nunique()) if "Document_No" in inv6.columns else 0,
             "sales_g_cust": 0.0,
             "sales_a_cust": 0.0,
             "sales_s_cust": 0.0,
@@ -383,7 +372,7 @@ def calculate_analytics(invoices: List[Dict], calculation_date: date) -> Dict[st
         }
     
     accum_6m = float(inv6[amount_col].fillna(0).sum())
-    frequency = int(inv6["Document No."].nunique()) if "Document No." in inv6.columns else 0
+    frequency = int(inv6["Document_No"].nunique()) if "Document_No" in inv6.columns else 0
     
     inv6["group"] = inv6["No."].apply(classify_group) if "No." in inv6.columns else "U"
     grp = inv6.groupby("group")[amount_col].sum().to_dict()

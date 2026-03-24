@@ -40,6 +40,10 @@ class SpecialPriceRequestCreate(BaseModel):
     valid_to: str
 
 
+class RejectionRequest(BaseModel):
+    reason: str
+
+
 # === HELPER FUNCTIONS ===
 
 def extract_product_categories(items: List[SpecialPriceItem]) -> set:
@@ -836,6 +840,126 @@ async def approve_request(request_id: int, employee_info: dict = Depends(get_emp
 
 
 @router.post("/{request_id}/reject")
-async def reject_request(request_id: int, employee_info: dict = Depends(get_employee_info)):
-    """Reject - placeholder"""
-    raise HTTPException(status_code=501, detail="Feature under development")
+async def reject_request(request_id: int, rejection_data: RejectionRequest, employee_info: dict = Depends(get_employee_info)):
+    """Reject a special price request"""
+    try:
+        current_employee_id = employee_info.get('employee_id')
+        current_role = employee_info.get('role', 'Sales')
+        current_name = employee_info.get('name', 'Unknown')
+        current_branch = employee_info.get('branch_code')
+        rejection_reason = rejection_data.reason.strip()
+        
+        logger.info(f"Rejecting request #{request_id}")
+        logger.info(f"  Rejector: {current_employee_id} ({current_name})")
+        logger.info(f"  Role: {current_role}")
+        logger.info(f"  Branch: {current_branch}")
+        logger.info(f"  Reason: {rejection_reason}")
+        
+        if not rejection_reason:
+            raise HTTPException(status_code=400, detail="Rejection reason is required")
+        
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        # 1. ดึงข้อมูลคำขอ
+        cursor.execute("""
+            SELECT * FROM special_price_requests
+            WHERE id = ?
+        """, (request_id,))
+        
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Request not found")
+        
+        columns = [column[0] for column in cursor.description]
+        request = dict(zip(columns, row))
+        
+        current_status = request.get('status')
+        approver_employee_id = request.get('approver_employee_id')
+        
+        logger.info(f"  Current status: {current_status}")
+        logger.info(f"  Approver employee ID: {approver_employee_id}")
+        
+        # 2. ตรวจสอบสิทธิ์ (ต้องเป็นผู้อนุมัติที่ได้รับมอบหมาย)
+        if current_role == 'ZM':
+            # ZM ต้องเช็คว่าเป็น ZM ของสาขานี้
+            expected_position = f"ZM_{current_branch}"
+            if current_status not in ['PENDING_ZM', 'SDM_APPROVAL']:
+                raise HTTPException(status_code=403, detail="This request is not pending ZM approval")
+            if approver_employee_id != expected_position:
+                raise HTTPException(status_code=403, detail=f"You are not the assigned approver (expected {approver_employee_id})")
+        
+        elif current_role == 'RM':
+            if current_status != 'PENDING_RM':
+                raise HTTPException(status_code=403, detail="This request is not pending RM approval")
+            
+            # RM ต้องเช็คว่าคำขอมาจากสาขาในภูมิภาคที่ RM ดูแล
+            if not approver_employee_id or not approver_employee_id.startswith('RM_'):
+                raise HTTPException(status_code=400, detail="Invalid approver employee ID for RM")
+            
+            request_region = approver_employee_id.split('_')[1]  # "RM_BE" → "BE"
+            rm_region = employee_info.get('region')  # Region ของ RM ที่ login
+            
+            logger.info(f"  Request region: {request_region}")
+            logger.info(f"  RM region: {rm_region}")
+            
+            if request_region != rm_region:
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"You are RM of region {rm_region}, but this request is from region {request_region}"
+                )
+        
+        elif current_role == 'SDM':
+            if current_status != 'PENDING_SDM':
+                raise HTTPException(status_code=403, detail="This request is not pending SDM approval")
+        
+        elif current_role == 'PM' or current_role.startswith('PM_'):
+            # PM approval (ไม่ต้อง check branch - PM ดูแลทั้งบริษัท)
+            if current_status != 'PENDING_PM':
+                raise HTTPException(status_code=403, detail="This request is not pending PM approval")
+        
+        else:
+            raise HTTPException(status_code=403, detail="You do not have permission to reject requests")
+        
+        # 3. อัปเดตฐานข้อมูล - เปลี่ยน status เป็น REJECTED
+        update_query = """
+            UPDATE special_price_requests
+            SET status = 'REJECTED',
+                approver_employee_id = NULL,
+                rejection_reason = ?,
+                approved_by = ?,
+                approved_at = GETDATE(),
+                updated_at = GETDATE()
+            WHERE id = ?
+        """
+        
+        cursor.execute(update_query, (
+            rejection_reason,
+            current_employee_id,
+            request_id
+        ))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        logger.info(f"✅ Request #{request_id} rejected successfully")
+        logger.info(f"   Rejected by: {current_employee_id} ({current_name})")
+        logger.info(f"   Reason: {rejection_reason}")
+        
+        return {
+            "success": True,
+            "message": "Request rejected successfully",
+            "status": "REJECTED",
+            "approved_by": current_employee_id,
+            "rejection_reason": rejection_reason
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rejecting request: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reject request: {str(e)}"
+        )

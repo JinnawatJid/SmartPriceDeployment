@@ -134,90 +134,57 @@ export default function SpecialPriceRequestModal({ open, onClose, onConfirm, ite
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">กำลังโหลดข้อมูลผู้อนุมัติ...</p>
             </div>
-          ) : approverInfo ? (
+          ) : approverInfo && Object.keys(approverInfo).length > 0 ? (
             <div className="space-y-3">
-              {/* Zone Manager Info (for all approvable items) */}
-              {zmOnlyItems.length > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <User className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-semibold text-blue-900">
-                        ผู้อนุมัติ: Zone Manager
-                      </p>
-                      <div className="mt-2 space-y-1 text-sm">
+              {/* Current User Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <User className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-blue-900">
+                      ผู้ส่งคำขอ: {approverInfo.name || 'ไม่ระบุ'}
+                    </p>
+                    <div className="mt-2 space-y-1 text-sm">
+                      {approverInfo.employee_id && (
                         <div className="flex items-center gap-2">
                           <span className="text-blue-700 font-medium">รหัสพนักงาน:</span>
                           <span className="text-blue-900 font-mono bg-blue-100 px-2 py-0.5 rounded">
-                            {approverInfo.zone_manager.employee_id}
+                            {approverInfo.employee_id}
                           </span>
                         </div>
+                      )}
+                      {approverInfo.role && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-700 font-medium">ตำแหน่ง:</span>
+                          <span className="text-blue-900">{approverInfo.role}</span>
+                        </div>
+                      )}
+                      {approverInfo.branch_code && (
                         <div className="flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-blue-600" />
-                          <span className="text-blue-700">สาขา: {approverInfo.zone_manager.branch}</span>
+                          <span className="text-blue-700">สาขา: {approverInfo.branch_code}</span>
                         </div>
-                      </div>
-                      <p className="text-xs text-blue-600 mt-2">
-                        จำนวน {zmOnlyItems.length} รายการ (อนุมัติโดย ZM เท่านั้น)
-                      </p>
+                      )}
                     </div>
+                    <p className="text-xs text-blue-600 mt-2">
+                      {approverInfo.can_approve 
+                        ? '✓ สามารถอนุมัติคำขอได้' 
+                        : 'ไม่สามารถอนุมัติคำขอได้'}
+                    </p>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Regional Manager Info (for multi-level items) */}
-              {zmThenRmItems.length > 0 && (
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <User className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-semibold text-orange-900">
-                        ผู้อนุมัติ: Zone Manager → Regional Manager
-                      </p>
-                      <div className="mt-2 space-y-2">
-                        {/* ZM Info */}
-                        <div className="bg-orange-100 rounded p-2">
-                          <p className="text-xs font-semibold text-orange-800 mb-1">1. Zone Manager</p>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex items-center gap-2">
-                              <span className="text-orange-700 font-medium">รหัส:</span>
-                              <span className="text-orange-900 font-mono bg-white px-2 py-0.5 rounded text-xs">
-                                {approverInfo.zone_manager.employee_id}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="w-3 h-3 text-orange-600" />
-                              <span className="text-orange-700 text-xs">สาขา: {approverInfo.zone_manager.branch}</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* RM Info */}
-                        {approverInfo.regional_manager && (
-                          <div className="bg-orange-100 rounded p-2">
-                            <p className="text-xs font-semibold text-orange-800 mb-1">2. Regional Manager</p>
-                            <div className="space-y-1 text-sm">
-                              <div className="flex items-center gap-2">
-                                <span className="text-orange-700 font-medium">รหัส:</span>
-                                <span className="text-orange-900 font-mono bg-white px-2 py-0.5 rounded text-xs">
-                                  {approverInfo.regional_manager.employee_id}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Building2 className="w-3 h-3 text-orange-600" />
-                                <span className="text-orange-700 text-xs">ภูมิภาค: {approverInfo.regional_manager.region}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs text-orange-600 mt-2">
-                        จำนวน {zmThenRmItems.length} รายการ (ต้องอนุมัติ 2 ระดับ)
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Approval Flow Info */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <p className="font-semibold text-orange-900 mb-2">ขั้นตอนการอนุมัติ:</p>
+                <ul className="text-sm text-orange-800 space-y-1 ml-4 list-disc">
+                  <li>ขั้นที่ 1: Zone Manager (ZM) อนุมัติ</li>
+                  <li>ขั้นที่ 2: Regional Manager (RM) อนุมัติ (ถ้าจำเป็น)</li>
+                  <li>ขั้นที่ 3: Sales Development Manager (SDM) อนุมัติ (ถ้าจำเป็น)</li>
+                  <li>ขั้นที่ 4: Product Manager (PM) อนุมัติ (ถ้าราคา &lt; SDM)</li>
+                </ul>
+              </div>
             </div>
           ) : null}
 

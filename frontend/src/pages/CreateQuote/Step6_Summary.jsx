@@ -17,6 +17,7 @@ import OrderHistoryCard from "../../components/wizard/OrderHistoryCard.jsx";
 import DynamicsImportConfirmModal from "../../components/wizard/DynamicsImportConfirmModal.jsx";
 import SpecialPriceRequestModal from "../../components/wizard/SpecialPriceRequestModal.jsx";
 import PriceEditReasonModal from "../../components/wizard/PriceEditReasonModal.jsx";
+import CustomerInfoTab from "../../components/wizard/CustomerInfoTab.jsx";
 
 import ProductList from "../../components/products/ProductList.jsx";
 import ProductDetail from "../../components/products/ProductDetail.jsx";
@@ -2835,8 +2836,13 @@ function Step6_Summary({ state, dispatch }) {
         </div>
       )}
 
-      {/* TAB: CUSTOMER (ถ้าจะทำเพิ่มทีหลังได้) */}
-      {activeTab === "customer" && <div className="border-t-4 border-gray-200 pt-4 "></div>}
+      {/* TAB: CUSTOMER */}
+      {activeTab === "customer" && (
+        <CustomerInfoTab 
+          customer={state.customer} 
+          customerCode={customerCode}
+        />
+      )}
 
       {/* Bottom nav */}
       <div className="mt-8 flex justify-between">
