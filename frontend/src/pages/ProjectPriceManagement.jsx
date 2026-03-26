@@ -79,19 +79,26 @@ const ProjectPriceManagement = () => {
     loadBranches();
   }, [employee?.id]);
 
-  // โหลด filter options เมื่อ categories เปลี่ยน
+  // ⭐ Load filter options when categories change
   useEffect(() => {
     if (filterCriteria.categories.length > 0) {
       loadFilterOptions();
     }
   }, [filterCriteria.categories]);
 
-  // โหลด matched SKUs เมื่อ filter เปลี่ยน
+  // ⭐ Reload matched SKUs when any filter changes
   useEffect(() => {
     if (filterCriteria.categories.length > 0) {
       loadMatchedSkus();
     }
-  }, [filterCriteria]);
+  }, [filterCriteria.brands, filterCriteria.groups, filterCriteria.subGroups, filterCriteria.colors, filterCriteria.thicknesses]);
+
+  // ⭐ Reload filter options when other filters change (to show only available options)
+  useEffect(() => {
+    if (filterCriteria.categories.length > 0) {
+      loadFilterOptions();
+    }
+  }, [filterCriteria.brands, filterCriteria.groups, filterCriteria.subGroups, filterCriteria.colors, filterCriteria.thicknesses]);
 
   const loadProjects = async () => {
     try {
@@ -174,11 +181,10 @@ const ProjectPriceManagement = () => {
     }
   };
 
+  // ⭐ Load filter options dynamically based on current filters
   const loadFilterOptions = async () => {
     try {
       const selectedCategories = filterCriteria.categories || [];
-      
-      console.log('🔍 [LOAD FILTER] Selected categories:', selectedCategories);
       
       if (selectedCategories.length === 0) {
         setFilterOptions({
@@ -212,29 +218,38 @@ const ProjectPriceManagement = () => {
       await Promise.all(
         selectedCategories.map(async (cat) => {
           const categoryCode = categoryMap[cat];
-          console.log(`🔍 [LOAD FILTER] Processing category: ${cat} -> ${categoryCode}`);
           
-          if (!categoryCode) {
-            console.log(`⚠️ [LOAD FILTER] Skipping ${cat} (invalid)`);
-            return;
-          }
+          if (!categoryCode) return;
 
           try {
             const url = categoryCode === 'G' 
               ? '/api/glass/filter-options'
               : `/api/items/categories/${categoryCode}/filter-options`;
             
-            console.log(`📡 [LOAD FILTER] Fetching: ${url}`);
+            // ⭐ Build filter params - pass individual values, not arrays
+            const params = {};
+            if (filterCriteria.brands?.length > 0) params.brand = filterCriteria.brands[0];
+            if (filterCriteria.groups?.length > 0) params.group = filterCriteria.groups[0];
+            if (filterCriteria.subGroups?.length > 0) params.subGroup = filterCriteria.subGroups[0];
+            if (filterCriteria.colors?.length > 0) params.color = filterCriteria.colors[0];
+            if (filterCriteria.thicknesses?.length > 0) params.thickness = filterCriteria.thicknesses[0];
             
-            const response = await api.get(url);
+            const response = await api.get(url, { params });
             const data = response.data;
-            
-            console.log(`✅ [LOAD FILTER] Response for ${categoryCode}:`, data);
 
-            // แปลงข้อมูลจาก API format {code, name} เป็น {value, label}
-            if (data.brand || data.brands) {
-              const brandData = data.brand || data.brands;
-              brandData.forEach(b => {
+            // ⭐ Parse filter options from API response
+            // Glass endpoint returns: brands, types, subGroups, colors, thicknesses with {value, label}
+            // Items endpoint returns: brand, group, subGroup, color, thickness with {code, name}
+            
+            if (data.brands) {
+              data.brands.forEach(b => {
+                allOptions.brands.add(JSON.stringify({
+                  value: b.value,
+                  label: b.label
+                }));
+              });
+            } else if (data.brand) {
+              data.brand.forEach(b => {
                 allOptions.brands.add(JSON.stringify({
                   value: b.code,
                   label: b.name
@@ -242,9 +257,15 @@ const ProjectPriceManagement = () => {
               });
             }
             
-            if (data.group || data.types) {
-              const groupData = data.group || data.types;
-              groupData.forEach(g => {
+            if (data.types) {
+              data.types.forEach(g => {
+                allOptions.groups.add(JSON.stringify({
+                  value: g.value,
+                  label: g.label
+                }));
+              });
+            } else if (data.group) {
+              data.group.forEach(g => {
                 allOptions.groups.add(JSON.stringify({
                   value: g.code,
                   label: g.name
@@ -252,9 +273,15 @@ const ProjectPriceManagement = () => {
               });
             }
             
-            if (data.subGroup || data.subGroups) {
-              const subGroupData = data.subGroup || data.subGroups;
-              subGroupData.forEach(s => {
+            if (data.subGroups) {
+              data.subGroups.forEach(s => {
+                allOptions.subGroups.add(JSON.stringify({
+                  value: s.value,
+                  label: s.label
+                }));
+              });
+            } else if (data.subGroup) {
+              data.subGroup.forEach(s => {
                 allOptions.subGroups.add(JSON.stringify({
                   value: s.code,
                   label: s.name
@@ -262,9 +289,15 @@ const ProjectPriceManagement = () => {
               });
             }
             
-            if (data.color || data.colors) {
-              const colorData = data.color || data.colors;
-              colorData.forEach(c => {
+            if (data.colors) {
+              data.colors.forEach(c => {
+                allOptions.colors.add(JSON.stringify({
+                  value: c.value,
+                  label: c.label
+                }));
+              });
+            } else if (data.color) {
+              data.color.forEach(c => {
                 allOptions.colors.add(JSON.stringify({
                   value: c.code,
                   label: c.name
@@ -272,9 +305,15 @@ const ProjectPriceManagement = () => {
               });
             }
             
-            if (data.thickness || data.thicknesses) {
-              const thicknessData = data.thickness || data.thicknesses;
-              thicknessData.forEach(t => {
+            if (data.thicknesses) {
+              data.thicknesses.forEach(t => {
+                allOptions.thicknesses.add(JSON.stringify({
+                  value: t.value,
+                  label: t.label
+                }));
+              });
+            } else if (data.thickness) {
+              data.thickness.forEach(t => {
                 allOptions.thicknesses.add(JSON.stringify({
                   value: t.code,
                   label: t.name
@@ -282,18 +321,10 @@ const ProjectPriceManagement = () => {
               });
             }
           } catch (err) {
-            console.error(`❌ [LOAD FILTER] Error loading filter options for category ${categoryCode}:`, err);
+            console.error(`Error loading filter options for category ${categoryCode}:`, err);
           }
         })
       );
-
-      console.log('📦 [LOAD FILTER] All options collected:', {
-        brands: allOptions.brands.size,
-        groups: allOptions.groups.size,
-        subGroups: allOptions.subGroups.size,
-        colors: allOptions.colors.size,
-        thicknesses: allOptions.thicknesses.size
-      });
 
       const finalOptions = {
         categories: CATEGORY_OPTIONS,
@@ -304,10 +335,9 @@ const ProjectPriceManagement = () => {
         thicknesses: Array.from(allOptions.thicknesses).map(t => JSON.parse(t)).sort((a, b) => a.label.localeCompare(b.label))
       };
       
-      console.log('✅ [LOAD FILTER] Final options:', finalOptions);
       setFilterOptions(finalOptions);
     } catch (error) {
-      console.error('❌ [LOAD FILTER] Error loading filter options:', error);
+      console.error('Error loading filter options:', error);
       setFilterOptions({
         categories: CATEGORY_OPTIONS,
         brands: [],
@@ -319,10 +349,22 @@ const ProjectPriceManagement = () => {
     }
   };
 
+  // ⭐ Load matched SKUs with filters sent to backend
   const loadMatchedSkus = async () => {
     try {
       setLoadingSkus(true);
-      const res = await api.post('/api/promotions/get-skus-by-filter', filterCriteria);
+      
+      // ⭐ Build filter params to send to backend
+      const filterParams = {
+        categories: filterCriteria.categories || [],
+        brands: filterCriteria.brands || [],
+        groups: filterCriteria.groups || [],
+        subGroups: filterCriteria.subGroups || [],
+        colors: filterCriteria.colors || [],
+        thicknesses: filterCriteria.thicknesses || []
+      };
+      
+      const res = await api.post('/api/promotions/get-skus-by-filter', filterParams);
       const skus = res.data?.skus || [];
       setMatchedSkus(skus);
     } catch (err) {
@@ -333,13 +375,7 @@ const ProjectPriceManagement = () => {
     }
   };
 
-  const handleFilterChange = (field, value) => {
-    setFilterCriteria(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
+  // ⭐ Handle filter toggle (for multi-select filters)
   const handleFilterToggle = (field, value) => {
     setFilterCriteria(prev => {
       const current = prev[field] || [];
@@ -350,6 +386,7 @@ const ProjectPriceManagement = () => {
     });
   };
 
+  // ⭐ Handle category toggle
   const handleCategoryToggle = (value) => {
     setFilterCriteria(prev => {
       const current = prev.categories || [];
@@ -358,6 +395,19 @@ const ProjectPriceManagement = () => {
         : [...current, value];
       return { ...prev, categories: newCategories };
     });
+  };
+
+  // ⭐ Clear all filters
+  const clearAllFilters = () => {
+    setFilterCriteria({
+      categories: [],
+      brands: [],
+      groups: [],
+      subGroups: [],
+      colors: [],
+      thicknesses: []
+    });
+    setMatchedSkus([]);
   };
 
   const addItemsFromFilter = () => {
@@ -692,7 +742,7 @@ const ProjectPriceManagement = () => {
                   type="text"
                   value={formData.customer_code}
                   onChange={(e) => {
-                    const code = e.target.value;
+                    const code = e.target.value.toUpperCase();
                     setFormData({...formData, customer_code: code});
                     
                     // Auto-fetch customer name when code is entered
@@ -733,7 +783,7 @@ const ProjectPriceManagement = () => {
                   required
                   value={formData.customer_code}
                   onChange={(e) => {
-                    const code = e.target.value;
+                    const code = e.target.value.toUpperCase();
                     setFormData({...formData, customer_code: code});
                     
                     // Auto-fetch customer name when code is entered
@@ -1194,36 +1244,34 @@ const ProjectPriceManagement = () => {
             </div>
 
             {/* Footer - Fixed */}
-            <div className="flex gap-2 justify-end p-4 border-t flex-shrink-0 bg-gray-50">
+            <div className="flex gap-2 justify-between p-4 border-t flex-shrink-0 bg-gray-50">
               <button
                 type="button"
-                onClick={() => {
-                  setShowFilterModal(false);
-                  setFilterCriteria({
-                    categories: [],
-                    brands: [],
-                    groups: [],
-                    subGroups: [],
-                    colors: [],
-                    thicknesses: []
-                  });
-                  setMatchedSkus([]);
-                  setGlobalPrice('');
-                  setGlobalQuantity('');
-                  setOpenDropdown({});
-                }}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                onClick={clearAllFilters}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm font-medium"
               >
-                ยกเลิก
+                ล้างทั้งหมด
               </button>
-              <button
-                type="button"
-                onClick={addItemsFromFilter}
-                disabled={matchedSkus.length === 0 || !globalPrice || parseFloat(globalPrice) <= 0}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                เพิ่มสินค้า {matchedSkus.length > 0 && `(${matchedSkus.length} รายการ)`}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFilterModal(false);
+                    clearAllFilters();
+                  }}
+                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={addItemsFromFilter}
+                  disabled={matchedSkus.length === 0 || !globalPrice || parseFloat(globalPrice) <= 0}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  เพิ่มสินค้า {matchedSkus.length > 0 && `(${matchedSkus.length} รายการ)`}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1376,17 +1424,20 @@ function MultiSelectDropdown({
 
       {selectedValues.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
-          {selectedLabels.slice(0, 5).map((text, index) => (
-            <span
-              key={`${text}-${index}`}
-              className="bg-red-50 text-red-700 text-xs px-2 py-1 rounded-full"
-            >
-              {text}
-            </span>
-          ))}
-          {selectedLabels.length > 5 && (
+          {selectedValues.slice(0, 5).map((value) => {
+            const label = options.find(opt => opt.value === value)?.label || value;
+            return (
+              <span
+                key={value}
+                className="bg-red-50 text-red-700 text-xs px-2 py-1 rounded-full"
+              >
+                {label}
+              </span>
+            );
+          })}
+          {selectedValues.length > 5 && (
             <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
-              +{selectedLabels.length - 5} อื่นๆ
+              +{selectedValues.length - 5} อื่นๆ
             </span>
           )}
         </div>
