@@ -24,7 +24,7 @@ const createDefaultForm = () => ({
   branches: ['ALL'],
   start_date: '',
   end_date: '',
-  selection_type: 'items', // items | filter | customer
+  selection_type: 'items', // items | filter (removed customer)
   promotion_text: '',
   items: [],
   filter_criteria: {
@@ -35,8 +35,15 @@ const createDefaultForm = () => ({
     colors: [],
     thicknesses: []
   },
-  customer_codes: []
+  customer_types: [] // ⭐ ประเภทลูกค้าที่ใช้โปรโมชั่นได้ (R, W, I, P) - ใช้กับทั้ง items และ filter
 });
+
+const CUSTOMER_TYPE_OPTIONS = [
+  { value: 'R', label: 'R - ร้านค้าปลีก' },
+  { value: 'W', label: 'W - ร้านค้าส่ง' },
+  { value: 'I', label: 'I - ผู้รับเหมา' },
+  { value: 'P', label: 'P - โครงการ' }
+];
 
 const emptyNewItem = { sku: '', promotion_text: '' };
 
@@ -48,7 +55,6 @@ const PromotionManagement = ({ standalone = false }) => {
 
   const [formData, setFormData] = useState(createDefaultForm());
   const [newItem, setNewItem] = useState(emptyNewItem);
-  const [newCustomerCode, setNewCustomerCode] = useState('');
 
   const [filterOptions, setFilterOptions] = useState({
     categories: CATEGORY_OPTIONS,
@@ -286,7 +292,6 @@ const PromotionManagement = ({ standalone = false }) => {
   const resetForm = () => {
     setFormData(createDefaultForm());
     setNewItem(emptyNewItem);
-    setNewCustomerCode('');
     setOpenDropdown({});
   };
 
@@ -421,26 +426,16 @@ const PromotionManagement = ({ standalone = false }) => {
     }
   }, [formData.filter_criteria, formData.selection_type]);
 
-  const handleAddCustomerCode = () => {
-    const code = newCustomerCode.trim();
-    if (!code) return;
-
+  const handleToggleCustomerType = (type) => {
     setFormData((prev) => {
-      if (prev.customer_codes.includes(code)) return prev;
+      const isSelected = prev.customer_types.includes(type);
       return {
         ...prev,
-        customer_codes: [...prev.customer_codes, code]
+        customer_types: isSelected
+          ? prev.customer_types.filter((t) => t !== type)
+          : [...prev.customer_types, type]
       };
     });
-
-    setNewCustomerCode('');
-  };
-
-  const handleRemoveCustomerCode = (code) => {
-    setFormData((prev) => ({
-      ...prev,
-      customer_codes: prev.customer_codes.filter((c) => c !== code)
-    }));
   };
 
   const validateForm = () => {
@@ -480,10 +475,7 @@ const PromotionManagement = ({ standalone = false }) => {
       }
     }
 
-    if (formData.selection_type === 'customer' && formData.customer_codes.length === 0) {
-      alert('กรุณาเพิ่มรหัสลูกค้าอย่างน้อย 1 รายการ');
-      return false;
-    }
+    // ⭐ ไม่บังคับเลือกประเภทลูกค้า (ถ้าไม่เลือก = ทุกประเภท)
 
     return true;
   };
@@ -498,7 +490,7 @@ const PromotionManagement = ({ standalone = false }) => {
       promotion_text: formData.promotion_text || null,
       items: [],
       filter_criteria: null,
-      customer_codes: formData.customer_codes.length > 0 ? formData.customer_codes : []
+      gen_bus: formData.customer_types.length > 0 ? formData.customer_types.join(',') : null // ⭐ บันทึกเป็น comma-separated string
     };
 
     if (formData.selection_type === 'items') {
@@ -562,10 +554,15 @@ const PromotionManagement = ({ standalone = false }) => {
 
   const renderSelectionSummary = (promo) => {
     const type = promo.selection_type || promo.SelectionType || 'items';
+    
+    // ⭐ แสดงประเภทลูกค้า (ถ้ามี)
+    const genBus = promo.gen_bus || promo.GenBus || '';
+    const types = genBus ? genBus.split(',').map(t => t.trim()) : [];
+    const customerTypeText = types.length > 0 ? ` | ลูกค้า: ${types.join(', ')}` : ' | ลูกค้า: ทุกประเภท';
 
     if (type === 'items') {
       const items = promo.items || [];
-      return `SKU ${items.length} รายการ`;
+      return `SKU ${items.length} รายการ${customerTypeText}`;
     }
 
     if (type === 'filter') {
@@ -586,12 +583,7 @@ const PromotionManagement = ({ standalone = false }) => {
         (fc.colors?.length || 0) +
         (fc.thicknesses?.length || 0);
 
-      return `Filter ${count} เงื่อนไข`;
-    }
-
-    if (type === 'customer') {
-      const customers = promo.customers || promo.customer_codes || [];
-      return `ลูกค้า ${customers.length} ราย`;
+      return `Filter ${count} เงื่อนไข${customerTypeText}`;
     }
 
     return '-';
@@ -601,12 +593,10 @@ const PromotionManagement = ({ standalone = false }) => {
     if (loading) return true;
     if (formData.selection_type === 'items') return formData.items.length === 0;
     if (formData.selection_type === 'filter') return matchedSkus.length === 0;
-    if (formData.selection_type === 'customer') return formData.customer_codes.length === 0;
     return false;
   }, [
     formData.selection_type,
     formData.items.length,
-    formData.customer_codes.length,
     matchedSkus.length,
     loading
   ]);
@@ -824,8 +814,8 @@ const PromotionManagement = ({ standalone = false }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">รูปแบบการเลือกโปรโมชั่น</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <label className="block text-sm font-medium mb-2">รูปแบบการเลือกสินค้า</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <label
                       className={`border rounded-xl p-4 cursor-pointer ${
                         formData.selection_type === 'items'
@@ -871,29 +861,6 @@ const PromotionManagement = ({ standalone = false }) => {
                         Category / Brand / Group / SubGroup / Color / Thickness
                       </div>
                     </label>
-
-                    <label
-                      className={`border rounded-xl p-4 cursor-pointer ${
-                        formData.selection_type === 'customer'
-                          ? 'border-red-500 bg-red-50'
-                          : 'border-gray-200'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="selection_type"
-                        value="customer"
-                        checked={formData.selection_type === 'customer'}
-                        onChange={(e) =>
-                          setFormData({ ...formData, selection_type: e.target.value })
-                        }
-                        className="hidden"
-                      />
-                      <div className="font-semibold">เลือกลูกค้า</div>
-                      <div className="text-sm text-gray-500 mt-1">
-                        ระบุลูกค้าที่สามารถใช้โปรโมชั่นนี้ได้
-                      </div>
-                    </label>
                   </div>
                 </div>
 
@@ -915,6 +882,40 @@ const PromotionManagement = ({ standalone = false }) => {
                 {formData.selection_type === 'items' && (
                   <div className="border-t pt-4">
                     <h3 className="font-semibold mb-3">เพิ่มสินค้าแบบราย SKU</h3>
+
+                    {/* ⭐ เลือกประเภทลูกค้า */}
+                    <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                      <label className="block text-sm font-medium mb-2">
+                        ประเภทลูกค้าที่ใช้โปรโมชั่นได้ (ไม่เลือก = ทุกประเภท)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {CUSTOMER_TYPE_OPTIONS.map((option) => (
+                          <label
+                            key={option.value}
+                            className={`border rounded-lg p-2 cursor-pointer transition-all ${
+                              formData.customer_types.includes(option.value)
+                                ? 'border-blue-500 bg-blue-100'
+                                : 'border-gray-300 bg-white hover:border-gray-400'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={formData.customer_types.includes(option.value)}
+                                onChange={() => handleToggleCustomerType(option.value)}
+                                className="w-4 h-4"
+                              />
+                              <span className="text-sm font-medium">{option.label}</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      {formData.customer_types.length > 0 && (
+                        <p className="text-xs text-blue-700 mt-2">
+                          เลือกแล้ว: {formData.customer_types.join(', ')}
+                        </p>
+                      )}
+                    </div>
 
                     <div className="flex gap-2 mb-3 relative">
                       <div className="flex-1 relative">
@@ -1004,6 +1005,40 @@ const PromotionManagement = ({ standalone = false }) => {
                 {formData.selection_type === 'filter' && (
                   <div className="border-t pt-4">
                     <h3 className="font-semibold mb-3">เลือกตามเงื่อนไขสินค้า</h3>
+
+                    {/* ⭐ เลือกประเภทลูกค้า */}
+                    <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                      <label className="block text-sm font-medium mb-2">
+                        ประเภทลูกค้าที่ใช้โปรโมชั่นได้ (ไม่เลือก = ทุกประเภท)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {CUSTOMER_TYPE_OPTIONS.map((option) => (
+                          <label
+                            key={option.value}
+                            className={`border rounded-lg p-2 cursor-pointer transition-all ${
+                              formData.customer_types.includes(option.value)
+                                ? 'border-blue-500 bg-blue-100'
+                                : 'border-gray-300 bg-white hover:border-gray-400'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={formData.customer_types.includes(option.value)}
+                                onChange={() => handleToggleCustomerType(option.value)}
+                                className="w-4 h-4"
+                              />
+                              <span className="text-sm font-medium">{option.label}</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      {formData.customer_types.length > 0 && (
+                        <p className="text-xs text-blue-700 mt-2">
+                          เลือกแล้ว: {formData.customer_types.join(', ')}
+                        </p>
+                      )}
+                    </div>
 
                     <div className="space-y-4">
                       <div>
@@ -1131,46 +1166,7 @@ const PromotionManagement = ({ standalone = false }) => {
                   </div>
                 )}
 
-                {formData.selection_type === 'customer' && (
-                  <div className="border-t pt-4">
-                    <h3 className="font-semibold mb-3">เลือกลูกค้าที่ใช้โปรโมชั่นได้</h3>
 
-                    <div className="flex gap-2 mb-3">
-                      <input
-                        type="text"
-                        placeholder="กรอกรหัสลูกค้า"
-                        value={newCustomerCode}
-                        onChange={(e) => setNewCustomerCode(e.target.value)}
-                        className="flex-1 border rounded-lg px-3 py-2"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddCustomerCode}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {formData.customer_codes.map((code) => (
-                        <div
-                          key={code}
-                          className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full"
-                        >
-                          <span className="text-sm font-medium">{code}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCustomerCode(code)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 <div className="flex gap-2 justify-end pt-4 border-t">
                   <button

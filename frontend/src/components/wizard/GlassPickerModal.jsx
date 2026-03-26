@@ -277,14 +277,22 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
   }, [open]);
 
   // -------------------------
-  // LOAD FILTER OPTIONS
+  // LOAD FILTER OPTIONS (Dynamic - only show available options)
   // -------------------------
   useEffect(() => {
     if (!open) return;
 
     const loadFilterOptions = async () => {
       try {
-        const res = await api.get("/api/glass/filter-options");
+        // ⭐ สร้าง params จาก filter ปัจจุบัน
+        const params = {};
+        if (brandFilter) params.brand = brandFilter;
+        if (typeFilter) params.type = typeFilter;
+        if (subGroupFilter) params.subGroup = subGroupFilter;
+        if (colorFilter) params.color = colorFilter;
+        if (thickFilter) params.thickness = thickFilter;
+
+        const res = await api.get("/api/glass/filter-options", { params });
         setFilterOptions(res.data);
       } catch (err) {
         console.error("Error loading filter options:", err);
@@ -292,7 +300,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
     };
 
     loadFilterOptions();
-  }, [open]);
+  }, [open, brandFilter, typeFilter, subGroupFilter, colorFilter, thickFilter]);
 
   async function handleCalculate() {
     if (!selectedItem) return;
@@ -532,7 +540,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
             value={typeFilter || null}
             options={typeDropdownOptions}
             onChange={(v) => setTypeFilter(v || "")}
-            width={160}
+            width={200}
           />
 
           <CustomDropdown
@@ -540,7 +548,7 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
             value={subGroupFilter || null}
             options={subGroupDropdownOptions}
             onChange={(v) => setSubGroupFilter(v || "")}
-            width={340}
+            width={360}
           />
 
           <CustomDropdown
@@ -556,9 +564,24 @@ export default function GlassPickerModal({ open, onClose, onConfirm }) {
             value={thickFilter || null}
             options={thicknessDropdownOptions}
             onChange={(v) => setThickFilter(v || "")}
-            width={160}
+            width={120}
           />
+
+          
         </div>
+        <button
+            onClick={() => {
+              setBrandFilter("");
+              setTypeFilter("");
+              setSubGroupFilter("");
+              setColorFilter("");
+              setThickFilter("");
+              setSearch("");
+            }}
+            className="px-2 py-2 h-8 mb-2 border rounded-lg hover:bg-gray-100 text-xs font-medium"
+          >
+            Clear All
+          </button>
 
         {/* VARIANT CHECKBOX (เพิ่มใหม่) */}
         <div className="mb-3">

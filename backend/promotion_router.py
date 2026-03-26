@@ -11,6 +11,20 @@ router = APIRouter(prefix="/api/promotions", tags=["promotions"])
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-this")
 JWT_ALG = "HS256"
 
+# ⭐ Helper function to normalize customer type
+def normalize_customer_type(gen_bus: str) -> str:
+    """
+    Normalize customer type. If not in R,W,I,P, treat as R.
+    """
+    valid_types = {'R', 'W', 'I', 'P'}
+    if not gen_bus:
+        return None
+    
+    normalized = gen_bus.strip().upper()
+    if normalized not in valid_types:
+        return 'R'
+    return normalized
+
 def get_current_user_from_token(authorization: str = Header(None)) -> dict:
     """Extract user info from JWT token"""
     if not authorization:
@@ -42,7 +56,8 @@ class PromotionCreate(BaseModel):
     promotion_text: Optional[str] = None
     items: List[PromotionItem]
     filter_criteria: Optional[dict] = None
-    customer_codes: Optional[List[str]] = []
+    customer_codes: Optional[List[str]] = []  # Deprecated: kept for backward compatibility
+    gen_bus: Optional[str] = None  # ⭐ New: comma-separated customer types (R,W,I,P)
 
 class PromotionResponse(BaseModel):
     id: int
@@ -86,15 +101,16 @@ async def create_promotion(promotion: PromotionCreate, authorization: str = Head
         # สร้าง Promotion Header
         cursor.execute("""
             INSERT INTO Promotion_Header 
-            (PromotionCode, PromotionName, BranchCode, StartDate, EndDate, Status, CreatedBy, CreatedAt, UpdatedAt)
-            VALUES (?, ?, ?, ?, ?, 'active', ?, GETDATE(), GETDATE())
+            (PromotionCode, PromotionName, BranchCode, StartDate, EndDate, Status, CreatedBy, CreatedAt, UpdatedAt, gen_bus)
+            VALUES (?, ?, ?, ?, ?, 'active', ?, GETDATE(), GETDATE(), ?)
         """, (
             promo_code,
             promotion.promotion_name,
             branches_str,
             promotion.start_date,
             promotion.end_date,
-            current_user.get('username', 'unknown')
+            current_user.get('username', 'unknown'),
+            promotion.gen_bus  # ⭐ บันทึก gen_bus (comma-separated customer types)
         ))
         
         # ดึง ID ที่เพิ่งสร้าง
@@ -344,7 +360,7 @@ async def get_promotions(status: Optional[str] = None, branch: Optional[str] = N
 
 @router.get("/active-by-customer")
 async def get_active_promotions_by_customer(customerCode: str):
-    """ดึง Promotion ที่ active สำหรับลูกค้า"""
+    """ดึง Promotion ที่ active สำหรับลูกค้า (ตรวจสอบทั้ง gen_bus และ customer_codes)"""
     conn = None
     
     try:
@@ -357,7 +373,63 @@ async def get_active_promotions_by_customer(customerCode: str):
         print(f"👤 [CUSTOMER PROMO API] Searching for customer: '{customerCode}'")
         print(f"📅 [CUSTOMER PROMO API] Today: {today}")
         
-        query = """
+        # ⭐ Step 1: ดึง gen_bus ของลูกค้าจากตาราง Customer
+        cursor.execute("""
+            SELECT gen_bus FROM Customer WHERE customer_code = ?
+        """, (customerCode,))
+        
+        customer_row = cursor.fetchone()
+        customer_gen_bus = customer_row[0] if customer_row and customer_row[0] else None
+        
+        print(f"👤 [CUSTOMER PROMO API] Customer gen_bus from DB: '{customer_gen_bus}'")
+        
+        # ⭐ Normalize customer_gen_bus: ถ้าไม่ใช่ R,W,I,P ให้ถือว่าเป็น R
+        customer_gen_bus = normalize_customer_type(customer_gen_bus)
+        
+        print(f"👤 [CUSTOMER PROMO API] Normalized customer gen_bus: '{customer_gen_bus}'")
+        
+        # ⭐ Step 2: ค้นหา Promotion ที่ตรงกับ gen_bus ของลูกค้า
+        promotions = []
+        
+        if customer_gen_bus:
+            # ค้นหา Promotion ที่มี gen_bus ตรงกับลูกค้า
+            query = """
+                SELECT 
+                    Id, PromotionName, BranchCode, StartDate, EndDate, gen_bus
+                FROM Promotion_Header
+                WHERE Status = 'active'
+                AND StartDate <= ?
+                AND EndDate >= ?
+                AND gen_bus IS NOT NULL
+                AND gen_bus != ''
+            """
+            
+            print(f"📝 [CUSTOMER PROMO API] Query: {query}")
+            print(f"📝 [CUSTOMER PROMO API] Params: [{today}, {today}]")
+            
+            cursor.execute(query, [today, today])
+            
+            columns = [column[0] for column in cursor.description]
+            all_promotions = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            print(f"📦 [CUSTOMER PROMO API] Found {len(all_promotions)} active promotions with gen_bus")
+            
+            # กรองเฉพาะ Promotion ที่มี customer_gen_bus ใน gen_bus field
+            for promo in all_promotions:
+                promo_gen_bus = promo.get('gen_bus', '') or ''
+                promo_types = [normalize_customer_type(t) for t in promo_gen_bus.split(',') if t.strip()]
+                promo_types = [t for t in promo_types if t]  # Remove None values
+                
+                print(f"  🔍 Promo '{promo['PromotionName']}' has types: {promo_types}")
+                
+                if customer_gen_bus in promo_types:
+                    print(f"  ✅ Match! Customer type '{customer_gen_bus}' found in promotion")
+                    promotions.append(promo)
+                else:
+                    print(f"  ❌ No match. Customer type '{customer_gen_bus}' not in {promo_types}")
+        
+        # ⭐ Step 3: ค้นหา Promotion แบบเก่าที่ระบุ customer_code โดยตรง (backward compatibility)
+        query_old = """
             SELECT 
                 ph.Id, ph.PromotionName, ph.BranchCode, ph.StartDate, ph.EndDate,
                 pc.PromotionText
@@ -369,30 +441,42 @@ async def get_active_promotions_by_customer(customerCode: str):
             AND pc.CustomerCode = ?
         """
         
-        print(f"📝 [CUSTOMER PROMO API] Query: {query}")
+        print(f"📝 [CUSTOMER PROMO API] Old query: {query_old}")
         print(f"📝 [CUSTOMER PROMO API] Params: [{today}, {today}, '{customerCode}']")
         
-        cursor.execute(query, [today, today, customerCode])
+        cursor.execute(query_old, [today, today, customerCode])
         
         columns = [column[0] for column in cursor.description]
-        promotions = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        old_promotions = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
-        print(f"📦 [CUSTOMER PROMO API] Found {len(promotions)} customer promotions")
-        print(f"📦 [CUSTOMER PROMO API] Raw data: {promotions}")
+        print(f"📦 [CUSTOMER PROMO API] Found {len(old_promotions)} customer-specific promotions")
         
-        result = [
-            {
+        # รวม promotions ทั้งสองแบบ
+        result = []
+        
+        # เพิ่ม gen_bus based promotions
+        for promo in promotions:
+            result.append({
+                "promotion_id": promo['Id'],
+                "promotion_name": promo['PromotionName'],
+                "promotion_text": f"โปรโมชั่นสำหรับลูกค้าประเภท {customer_gen_bus}",
+                "branch": promo['BranchCode'],
+                "start_date": str(promo['StartDate']),
+                "end_date": str(promo['EndDate'])
+            })
+        
+        # เพิ่ม customer-specific promotions
+        for promo in old_promotions:
+            result.append({
                 "promotion_id": promo['Id'],
                 "promotion_name": promo['PromotionName'],
                 "promotion_text": promo['PromotionText'],
                 "branch": promo['BranchCode'],
                 "start_date": str(promo['StartDate']),
                 "end_date": str(promo['EndDate'])
-            }
-            for promo in promotions
-        ]
+            })
         
-        print(f"✅ [CUSTOMER PROMO API] Returning {len(result)} promotions")
+        print(f"✅ [CUSTOMER PROMO API] Returning {len(result)} promotions total")
         print(f"✅ [CUSTOMER PROMO API] Result: {result}")
         print(f"👤 [CUSTOMER PROMO API] ========================================")
         

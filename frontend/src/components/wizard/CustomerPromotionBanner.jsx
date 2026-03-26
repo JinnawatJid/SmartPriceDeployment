@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Megaphone, X } from 'lucide-react';
 import api from '../../services/api';
 
+// ⭐ Helper function to normalize customer type
+const normalizeCustomerType = (genBus) => {
+  const validTypes = ['R', 'W', 'I', 'P'];
+  if (!genBus) return null;
+  
+  const normalized = genBus.trim().toUpperCase();
+  if (!validTypes.includes(normalized)) {
+    return 'R';
+  }
+  return normalized;
+};
+
 const CustomerPromotionBanner = ({ customerCode }) => {
   const [promotions, setPromotions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -25,14 +37,18 @@ const CustomerPromotionBanner = ({ customerCode }) => {
         const response = await api.get(url);
         console.log('✅ [CUSTOMER PROMO] Response received:', response.data);
         
-        setPromotions(response.data || []);
-        setDismissed(false); // Reset dismissed state when customer changes
-        
+        // ⭐ Log customer type normalization
         if (response.data && response.data.length > 0) {
           console.log(`🎉 [CUSTOMER PROMO] Found ${response.data.length} promotions for customer ${customerCode}`);
+          response.data.forEach((promo, idx) => {
+            console.log(`  📌 Promo ${idx + 1}: ${promo.promotion_name} - ${promo.promotion_text}`);
+          });
         } else {
           console.log(`ℹ️ [CUSTOMER PROMO] No promotions found for customer ${customerCode}`);
         }
+        
+        setPromotions(response.data || []);
+        setDismissed(false); // Reset dismissed state when customer changes
       } catch (error) {
         console.error('❌ [CUSTOMER PROMO] Error fetching customer promotions:', error);
         console.error('❌ [CUSTOMER PROMO] Error details:', error.response?.data);

@@ -23,7 +23,7 @@ export default function CustomDropdown({
 
   const displayOptions = cachedOptionsRef.current.length > 0 ? cachedOptionsRef.current : options;
 
-  const selected = value == null ? null : displayOptions.find((o) => o.code === value);
+  const selected = value == null ? null : displayOptions.find((o) => o.value === value || o.code === value);
 
   const dropdownId = useId();
 
@@ -68,7 +68,7 @@ export default function CustomDropdown({
         "
       >
         <span className={selected ? "text-gray-800" : "text-gray-400"}>
-          {selected ? selected.name : placeholder}
+          {selected ? (selected.label || selected.name) : placeholder}
         </span>
         <span className="text-gray-400 text-xs">▾</span>
       </button>
@@ -106,13 +106,15 @@ export default function CustomDropdown({
           </div>
 
           {displayOptions.map((opt) => {
-            const active = opt.code === value;
+            const optValue = opt.value !== undefined ? opt.value : opt.code;
+            const optLabel = opt.label || opt.name;
+            const active = optValue === value;
             return (
               <div
-                key={opt.code}
+                key={optValue}
                 onMouseDown={(e) => {
                   e.stopPropagation();
-                  onChange(opt.code);
+                  onChange(optValue);
                   setOpen(false);
                 }}
                 className={`
@@ -124,7 +126,7 @@ export default function CustomDropdown({
                   ${active ? "bg-blue-600 text-white" : "hover:bg-blue-50"}
                 `}
               >
-                {opt.name}
+                {optLabel}
               </div>
             );
           })}

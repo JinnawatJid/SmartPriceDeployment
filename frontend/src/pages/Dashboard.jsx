@@ -16,14 +16,15 @@ function Dashboard() {
   
   // ⭐ สิทธิ์ขึ้นอยู่กับ role แทนที่จะ hard code employee ID
   // 1. เพิ่ม/อัปเดตราคา/จัดการโปรโมชั่น: SDM, PM (ทั้งหมด)
-  // 2. ราคาโครงการ: ZM, RM, SDM, PM (ทั้งหมด)
+  // 2. ราคาโครงการ: ZM, RM, SDM, PM (ทั้งหมด), Sales_Project
   // 3. อนุมัติราคาพิเศษ: ZM, RM, SDM, PM (ทั้งหมด)
   // PM ทั้งหมด: PM, PM_CLINE, PM_GLASS, PM_EQUIPMENT, PM_ALUMINIUM, PM_GYPSUM, PM_SEALANT
+  // Sales_Project: พนักงานขายโครงการ
   const isPM = employee?.role && typeof employee.role === "string" && (
     employee.role === "PM" || employee.role.startsWith("PM_")
   );
   const canUpdatePrice = ["SDM"].includes(employee?.role) || isPM;
-  const canManageProjectPrice = ["ZM", "RM", "SDM"].includes(employee?.role) || isPM;
+  const canManageProjectPrice = ["ZM", "RM", "SDM", "Sales_Project"].includes(employee?.role) || isPM;
   const canApproveSpecialPrice = ["ZM", "RM", "SDM"].includes(employee?.role) || isPM;
 
   // โหลดวันที่ปัจจุบัน (ภาษาไทย)

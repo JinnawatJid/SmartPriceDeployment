@@ -7,17 +7,18 @@ for internal use throughout the application.
 
 Role Mappings:
 1. พนักงานขาย → Sales
-2. ผู้จัดการสาขา (R1-W2) → ZM (Zone Manager)
-3. ผู้จัดการภูมิภาค (R1-W2) → RM (Regional Manager)
-4. ผู้จัดการฝ่ายขาย (W1-SDM) → SDM (Sales Director Manager)
-5. ผู้จัดการผลิตภัณฑ์ (Below SDM) → PM (Product Manager - General)
-6. ผู้จัดการผลิตภัณฑ์โครงคร่าวฝ้าเพดานโครงผนัง → PM_CLINE (Product Manager - Cline)
-7. ผู้จัดการผลิตภัณฑ์กระจก → PM_GLASS (Product Manager - Glass)
-8. ผู้จัดการผลิตภัณฑ์อุปกรณ์และอื่นๆ → PM_EQUIPMENT (Product Manager - Equipment & Others)
-9. ผู้จัดการผลิตภัณฑ์อลูมิเนียม → PM_ALUMINIUM (Product Manager - Aluminium)
-10. ผู้จัดการผลิตภัณฑ์ยิปซัม → PM_GYPSUM (Product Manager - Gypsum)
-11. ผู้จัดการผลิตภัณฑ์ซีลแลนท์ → PM_SEALANT (Product Manager - Sealant)
-12. กรรมการผู้จัดการ → CEO
+2. พนักงานขายโครงการ → Sales_Project
+3. ผู้จัดการสาขา (R1-W2) → ZM (Zone Manager)
+4. ผู้จัดการภูมิภาค (R1-W2) → RM (Regional Manager)
+5. ผู้จัดการฝ่ายขาย (W1-SDM) → SDM (Sales Director Manager)
+6. ผู้จัดการผลิตภัณฑ์ (Below SDM) → PM (Product Manager - General)
+7. ผู้จัดการผลิตภัณฑ์โครงคร่าวฝ้าเพดานโครงผนัง → PM_CLINE (Product Manager - Cline)
+8. ผู้จัดการผลิตภัณฑ์กระจก → PM_GLASS (Product Manager - Glass)
+9. ผู้จัดการผลิตภัณฑ์อุปกรณ์และอื่นๆ → PM_EQUIPMENT (Product Manager - Equipment & Others)
+10. ผู้จัดการผลิตภัณฑ์อลูมิเนียม → PM_ALUMINIUM (Product Manager - Aluminium)
+11. ผู้จัดการผลิตภัณฑ์ยิปซัม → PM_GYPSUM (Product Manager - Gypsum)
+12. ผู้จัดการผลิตภัณฑ์ซีลแลนท์ → PM_SEALANT (Product Manager - Sealant)
+13. กรรมการผู้จัดการ → CEO
 """
 
 import logging
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 # Thai role name to internal role code mapping
 THAI_ROLE_TO_CODE = {
     "พนักงานขาย": "Sales",
+    "พนักงานขายโครงการ": "Sales_Project",  # ⭐ Project Sales
     "ผู้จัดการสาขา (R1-W2)": "ZM",  # Zone Manager
     "ผู้จัดการภูมิภาค (R1-W2)": "RM",  # Regional Manager
     "ผู้จัดการฝ่ายขาย (W1-SDM)": "SDM",  # Sales Director Manager
@@ -43,7 +45,7 @@ THAI_ROLE_TO_CODE = {
 
 # Valid role codes (for when role is already in English)
 VALID_ROLE_CODES = {
-    "Sales", "ZM", "RM", "SDM", "PM", "CEO",
+    "Sales", "Sales_Project", "ZM", "RM", "SDM", "PM", "CEO",
     "PM_CLINE", "PM_GLASS", "PM_EQUIPMENT", "PM_ALUMINIUM", "PM_GYPSUM", "PM_SEALANT"
 }
 
@@ -114,13 +116,14 @@ def get_role_display_name(role_code: str) -> str:
     Get display name for role code.
     
     Args:
-        role_code: Internal role code (Sales, ZM, RM, SDM, PM, PM_CLINE, PM_GLASS, etc.)
+        role_code: Internal role code (Sales, Sales_Project, ZM, RM, SDM, PM, PM_CLINE, PM_GLASS, etc.)
         
     Returns:
         Human-readable role name in English
     """
     role_display_names = {
         "Sales": "Sales",
+        "Sales_Project": "Project Sales",  # ⭐ Project Sales
         "ZM": "Zone Manager",
         "RM": "Regional Manager",
         "SDM": "Sales Director Manager",

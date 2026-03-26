@@ -1419,8 +1419,19 @@ def calc_glass(req: GlassCalcRequest, branch_code: str = Depends(get_branch_code
 
 
 @glass_router.get("/filter-options")
-def get_glass_filter_options(branch_code: str = Depends(get_branch_code)):
-    """⚡ ดึง filter options ทั้งหมด (กรองตาม branch_code)"""
+def get_glass_filter_options(
+    brand: Optional[str] = None,
+    type: Optional[str] = None,
+    subGroup: Optional[str] = None,
+    color: Optional[str] = None,
+    thickness: Optional[str] = None,
+    branch_code: str = Depends(get_branch_code)
+):
+    """⚡ ดึง filter options ที่ถูกกรองแล้วตามเงื่อนไขปัจจุบัน
+    
+    ส่งกลับ options สำหรับแต่ละฟิลเตอร์ที่ยังไม่ได้เลือก
+    เช่น ถ้าเลือก brand แล้ว ให้ส่ง type/subGroup/color/thickness ที่มีอยู่ใน brand นั้น
+    """
     
     # Query จาก database พร้อมกรองตาม branch_code
     conn = get_mssql_conn()
@@ -1453,14 +1464,35 @@ def get_glass_filter_options(branch_code: str = Depends(get_branch_code)):
     
     conn.close()
     
-    # สร้าง unique sets จาก SKU ที่มีราคา
+    # ⭐ กรอง SKU ตามเงื่อนไขปัจจุบัน
+    filtered_skus = []
+    for sku in skus:
+        parsed = parse_glass_sku(sku)
+        if not parsed:
+            continue
+        
+        # ตรวจสอบว่า SKU ตรงกับ filter ทั้งหมด
+        if brand and parsed["brand"] != brand:
+            continue
+        if type and parsed["type"] != type:
+            continue
+        if subGroup and parsed["subGroup"] != subGroup:
+            continue
+        if color and parsed["color"] != color:
+            continue
+        if thickness and parsed["thickness"] != thickness:
+            continue
+        
+        filtered_skus.append(sku)
+    
+    # ⭐ สร้าง options สำหรับแต่ละฟิลเตอร์ โดยกรองตามเงื่อนไขปัจจุบัน
     brands = {}
     types = {}
     subGroups = {}
     colors = {}
     thicknesses = {}
     
-    for sku in skus:
+    for sku in filtered_skus:
         parsed = parse_glass_sku(sku)
         if not parsed:
             continue
@@ -1472,11 +1504,11 @@ def get_glass_filter_options(branch_code: str = Depends(get_branch_code)):
         thicknesses[parsed["thickness"]] = parsed["thickness"]
     
     return {
-        "brands": [{"code": k, "name": v} for k, v in sorted(brands.items())],
-        "types": [{"code": k, "name": v} for k, v in sorted(types.items())],
-        "subGroups": [{"code": k, "name": v} for k, v in sorted(subGroups.items())],
-        "colors": [{"code": k, "name": v} for k, v in sorted(colors.items())],
-        "thicknesses": [{"code": k, "name": f"{v} มม."} for k, v in sorted(thicknesses.items())],
+        "brands": [{"value": k, "label": f"{k} - {v}"} for k, v in sorted(brands.items())],
+        "types": [{"value": k, "label": f"{k} - {v}"} for k, v in sorted(types.items())],
+        "subGroups": [{"value": k, "label": f"{k} - {v}"} for k, v in sorted(subGroups.items())],
+        "colors": [{"value": k, "label": f"{k} - {v}"} for k, v in sorted(colors.items())],
+        "thicknesses": [{"value": k, "label": f"{k} - {v} มม."} for k, v in sorted(thicknesses.items())],
     }
 
 

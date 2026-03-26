@@ -648,7 +648,23 @@ const ProjectPriceManagement = () => {
           
           {(priceMode || editingProjectId) && (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Row 1: Project Info */}
+            {/* Row 1: Project Name for Branch Mode */}
+            {(priceMode === 'branch' || (editingProjectId && formData.branch_code)) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ชื่อโครงการ
+              </label>
+              <input
+                type="text"
+                value={formData.project_name}
+                onChange={(e) => setFormData({...formData, project_name: e.target.value})}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="เช่น โครงการคอนโดXXX"
+              />
+            </div>
+            )}
+
+            {/* Row 1: Project Info (for project mode) */}
             {(priceMode === 'project' || editingProjectId) && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -824,6 +840,22 @@ const ProjectPriceManagement = () => {
                 />
               </div>
             </div>
+
+            {/* ⭐ Row 3.5: Project Name for Branch Mode */}
+            {(priceMode === 'branch' || (editingProjectId && formData.branch_code)) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ชื่อโครงการ
+              </label>
+              <input
+                type="text"
+                value={formData.project_name}
+                onChange={(e) => setFormData({...formData, project_name: e.target.value})}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="เช่น โครงการคอนโดXXX"
+              />
+            </div>
+            )}
 
             {/* Row 4: Request By & Remark */}
             <div className="grid grid-cols-2 gap-4">
