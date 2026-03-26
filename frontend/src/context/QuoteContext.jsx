@@ -12,6 +12,7 @@ const initialState = {
   deliveryAddress: null,
   vehicle: null,
   deliveryType: "PICKUP",
+  ibtBranch: null,
 
   cart: [],
 
@@ -46,6 +47,7 @@ function quoteReducer(state, action) {
         ...state,
         needsTax: action.payload.needsTax,
         deliveryType: nextDeliveryType,
+        ibtBranch: action.payload.ibtBranch ?? null,
 
         // ⭐ KEY FIX: ถ้าเป็นรับเอง → ล้างค่าขนส่งทันที
         ...(nextDeliveryType === "PICKUP"

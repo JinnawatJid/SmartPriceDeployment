@@ -31,9 +31,10 @@ def _now_iso():
     return datetime.now().isoformat(timespec="seconds")
 
 
-def _generate_quote_no(branch_code: str) -> str:
+def _generate_quote_no(branch_code: str, ibt_branch: str = None) -> str:
     """
-    Format:  BSQT-2502/0001
+    Format:  BSQT-2502/0001 (normal)
+             BSQT-2502/0001-IBT-00TR (IBT)
     """
     now = datetime.now()
     yy = str(now.year)[-2:]
@@ -44,15 +45,28 @@ def _generate_quote_no(branch_code: str) -> str:
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT QuoteNo FROM Quote_Header
-        WHERE QuoteNo LIKE ?
-    """, (f"{prefix}%",))
+    # ถ้าเป็น IBT ให้ค้นหาเลขที่ IBT เท่านั้น
+    if ibt_branch:
+        cursor.execute("""
+            SELECT QuoteNo FROM Quote_Header
+            WHERE QuoteNo LIKE ? AND IBT_branch IS NOT NULL
+        """, (f"{prefix}%",))
+    else:
+        cursor.execute("""
+            SELECT QuoteNo FROM Quote_Header
+            WHERE QuoteNo LIKE ? AND IBT_branch IS NULL
+        """, (f"{prefix}%",))
 
     count = len(cursor.fetchall()) + 1
     seq = f"{count:04d}"
 
-    return f"{prefix}/{seq}"
+    quote_no = f"{prefix}/{seq}"
+    
+    # ถ้าเป็น IBT ให้เพิ่มเลขประจำตัว IBT
+    if ibt_branch:
+        quote_no = f"{quote_no}-IBT-{ibt_branch}"
+
+    return quote_no
 
 
 def _safe_get_header_row(ws):
@@ -183,6 +197,7 @@ def create_quotation(payload: dict = Body(...)):
     employee = payload.get("employee") or {}
     customer = payload.get("customer") or {}
     branch = employee.get("branchId", "")
+    ibt_branch = payload.get("ibtBranch")  # ⭐ ดึง IBT branch
 
     raw_code = (customer.get("code") or "").strip()
     raw_name = (customer.get("name") or "").strip()
@@ -196,7 +211,7 @@ def create_quotation(payload: dict = Body(...)):
         cust_name = "ลูกค้าใหม่"
 
 
-    quote_no = _generate_quote_no(branch)
+    quote_no = _generate_quote_no(branch, ibt_branch)  # ⭐ ส่ง ibt_branch
     now = _now_iso()
 
     header = {
@@ -227,6 +242,7 @@ def create_quotation(payload: dict = Body(...)):
         "Pre_Order": payload.get("pre_order", 0),  # ⭐ เพิ่ม Pre_Order field
         "Required_Delivery_Date": payload.get("required_delivery_date") or None,  # ⭐ เพิ่ม Required_Delivery_Date field
         "project_code": payload.get("project_code") or None,  # ⭐ เพิ่ม project_code field
+        "IBT_branch": ibt_branch,  # ⭐ เพิ่ม IBT_branch field
     }
 
     cursor.execute("""
@@ -236,8 +252,8 @@ def create_quotation(payload: dict = Body(...)):
             PaymentTerm, CreditTerm, ShippingMethod, ShippingCost,
             DiscountAmount, SubtotalAmount, TotalAmount,
             NeedsTax, Remark, Remark_Shipping, LastUpdate,
-            CustomerName, Tel, tax_no, ShippingCustomerPay, Pre_Order, Required_Delivery_Date, project_code
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            CustomerName, Tel, tax_no, ShippingCustomerPay, Pre_Order, Required_Delivery_Date, project_code, IBT_branch
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, tuple(header.values()))
 
     cart = payload.get("cart", [])
@@ -300,6 +316,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
 
     employee = payload.get("employee") or {}
     customer = payload.get("customer") or {}
+    ibt_branch = payload.get("ibtBranch")  # ⭐ ดึง IBT branch
     now = _now_iso()
     raw_code = (customer.get("code") or "").strip()
     raw_name = (customer.get("name") or "").strip()
@@ -337,6 +354,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         "ShippingCustomerPay": payload.get("totals", {}).get("shippingCustomerPay", 0),
         "Pre_Order": payload.get("pre_order", 0),  # ⭐ เพิ่ม Pre_Order field
         "Required_Delivery_Date": payload.get("required_delivery_date") or None,  # ⭐ เพิ่ม Required_Delivery_Date field
+        "IBT_branch": ibt_branch,  # ⭐ เพิ่ม IBT_branch field
     }
 
     cursor.execute("""
@@ -346,7 +364,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
             PaymentTerm=?, CreditTerm=?, ShippingMethod=?, ShippingCost=?,
             DiscountAmount=?, SubtotalAmount=?, TotalAmount=?,
             NeedsTax=?, Remark=?, Remark_Shipping=?, LastUpdate=?,
-            CustomerName=?, Tel=?, tax_no=?, ShippingCustomerPay=?, Pre_Order=?, Required_Delivery_Date=?
+            CustomerName=?, Tel=?, tax_no=?, ShippingCustomerPay=?, Pre_Order=?, Required_Delivery_Date=?, IBT_branch=?
         WHERE QuoteNo=?
     """, (
         header["Status"],
@@ -373,6 +391,7 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
         header["ShippingCustomerPay"],
         header["Pre_Order"],
         header["Required_Delivery_Date"],
+        header["IBT_branch"],
         quote_no
     ))
 
@@ -433,6 +452,7 @@ def list_quotations(
 ):
     """
     โหลดรายการใบเสนอราคา กรองตามสาขาของพนักงาน
+    รวมถึงใบเสนอราคา IBT ที่ส่งไปยังสาขานี้
     
     Args:
         status: กรองตาม status (draft, complete, cancelled)
@@ -441,19 +461,19 @@ def list_quotations(
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
-    # ⭐ กรองตามสาขาของพนักงาน
+    # ⭐ กรองตามสาขาของพนักงาน หรือเป็น IBT ที่ส่งไปยังสาขานี้
     if status:
         cursor.execute("""
             SELECT * FROM Quote_Header
-            WHERE Status = ? AND BranchCode = ?
+            WHERE Status = ? AND (BranchCode = ? OR IBT_branch = ?)
             ORDER BY LastUpdate DESC
-        """, (status, branch_code))
+        """, (status, branch_code, branch_code))
     else:
         cursor.execute("""
             SELECT * FROM Quote_Header
-            WHERE BranchCode = ?
+            WHERE BranchCode = ? OR IBT_branch = ?
             ORDER BY LastUpdate DESC
-        """, (branch_code,))
+        """, (branch_code, branch_code))
 
     headers = [normalize_keys(row_to_dict(cursor, r)) for r in cursor.fetchall()]
     result = []
@@ -504,6 +524,7 @@ def list_quotations(
             },
             "cart": cart_items,
             "items": cart_items,  # ⭐ alias สำหรับ frontend
+            "ibtBranch": h.get("IBT_branch"),  # ⭐ เพิ่ม IBT_branch
         })
 
     conn.close()
@@ -511,6 +532,63 @@ def list_quotations(
 
 
 # -----------------------------------------------------
+# =====================================================
+# GET PRE-ORDER QUOTES BY BRANCH CODE
+# =====================================================
+@router.get("/pre-order/{branch_code}", summary="ดึงใบเสนอราคา Pre-Order ตามสาขา")
+def get_preorder_quotes(branch_code: str):
+    """
+    ดึงรายการใบเสนอราคาที่เป็น Pre-Order ตามรหัสสาขา
+    
+    Args:
+        branch_code: รหัสสาขา (เช่น BKK, CNX)
+    
+    Returns:
+        List of Quote_Header records where Pre_Order = 1
+    """
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        print(f"🔍 [GET PRE-ORDER QUOTES] Branch: {branch_code}")
+        
+        # ดึงใบเสนอราคาที่เป็น Pre-Order ของสาขานี้
+        cursor.execute("""
+            SELECT 
+                QuoteNo, Status, CustomerCode, CustomerName, SalesID, SalesName,
+                CreateDate, ExpireDate, ApproveDate, BranchCode,
+                ShippingCost, DiscountAmount, SubtotalAmount, TotalAmount,
+                NeedsTax, Remark, Remark_Shipping, LastUpdate,
+                Tel, tax_no, ShippingCustomerPay, Pre_Order, Required_Delivery_Date, project_code
+            FROM Quote_Header
+            WHERE Pre_Order = 1 AND BranchCode = ?
+            ORDER BY CreateDate DESC
+        """, (branch_code,))
+        
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        # แปลง datetime เป็น string
+        for r in results:
+            for key in ['CreateDate', 'ExpireDate', 'ApproveDate', 'LastUpdate', 'Required_Delivery_Date']:
+                if r.get(key):
+                    r[key] = str(r[key])
+        
+        print(f"📦 [GET PRE-ORDER QUOTES] Found {len(results)} pre-order quotes for branch {branch_code}")
+        
+        return results
+    
+    except Exception as e:
+        print(f"❌ [GET PRE-ORDER QUOTES] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if conn:
+            conn.close()
+
+
 # GET SINGLE QUOTATION
 # -----------------------------------------------------
 @router.get("/{quote_no:path}", summary="โหลดใบเสนอราคาแบบเต็ม")
@@ -573,3 +651,59 @@ def cancel_quotation(quote_no: str):
 
 
 
+
+# =====================================================
+# GET PRE-ORDER QUOTES BY BRANCH CODE
+# =====================================================
+@router.get("/pre-order/{branch_code}", summary="ดึงใบเสนอราคา Pre-Order ตามสาขา")
+def get_preorder_quotes(branch_code: str):
+    """
+    ดึงรายการใบเสนอราคาที่เป็น Pre-Order ตามรหัสสาขา
+    
+    Args:
+        branch_code: รหัสสาขา (เช่น BKK, CNX)
+    
+    Returns:
+        List of Quote_Header records where Pre_Order = 1
+    """
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        print(f"🔍 [GET PRE-ORDER QUOTES] Branch: {branch_code}")
+        
+        # ดึงใบเสนอราคาที่เป็น Pre-Order ของสาขานี้
+        cursor.execute("""
+            SELECT 
+                QuoteNo, Status, CustomerCode, CustomerName, SalesID, SalesName,
+                CreateDate, ExpireDate, ApproveDate, BranchCode,
+                ShippingCost, DiscountAmount, SubtotalAmount, TotalAmount,
+                NeedsTax, Remark, Remark_Shipping, LastUpdate,
+                Tel, tax_no, ShippingCustomerPay, Pre_Order, Required_Delivery_Date, project_code
+            FROM Quote_Header
+            WHERE Pre_Order = 1 AND BranchCode = ?
+            ORDER BY CreateDate DESC
+        """, (branch_code,))
+        
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        # แปลง datetime เป็น string
+        for r in results:
+            for key in ['CreateDate', 'ExpireDate', 'ApproveDate', 'LastUpdate', 'Required_Delivery_Date']:
+                if r.get(key):
+                    r[key] = str(r[key])
+        
+        print(f"📦 [GET PRE-ORDER QUOTES] Found {len(results)} pre-order quotes for branch {branch_code}")
+        
+        return results
+    
+    except Exception as e:
+        print(f"❌ [GET PRE-ORDER QUOTES] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if conn:
+            conn.close()

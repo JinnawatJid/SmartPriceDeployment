@@ -104,6 +104,10 @@ function Step6_Summary({ state, dispatch }) {
   const [editingShippingCost, setEditingShippingCost] = useState(false);
   const [tempShippingCost, setTempShippingCost] = useState(0);
 
+  // Branches for IBT
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+
   // Product browser state
   const [productFilters, setProductFilters] = useState({});
   
@@ -157,6 +161,24 @@ function Step6_Summary({ state, dispatch }) {
     
     loadActiveSpecialPrices();
   }, [state.customer]);
+
+  // Load branches for IBT
+  useEffect(() => {
+    const loadBranches = async () => {
+      try {
+        setBranchesLoading(true);
+        const res = await api.get('/api/branches');
+        setBranches(res.data.branches || []);
+      } catch (err) {
+        console.error('Error loading branches:', err);
+        setBranches([]);
+      } finally {
+        setBranchesLoading(false);
+      }
+    };
+    
+    loadBranches();
+  }, []);
 
   const [productItems, setProductItems] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -1538,6 +1560,7 @@ function Step6_Summary({ state, dispatch }) {
         code: state.customer?.id || state.customer?.code || "",
       },
       deliveryType: state.deliveryType || null,
+      ibtBranch: state.ibtBranch || null,
       cart: cartPayload,
       totals: {
         exVat: effectiveTotals.exVat,
@@ -2242,6 +2265,8 @@ function Step6_Summary({ state, dispatch }) {
           <TaxDeliverySection
             needsTax={state.needsTax}
             deliveryType={state.deliveryType}
+            ibtBranch={state.ibtBranch}
+            branches={branches}
             onOpenShipping={() => setShippingOpen(true)}
             onChange={(change) => {
               const payload = {
@@ -2250,7 +2275,11 @@ function Step6_Summary({ state, dispatch }) {
                   : state.needsTax,
                 deliveryType: Object.prototype.hasOwnProperty.call(change, "deliveryType")
                   ? change.deliveryType
-                  : state.deliveryType,};
+                  : state.deliveryType,
+                ibtBranch: Object.prototype.hasOwnProperty.call(change, "ibtBranch")
+                  ? change.ibtBranch
+                  : state.ibtBranch,
+              };
               dispatch({ type: "SET_TAX_DELIVERY", payload });
             }}
           />
