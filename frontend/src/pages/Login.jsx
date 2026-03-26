@@ -116,7 +116,7 @@ function Login() {
           </button>
           {/* ปุ่ม Manual Login */}
        
-           {/*} <button
+            <button
               onClick={() => setLoginMode("manual")}
               className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
                 loginMode === "manual"
@@ -125,7 +125,7 @@ function Login() {
               }`}
             >
               Manual Login
-            </button> */}
+            </button> 
   
         </div>
 

@@ -20,11 +20,13 @@ async def get_credit_status(customer_id: str):
         {
             "customer_id": "0100ZTR",
             "customer_name": "Mock Customer (N Scomartr)",
-            "status": "N",
+            "status": "ปกติ",
             "credit_limit": 500000,
+            "credit_available": 250000,
             "credit_terms": {
-                "ga": 60,
-                "yc": 45
+                "gs": 60,      // Glass/Glue (กระจก/กาว)
+                "ae": 45,      // Aluminum/Equipment (อลูมิเนียม/อุปกรณ์)
+                "yc": 30       // Gypsum/Frame (ยิปซัม/โครงคร่าว)
             },
             "updated_at": "2024-02-29T12:48:51.3992"
         }
@@ -48,7 +50,31 @@ async def get_credit_status(customer_id: str):
             response.raise_for_status()
             data = response.json()
             
-            logger.info(f"✅ [CREDIT API] Success! Data: {data}")
+            # ⭐ Map credit_terms keys from external API to frontend format
+            # External API might return: ga, yc, ae
+            # Frontend expects: gs (glass/glue), ae (aluminum/equipment), yc (gypsum/frame)
+            if data.get("credit_terms"):
+                credit_terms = data["credit_terms"]
+                # Map 'ga' to 'gs' if it exists
+                if "ga" in credit_terms and "gs" not in credit_terms:
+                    credit_terms["gs"] = credit_terms.pop("ga")
+                # Ensure all expected keys exist
+                data["credit_terms"] = {
+                    "gs": credit_terms.get("gs", 0),
+                    "ae": credit_terms.get("ae", 0),
+                    "yc": credit_terms.get("yc", 0),
+                }
+            else:
+                # ถ้าไม่มี credit_terms ให้ set เป็น empty dict
+                data["credit_terms"] = {
+                    "gs": 0,
+                    "ae": 0,
+                    "yc": 0,
+                }
+            
+            logger.info(f"✅ [CREDIT API] Success! Mapped data: {data}")
+            logger.info(f"✅ [CREDIT API] Status: {data.get('status')}")
+            logger.info(f"✅ [CREDIT API] Credit terms: {data.get('credit_terms')}")
             return data
             
     except httpx.HTTPStatusError as e:

@@ -447,6 +447,7 @@ function Step6_Summary({ state, dispatch }) {
               pricePerSqft: it.priceSource === "manual" ? Number(it.pricePerSqft ?? 0) : undefined,
               pricePerKg: it.priceSource === "manual" ? Number(it.pricePerKg ?? 0) : undefined,
               weight: it.priceSource === "manual" ? Number(it.weight ?? 0) : undefined,
+              isPromotion: it.isPromotion ?? false,
             })),
           });
 
@@ -1197,6 +1198,12 @@ function Step6_Summary({ state, dispatch }) {
       if (item.priceSource !== 'manual') {
         console.log(`   ⏭️ Skipping: not manual price`);
         return; // ข้ามสินค้าที่ใช้ราคาจากระบบ
+      }
+      
+      // ⭐ ถ้าเป็นโปรโมชั่น ไม่ต้องขอราคาพิเศษ
+      if (item.isPromotion) {
+        console.log(`   ⏭️ Skipping: marked as promotion (no special price request needed)`);
+        return;
       }
       
       console.log(`   ✅ Manual price detected, checking thresholds...`);
@@ -2839,6 +2846,7 @@ function Step6_Summary({ state, dispatch }) {
       {/* TAB: CUSTOMER */}
       {activeTab === "customer" && (
         <CustomerInfoTab 
+          key={customerCode}
           customer={state.customer} 
           customerCode={customerCode}
         />

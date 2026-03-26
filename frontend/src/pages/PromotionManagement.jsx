@@ -64,10 +64,46 @@ const PromotionManagement = ({ standalone = false }) => {
 
   const [openDropdown, setOpenDropdown] = useState({});
 
+  // ⭐ State สำหรับ SKU search
+  const [skuSearchResults, setSkuSearchResults] = useState([]);
+  const [skuSearchLoading, setSkuSearchLoading] = useState(false);
+  const [showSkuDropdown, setShowSkuDropdown] = useState(false);
+
   useEffect(() => {
     loadPromotions();
     loadBranches();
   }, []);
+
+  // ⭐ useEffect สำหรับ SKU search
+  useEffect(() => {
+    if (!newItem.sku || newItem.sku.length < 3) {
+      setSkuSearchResults([]);
+      setShowSkuDropdown(false);
+      return;
+    }
+
+    const searchSKU = async () => {
+      try {
+        setSkuSearchLoading(true);
+        const res = await api.get("/api/items/search", {
+          params: { q: newItem.sku },
+        });
+        setSkuSearchResults(res.data || []);
+        setShowSkuDropdown(true);
+      } catch (e) {
+        console.error(e);
+        setSkuSearchResults([]);
+      } finally {
+        setSkuSearchLoading(false);
+      }
+    };
+
+    const t = setTimeout(() => {
+      searchSKU();
+    }, 300);
+
+    return () => clearTimeout(t);
+  }, [newItem.sku]);
 
   // โหลด filter options เมื่อ categories เปลี่ยน
   useEffect(() => {
@@ -880,16 +916,48 @@ const PromotionManagement = ({ standalone = false }) => {
                   <div className="border-t pt-4">
                     <h3 className="font-semibold mb-3">เพิ่มสินค้าแบบราย SKU</h3>
 
-                    <div className="flex gap-2 mb-3">
-                      <input
-                        type="text"
-                        placeholder="SKU สินค้า"
-                        value={newItem.sku}
-                        onChange={(e) =>
-                          setNewItem({ ...newItem, sku: e.target.value })
-                        }
-                        className="flex-1 border rounded-lg px-3 py-2"
-                      />
+                    <div className="flex gap-2 mb-3 relative">
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          placeholder="ค้นหา SKU หรือชื่อสินค้า (พิมพ์อย่างน้อย 3 ตัวอักษร)"
+                          value={newItem.sku}
+                          onChange={(e) =>
+                            setNewItem({ ...newItem, sku: e.target.value })
+                          }
+                          className="w-full border rounded-lg px-3 py-2"
+                        />
+                        {/* Search results dropdown */}
+                        {showSkuDropdown && newItem.sku.length >= 3 && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
+                            {skuSearchLoading && (
+                              <div className="p-3 text-center text-gray-500">
+                                กำลังค้นหา...
+                              </div>
+                            )}
+                            {!skuSearchLoading && skuSearchResults.length === 0 && (
+                              <div className="p-3 text-center text-gray-500">
+                                ไม่พบสินค้า
+                              </div>
+                            )}
+                            {!skuSearchLoading && skuSearchResults.length > 0 && (
+                              skuSearchResults.map((item, idx) => (
+                                <div
+                                  key={idx}
+                                  onClick={() => {
+                                    setNewItem({ ...newItem, sku: item.sku });
+                                    setShowSkuDropdown(false);
+                                  }}
+                                  className="p-3 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                                >
+                                  <p className="font-medium text-sm">{item.sku}</p>
+                                  <p className="text-xs text-gray-600">{item.name}</p>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <input
                         type="text"
                         placeholder="รายละเอียดโปรโมชั่น"

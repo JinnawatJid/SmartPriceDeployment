@@ -12,6 +12,24 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  console.log("📋 [CustomerInfoTab] Received props:", { customer, customerCode });
+  console.log("📋 [CustomerInfoTab] Current creditData:", creditData);
+
+  // ⭐ Debug: Log เมื่อ creditData เปลี่ยน
+  useEffect(() => {
+    console.log("🔄 [CREDIT STATE] creditData changed:", creditData);
+    console.log("🔄 [CREDIT STATE] status:", creditData?.status);
+  }, [creditData]);
+
+  // โหลดข้อมูลลูกค้า
+  useEffect(() => {
+    console.log("🔄 [CustomerInfoTab] Component mounted/updated");
+    
+    return () => {
+      console.log("🔄 [CustomerInfoTab] Component will unmount");
+    };
+  }, []);
+
   // โหลดข้อมูลลูกค้า
   useEffect(() => {
     const fetchCustomerData = async () => {
@@ -40,19 +58,36 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
 
   // โหลดข้อมูลเครดิต
   useEffect(() => {
+    // ⭐ Clear credit data ทันทีเมื่อ customerCode เปลี่ยน
+    setCreditData(null);
+    
     const loadCreditData = async () => {
       if (!customerCode || customerCode.toUpperCase() === "N/A") {
-        setCreditData(null);
+        console.log("⏭️ [CREDIT] Skipping: no customerCode or N/A");
         return;
       }
 
+      console.log("🔄 [CREDIT] Loading credit data for:", customerCode);
       setCreditLoading(true);
       try {
-        const res = await api.get(`/api/credit-status/${customerCode}`);
-        console.log("✅ Credit API response:", res.data);
+        // เพิ่ม timestamp เพื่อป้องกัน cache
+        const timestamp = new Date().getTime();
+        const res = await api.get(`/api/credit-status/${customerCode}?_t=${timestamp}`);
+        console.log("✅ [CREDIT] API response:", res.data);
+        console.log("✅ [CREDIT] Status:", res.data?.status);
+        console.log("✅ [CREDIT] Credit terms:", res.data?.credit_terms);
+        
+        // ⭐ Set credit data
         setCreditData(res.data);
+        console.log("✅ [CREDIT] creditData updated to:", res.data);
+        
+        // ⭐ Force re-render check
+        setTimeout(() => {
+          console.log("✅ [CREDIT] creditData after setState:", creditData);
+        }, 100);
       } catch (err) {
-        console.error("❌ Load credit data error:", err);
+        console.error("❌ [CREDIT] Load credit data error:", err);
+        console.error("❌ [CREDIT] Error details:", err.response?.data || err.message);
         setCreditData(null);
       } finally {
         setCreditLoading(false);
@@ -138,6 +173,63 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
     });
   };
 
+  // ⭐ Helper functions สำหรับ status styling
+  const getStatusStyle = (status) => {
+    const statusMap = {
+      'N': { 
+        bgColor: 'bg-green-100 border-green-300', 
+        textColor: 'text-green-800',
+        iconColor: 'text-green-600'
+      },
+      'P': { 
+        bgColor: 'bg-yellow-100 border-yellow-300', 
+        textColor: 'text-yellow-800',
+        iconColor: 'text-yellow-600'
+      },
+      'NPL': { 
+        bgColor: 'bg-red-100 border-red-300', 
+        textColor: 'text-red-800',
+        iconColor: 'text-red-600'
+      },
+      'L': { 
+        bgColor: 'bg-red-200 border-red-400', 
+        textColor: 'text-red-900',
+        iconColor: 'text-red-700'
+      },
+    };
+    
+    return statusMap[status] || { 
+      bgColor: 'bg-gray-100 border-gray-300', 
+      textColor: 'text-gray-800',
+      iconColor: 'text-gray-600'
+    };
+  };
+
+  const getStatusLabel = (status) => {
+    const labelMap = {
+      'N': '✓ หนี้ปกติ (ชำระตรงเวลา)',
+      'P': '⚠️ จับตามองพิเศษ (ผิดนัดเริ่มต้น)',
+      'NPL': '🔴 หนี้เสีย (ค้างเกิน 90 วัน)',
+      'L': '❌ หนี้สูญ (ไม่สามารถเรียกคืน)',
+    };
+    
+    return labelMap[status] || status;
+  };
+
+  const getStatusIcon = (status) => {
+    if (status === 'N') {
+      // Check icon for good status
+      return <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />;
+    } else if (status === 'P') {
+      // Exclamation icon for warning
+      return <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />;
+    } else if (status === 'NPL' || status === 'L') {
+      // X icon for error/critical
+      return <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />;
+    }
+    return <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />;
+  };
+
   const creditPercentage = creditData 
     ? ((creditData.credit_limit - (creditData.credit_available || 0)) / creditData.credit_limit) * 100
     : 0;
@@ -179,6 +271,14 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
               label="รหัสลูกค้า" 
               value={customerData?.id || customerData?.code || customerCode} 
               bold 
+            />
+            <InfoField 
+              label="ประเภทลูกค้า" 
+              value={customerData?.customer_type || customerData?.CustomerType || "-"} 
+            />
+            <InfoField 
+              label="ประเภทธุรกิจ" 
+              value={customerData?.gen_bus || customerData?.GenBus || "-"} 
             />
             <InfoField 
               label="วันที่เริ่มเป็นลูกค้า" 
@@ -274,63 +374,73 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
               <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
               <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
             </svg>
-            ข้อมูลเครดิต
+            ข้อมูลเครดิตและวงเงิน
             {creditLoading && (
               <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             )}
           </h3>
 
-          <div className="space-y-3 mb-4">
-            <CreditRow 
-              label="การใช้เครดิต" 
-              value={`${creditPercentage.toFixed(0)}%`}
-              percentage={creditPercentage}
-            />
-            <CreditRow 
-              label="วงเงินเครดิต" 
-              value={`${formatCurrency(displayCredit.creditLimit)} บาท`}
-              color="text-blue-600"
-            />
-            <CreditRow 
-              label="คงเหลือ" 
-              value={`${formatCurrency(displayCredit.creditAvailable)} บาท`}
-              color="text-green-600"
-            />
-            <CreditRow 
-              label="ใช้ไป" 
-              value={`${formatCurrency(displayCredit.creditUsed)} บาท`}
-              color="text-orange-600"
-            />
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            {/* Credit Limit */}
+            <div className="bg-blue-50 rounded-lg p-3">
+              <p className="text-xs text-gray-600 mb-1">วงเงินเครดิตทั้งหมด</p>
+              <p className="text-xl font-bold text-blue-600">
+                ฿ {formatCurrency(displayCredit.creditLimit)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                เหลือวงเงิน: ฿ {formatCurrency(displayCredit.creditAvailable)}
+              </p>
+            </div>
+
+            {/* Credit Used */}
+            <div className="bg-red-50 rounded-lg p-3">
+              <p className="text-xs text-gray-600 mb-1">ยอดที่ใช้ไป:</p>
+              <p className="text-xl font-bold text-red-600">
+                ฿ {formatCurrency(displayCredit.creditUsed)}
+              </p>
+              {displayCredit.lastUpdate && (
+                <p className="text-xs text-gray-500 mt-1">
+                  อัปเดต: {formatDateThai(displayCredit.lastUpdate)}
+                </p>
+              )}
+            </div>
           </div>
 
-          {/* สถานะเครดิต */}
-          {creditPercentage > 80 ? (
-            <div className="bg-red-100 border border-red-300 rounded-lg p-3 flex items-start gap-2">
-              <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <div>
-                <p className="text-sm font-bold text-red-800">สถานะเครดิต</p>
-                <p className="text-xs text-red-700">⚠️ NPL: เร่งรัดชำระ</p>
-              </div>
+          {/* Credit Progress Bar */}
+          <div className="mb-4">
+            <div className="flex justify-between text-xs mb-2">
+              <span className="text-gray-600">การใช้วงเงิน</span>
+              <span className="font-semibold">{creditPercentage.toFixed(0)}%</span>
             </div>
-          ) : (
-            <div className="bg-green-100 border border-green-300 rounded-lg p-3 flex items-start gap-2">
-              <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <div>
-                <p className="text-sm font-bold text-green-800">สถานะเครดิต</p>
-                <p className="text-xs text-green-700">✓ {displayCredit.paymentTerm}</p>
-              </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full ${
+                  creditPercentage > 80 ? "bg-red-500" : "bg-blue-500"
+                }`}
+                style={{ width: `${Math.min(creditPercentage, 100)}%` }}
+              ></div>
             </div>
-          )}
+          </div>
 
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-xs text-gray-600 mb-2">วงเงินเครดิต</p>
-            <p className="text-lg font-bold text-gray-800">
-              {displayCredit.creditDaysGA || displayCredit.creditDaysAL || displayCredit.creditDaysYC || 30}/60 วัน
-            </p>
+          <div className="border-t pt-3 space-y-2 mb-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-600">สถานะเครดิต:</span>
+              <span className={`font-semibold px-2 py-1 rounded-full text-xs ${getStatusStyle(creditData?.status).bgColor}`}>
+                {getStatusLabel(creditData?.status)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-xs text-gray-600">ระยะเวลาเครดิต กระจก/กาว:</span>
+              <span className="text-sm font-semibold">{displayCredit.creditDaysGA || 0} วัน</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-xs text-gray-600">ระยะเวลาเครดิต อลูมิเนียม/อุปกรณ์:</span>
+              <span className="text-sm font-semibold">{displayCredit.creditDaysAL || 0} วัน</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-xs text-gray-600">ระยะเวลาเครดิต ยิปซัม/โครงคร่าว:</span>
+              <span className="text-sm font-semibold">{displayCredit.creditDaysYC || 0} วัน</span>
+            </div>
           </div>
         </div>
       </div>

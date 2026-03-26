@@ -294,7 +294,8 @@ function quoteReducer(state, action) {
         unitPrice,
         pricePerSqft,
         pricePerKg,
-        weight
+        weight,
+        isPromotion = false
       } = action.payload;
 
       const targetVariant = variantCode ?? null;
@@ -323,7 +324,8 @@ function quoteReducer(state, action) {
             isAluminium,
             unitPrice,
             pricePerSqft,
-            pricePerKg
+            pricePerKg,
+            isPromotion
           });
 
           // -------------------------
@@ -341,6 +343,7 @@ function quoteReducer(state, action) {
               priceSource: "manual",        // ⭐ สำคัญ
               needsPricing: true,           // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
               unit: it.unit, // ⭐ เก็บ unit ไว้
+              isPromotion,                  // ⭐ เก็บ flag โปรโมชั่น
               ...(pricePerSqft && { pricePerSqft }), // เก็บราคาต่อตร.ฟุต
             };
           }
@@ -356,6 +359,7 @@ function quoteReducer(state, action) {
               priceSource: "manual",
               needsPricing: true,           // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
               unit: it.unit, // ⭐ เก็บ unit ไว้
+              isPromotion,                  // ⭐ เก็บ flag โปรโมชั่น
               ...(pricePerKg && { pricePerKg }), // เก็บราคาต่อกก.
               ...(weight !== undefined && { weight, product_weight: weight }), // เก็บน้ำหนัก
             };
@@ -371,6 +375,7 @@ function quoteReducer(state, action) {
             priceSource: "manual",          // ⭐ สำคัญ
             needsPricing: true,             // ⭐ ต้องส่งไปให้ backend ตรวจสอบ
             unit: it.unit, // ⭐ เก็บ unit ไว้
+            isPromotion,                    // ⭐ เก็บ flag โปรโมชั่น
           };
         }),
       };
@@ -651,6 +656,7 @@ function quoteReducer(state, action) {
 
             variantCode: variantCodeFromPricing,
             needsPricing: false,
+            isPromotion: priced.isPromotion ?? false,  // ⭐ เก็บ flag โปรโมชั่น
           };
         }),
       };

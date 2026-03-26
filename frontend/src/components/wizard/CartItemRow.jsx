@@ -200,6 +200,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
         sqft_sheet: Number(item.sqft_sheet ?? item.sqft ?? 0),
         unitPrice: data.unitPrice,
         from: "manual",
+        isPromotion: data.isPromotion ?? false,
         ...(data.pricePerSqft && { pricePerSqft: data.pricePerSqft }),
         ...(data.pricePerKg && { pricePerKg: data.pricePerKg }),
         ...(isAluminium && data.weight !== undefined && { weight: data.weight }),
@@ -316,6 +317,13 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
                 {Number(displayUnitPrice).toLocaleString("th-TH")}
               </span>
               
+              {/* ⭐ แสดงว่าเป็นโปรโมชั่น */}
+              {item.isPromotion && (
+                <div className="text-[9px] text-red-600 font-semibold bg-red-50 border border-red-200 px-2 py-0.5 rounded mt-1">
+                  🎁 โปรโมชั่น
+                </div>
+              )}
+              
               {/* ⭐ แสดงว่าใช้ราคาพิเศษที่อนุมัติแล้ว */}
               {hasActiveSpecialPrice && item.priceSource !== "manual" && (
                 <div className="text-[9px] text-green-600 font-semibold bg-green-50 border border-green-200 px-2 py-0.5 rounded mt-1">
@@ -371,6 +379,7 @@ export default function CartItemRow({ item, index, calculatedItem, dispatch, cus
           calculatedItem={calculatedItem}
           onClose={() => setShowPriceModal(false)}
           onSave={handlePriceSave}
+          hasPromotion={promotions.length > 0}
         />
       )}
 

@@ -314,6 +314,49 @@ function CustomerDetail() {
     ? ((creditData.credit_limit - (creditData.credit_available || 0)) / creditData.credit_limit) * 100
     : 0;
 
+  // ⭐ Helper functions สำหรับ status styling
+  const getStatusStyle = (status) => {
+    const statusMap = {
+      'N': { 
+        bgColor: 'bg-green-100 border-green-300', 
+        textColor: 'text-green-800',
+        iconColor: 'text-green-600'
+      },
+      'P': { 
+        bgColor: 'bg-yellow-100 border-yellow-300', 
+        textColor: 'text-yellow-800',
+        iconColor: 'text-yellow-600'
+      },
+      'NPL': { 
+        bgColor: 'bg-red-100 border-red-300', 
+        textColor: 'text-red-800',
+        iconColor: 'text-red-600'
+      },
+      'L': { 
+        bgColor: 'bg-red-200 border-red-400', 
+        textColor: 'text-red-900',
+        iconColor: 'text-red-700'
+      },
+    };
+    
+    return statusMap[status] || { 
+      bgColor: 'bg-gray-100 border-gray-300', 
+      textColor: 'text-gray-800',
+      iconColor: 'text-gray-600'
+    };
+  };
+
+  const getStatusLabel = (status) => {
+    const labelMap = {
+      'N': '✓ หนี้ปกติ (ชำระตรงเวลา)',
+      'P': '⚠️ จับตามองพิเศษ (ผิดนัดเริ่มต้น)',
+      'NPL': '🔴 หนี้เสีย (ค้างเกิน 90 วัน)',
+      'L': '❌ หนี้สูญ (ไม่สามารถเรียกคืน)',
+    };
+    
+    return labelMap[status] || status;
+  };
+
   // ใช้ข้อมูลจาก API ถ้ามี ไม่งั้นใส่ 0 (สำหรับลูกค้าเงินสด)
   const displayCredit = creditData ? {
     creditLimit: creditData.credit_limit || 0,
@@ -544,9 +587,11 @@ function CustomerDetail() {
               </div>
 
               <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-gray-600">สถานะเครดิต:</span>
-                  <span className="font-semibold text-green-600">{displayCredit.paymentTerm}</span>
+                  <span className={`font-semibold px-3 py-1 rounded-full text-sm ${getStatusStyle(creditData?.status).bgColor}`}>
+                    {getStatusLabel(creditData?.status)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">ระยะเวลาเครดิต กระจก/กาว:</span>

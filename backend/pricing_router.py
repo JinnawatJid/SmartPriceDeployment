@@ -39,6 +39,7 @@ class CartItem(BaseModel):
     pricePerSqft: float | None = None  # Manual price per sqft (for glass)
     pricePerKg: float | None = None  # Manual price per kg (for aluminium)
     weight: float | None = None  # Manual weight (for aluminium)
+    isPromotion: bool = False  # ⭐ Flag to indicate if price is promotion (no special price request needed)
 
 
 class PricingRequest(BaseModel):
@@ -514,6 +515,11 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     manual_price_items = []
     for idx, row in df_calc.iterrows():
         if row.get("priceSource") == "manual" and row.get("UnitPrice"):
+            # ⭐ ถ้าเป็นโปรโมชั่น ไม่ต้องสร้าง special price request
+            if row.get("isPromotion"):
+                print(f"🎁 [PROMOTION] Skipping special price request for {row['sku']} (marked as promotion)")
+                continue
+            
             manual_price_items.append({
                 "sku": row["sku"],
                 "manual_price": row.get("UnitPrice"),
@@ -542,6 +548,10 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     )
     df_calc["_manual_weight"] = df_calc.apply(
         lambda row: row.get("weight") if row.get("priceSource") == "manual" else None,
+        axis=1
+    )
+    df_calc["_isPromotion"] = df_calc.apply(
+        lambda row: row.get("isPromotion", False),
         axis=1
     )
 
@@ -992,6 +1002,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             "priceW1": float(row.get("priceW1", 0) or 0),
             "priceSDM": float(row.get("priceSDM", 0) or 0),
             "isSoldByPack": bool(row.get("isSoldByPack", False)),  # ⭐ เพิ่ม flag
+            "isPromotion": bool(row.get("_isPromotion", False)),  # ⭐ เพิ่ม flag โปรโมชั่น
         })
 
     print(

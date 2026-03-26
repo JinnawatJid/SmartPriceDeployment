@@ -411,6 +411,9 @@ class ItemMasterRecord:
     Variant_Mandatory: Optional[int] = None
     Product_Weight: Optional[float] = None
     Blocked: Optional[int] = None
+    Inventory_Posting_Group: Optional[str] = None
+    Sales_Blocked: Optional[int] = None
+    Purchasing_Blocked: Optional[int] = None
 
 
 @dataclass
@@ -461,9 +464,12 @@ def parse_item_record(item_data: Dict) -> Optional[ItemMasterRecord]:
             Base_Unit_of_Measure=item_data.get("Base_Unit_Of_Measure"),
             Product_Group=item_data.get("Product_Group_No"),
             Product_Sub_Group=item_data.get("Product_Subgroup_No"),
-            Variant_Mandatory=item_data.get("Variant_Code"),
+            Variant_Mandatory=item_data.get("Variant_Mandatory"),
             Product_Weight=item_data.get("Product_Weight"),
-            Blocked=item_data.get("Blocked")
+            Blocked=item_data.get("Blocked"),
+            Inventory_Posting_Group=item_data.get("Inventory_Posting_Group"),
+            Sales_Blocked=item_data.get("Sales_Blocked"),
+            Purchasing_Blocked=item_data.get("Purchasing_Blocked")
         )
         
         return record
@@ -519,8 +525,9 @@ def upsert_item_batch(items: List[ItemMasterRecord], conn: pyodbc.Connection) ->
                         INSERT INTO Item_Master (
                             SKU, No_2, Description, Base_Unit_of_Measure,
                             Product_Group, Product_Sub_Group, Variant_Mandatory,
-                            Product_Weight, blocked
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            Product_Weight, blocked, Inventory_Posting_Group,
+                            Sales_Blocked, Purchasing_Blocked
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         item.SKU,
                         item.No_2,
@@ -530,7 +537,10 @@ def upsert_item_batch(items: List[ItemMasterRecord], conn: pyodbc.Connection) ->
                         item.Product_Sub_Group,
                         item.Variant_Mandatory,
                         item.Product_Weight,
-                        item.Blocked
+                        item.Blocked,
+                        item.Inventory_Posting_Group,
+                        item.Sales_Blocked,
+                        item.Purchasing_Blocked
                     ))
 
                 conn.commit()
@@ -554,7 +564,10 @@ def upsert_item_batch(items: List[ItemMasterRecord], conn: pyodbc.Connection) ->
                             Product_Sub_Group = ?,
                             Variant_Mandatory = ?,
                             Product_Weight = ?,
-                            blocked = ?
+                            blocked = ?,
+                            Inventory_Posting_Group = ?,
+                            Sales_Blocked = ?,
+                            Purchasing_Blocked = ?
                         WHERE SKU = ?
                     """, (
                         item.No_2,
@@ -565,6 +578,9 @@ def upsert_item_batch(items: List[ItemMasterRecord], conn: pyodbc.Connection) ->
                         item.Variant_Mandatory,
                         item.Product_Weight,
                         item.Blocked,
+                        item.Inventory_Posting_Group,
+                        item.Sales_Blocked,
+                        item.Purchasing_Blocked,
                         item.SKU
                     ))
 

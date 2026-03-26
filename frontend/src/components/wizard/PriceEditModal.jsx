@@ -9,10 +9,14 @@ function roundUp050(x) {
   return Math.ceil(x * 2) / 2;
 }
 
-export default function PriceEditModal({ item, calculatedItem, onClose, onSave }) {
+export default function PriceEditModal({ item, calculatedItem, onClose, onSave, hasPromotion = false }) {
   const cat = (item.category || String(item.sku || "").slice(0, 1)).toUpperCase();
   const isGlass = cat === "G";
   const isAluminium = cat === "A";
+  const [isPromotion, setIsPromotion] = useState(false);
+  
+  // ⭐ ถ้าไม่มีโปรโมชั่นสำหรับ SKU นี้ ให้ disable checkbox
+  const canMarkAsPromotion = hasPromotion;
 
   // สำหรับกระจก
   const currentSqft = Number(item.sqft_sheet ?? item.sqft ?? 0);
@@ -104,7 +108,8 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
       category: cat,
       isGlass,
       isAluminium,
-      isProjectPrice
+      isProjectPrice,
+      isPromotion
     });
     
     if (isGlass) {
@@ -112,6 +117,7 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
       const saveData = {
         unitPrice: calculatedPricePerSheet,
         pricePerSqft: pricePerSqft,
+        isPromotion,
       };
       console.log('💾 [PRICE EDIT] Glass price data:', saveData);
       onSave(saveData);
@@ -121,6 +127,7 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
         unitPrice: calculatedPricePerLine,
         pricePerKg: pricePerKg,
         weight: weight,
+        isPromotion,
       };
       console.log('💾 [PRICE EDIT] Aluminium price data:', saveData);
       onSave(saveData);
@@ -128,6 +135,7 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
       // สินค้าอื่นๆ
       const saveData = {
         unitPrice: otherPrice,
+        isPromotion,
       };
       console.log('💾 [PRICE EDIT] Other product price data:', saveData);
       onSave(saveData);
@@ -248,6 +256,32 @@ export default function PriceEditModal({ item, calculatedItem, onClose, onSave }
               />
             </div>
           )}
+
+          {/* ⭐ Checkbox สำหรับระบุว่าเป็นโปรโมชั่น */}
+          <div className="border-t pt-4">
+            <label className={`flex items-center gap-3 ${canMarkAsPromotion ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+              <input
+                type="checkbox"
+                checked={isPromotion}
+                onChange={(e) => setIsPromotion(e.target.checked)}
+                disabled={!canMarkAsPromotion}
+                className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 disabled:opacity-50"
+              />
+              <span className={`text-sm font-medium ${canMarkAsPromotion ? 'text-gray-700' : 'text-gray-500'}`}>
+                ✓ ราคานี้เป็นโปรโมชั่น (ไม่ต้องขอราคาพิเศษ)
+              </span>
+            </label>
+            {!canMarkAsPromotion && (
+              <p className="text-xs text-gray-500 mt-2 ml-7">
+                ⚠️ สินค้านี้ไม่มีโปรโมชั่น ไม่สามารถเลือกได้
+              </p>
+            )}
+            {isPromotion && canMarkAsPromotion && (
+              <p className="text-xs text-red-600 mt-2 ml-7">
+                ระบบจะไม่สร้างคำขอราคาพิเศษสำหรับสินค้านี้
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
