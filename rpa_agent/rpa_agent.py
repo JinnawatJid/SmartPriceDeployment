@@ -1298,6 +1298,7 @@ class RPAHandler(BaseHTTPRequestHandler):
                 print("LOCAL RPA REQUEST RECEIVED")
                 print(f"Quote Code: {request_data.get('quote_code', '')}")
                 print(f"Customer: {request_data.get('customer_no', '')}")
+                print(f"Project Code: {request_data.get('project_code', '')}")  # ⭐ เพิ่ม debug
                 print(f"Items Count: {len(request_data.get('items', []))}")
                 print("="*60 + "\n")
 
@@ -1319,6 +1320,12 @@ class RPAHandler(BaseHTTPRequestHandler):
                         for item in request_data.get('items', [])
                     ],
                 }
+                
+                # ⭐ Debug: แสดง project_code ที่ได้รับ
+                print(f"\n🔍 [RPA DEBUG] Project Code received: '{rpa_data.get('project_code', '')}'")
+                if not rpa_data.get('project_code'):
+                    print("⚠️ [RPA WARNING] No project_code in request!")
+                print()
 
                 execute_create_sales_quote(request_data.get('quote_code', ''), rpa_data)
 

@@ -1020,6 +1020,16 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
     for r in results:
         print(r["sku"], r.get("unit"))
     print("=== END PRICING RESPONSE ITEMS ===\n")
+    
+    # ⭐ Debug: แสดง project_code ที่ส่งกลับ
+    project_items = [r for r in results if r.get("project_code")]
+    if project_items:
+        print("\n🏗️ [PRICING DEBUG] Items with project_code:")
+        for r in project_items:
+            print(f"  - SKU: {r['sku']}, Project Code: {r.get('project_code')}, Project Name: {r.get('project_name')}")
+    else:
+        print("\n⚠️ [PRICING DEBUG] No items with project_code found in response")
+    print()
 
     # FIX: Sanitize NaNs for JSON compliance
     def sanitize(val):

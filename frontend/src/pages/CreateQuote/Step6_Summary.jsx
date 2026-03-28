@@ -811,7 +811,13 @@ function Step6_Summary({ state, dispatch }) {
 
     const recalculateWithProject = async () => {
       try {
-        console.log('🔄 [PROJECT CHANGE] Recalculating prices with project_id:', selectedProject);
+        console.log('🔄 ========================================');
+        console.log('🔄 [PROJECT CHANGE] Recalculating prices');
+        console.log('🔄 ========================================');
+        console.log('  - project_id:', selectedProject);
+        console.log('  - customerCode:', customerCode);
+        console.log('  - cart items:', state.cart?.length);
+        console.log('🔄 ========================================');
         
         // ตั้งค่า loading
         setCalculation((prev) => ({ ...prev, loading: true }));
@@ -857,13 +863,19 @@ function Step6_Summary({ state, dispatch }) {
         const { subtotal, vat, total, product_total, shippingCustomerPay, profit } =
           calcRes.data.totals || {};
 
-        console.log('📦 [PROJECT CHANGE] API Response items:', items.map(it => ({
+        console.log('📦 ========================================');
+        console.log('📦 [PROJECT CHANGE] API Response received');
+        console.log('📦 ========================================');
+        console.log('  - Total items:', items.length);
+        console.log('  - Items with project_code:', items.filter(it => it.project_code).length);
+        console.log('  - Sample items:', items.slice(0, 3).map(it => ({
           sku: it.sku,
           UnitPrice: it.UnitPrice,
-          price_per_sheet: it.price_per_sheet,
           price_source: it.price_source,
-          _LineTotal: it._LineTotal
+          project_code: it.project_code,
+          project_name: it.project_name
         })));
+        console.log('📦 ========================================');
 
         // ✅ ล็อกราคาโครงการ: ถ้าเลือกโครงการแล้ว ให้ใช้ราคาโครงการตลอด
         // ไม่ว่าจะเปลี่ยนค่าขนส่ง เพิ่มจำนวน ใส่หมายเหตุ หรืออื่นๆ
@@ -1536,6 +1548,11 @@ function Step6_Summary({ state, dispatch }) {
         category: it.category ?? "",
         sqft_sheet: sqft,
         variantCode: it.variantCode ?? "",
+        
+        // ⭐ เพิ่ม project_code จาก pricing response
+        project_code: calc?.project_code ?? it.project_code ?? "",
+        project_name: calc?.project_name ?? it.project_name ?? "",
+        project_valid_until: calc?.project_valid_until ?? it.project_valid_until ?? "",
       };
     });
 
@@ -1909,13 +1926,21 @@ function Step6_Summary({ state, dispatch }) {
       // ⭐ ดึง project_code จาก pricing response (ถ้ามี)
       // ใช้ project_code จากรายการแรกที่มี project_code
       const projectCodeFromPricing = payload.cart?.find(it => it.project_code)?.project_code || "";
+      
+      console.log("🔍 [RPA DEBUG] Checking project_code:");
+      console.log("  - selectedProject:", selectedProject);
+      console.log("  - projectCodeFromPricing:", projectCodeFromPricing);
+      console.log("  - payload.cart items with project_code:", payload.cart?.filter(it => it.project_code).map(it => ({
+        sku: it.sku,
+        project_code: it.project_code
+      })));
 
       const rpaPayload = {
         quote_code: payload.quoteNo?.substring(0, 4) || "TRQT", // เอา 4 ตัวแรกของเลขที่ใบเสนอราคา
         customer_no: payload.customer.code,
         sales_admin: payload.employee?.id || "20614", // ใช้ employee ID หรือค่า default
         your_reference: payload.quoteNo || "", // ใส่เลขที่ใบเสนอราคาในระบบเรา
-        project_code: projectCodeFromPricing || (selectedProject ? customerProjects.find(p => p.id === selectedProject)?.project_code : ""), // ⭐ ใช้ project_code จาก pricing response ก่อน
+        project_code: projectCodeFromPricing || (selectedProject ? customerProjects.find(p => p.project_id === selectedProject)?.project_code : ""), // ⭐ แก้เป็น project_id
         // ไม่ต้องใช้ remote_chrome_address อีกต่อไปเพราะ Local Agent รันที่เครื่องเดียวกัน (127.0.0.1) เสมอ
         remote_chrome_address: "127.0.0.1:9222",
         items: rpaItems,
@@ -2560,8 +2585,19 @@ function Step6_Summary({ state, dispatch }) {
                     value={selectedProject || ''}
                     onChange={(e) => {
                       const projectId = e.target.value ? parseInt(e.target.value) : null;
+                      const selectedProj = customerProjects.find(p => p.project_id === projectId);
+                      
+                      console.log('🏗️ ========================================');
+                      console.log('🏗️ [PROJECT SELECT] User selected project');
+                      console.log('🏗️ ========================================');
+                      console.log('  - Project ID:', projectId);
+                      console.log('  - Project Code:', selectedProj?.project_code);
+                      console.log('  - Project Name:', selectedProj?.project_name);
+                      console.log('  - Available projects:', customerProjects.length);
+                      console.log('  - Current cart items:', state.cart?.length);
+                      console.log('🏗️ ========================================');
+                      
                       setSelectedProject(projectId);
-                      console.log('🏗️ Selected project:', projectId);
                     }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   >
