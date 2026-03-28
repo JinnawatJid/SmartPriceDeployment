@@ -437,6 +437,160 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
         print("[WAIT] Waiting for page to load after customer selection...")
         time.sleep(5)  # เพิ่มจาก 3 เป็น 5 วินาที
         
+        # STEP 4.5: Fill in Project Code (if provided)
+        project_code = rpa_data.get("project_code", "") if rpa_data else ""
+        
+        if project_code:
+            print("\n" + "="*60)
+            print(f"STEP 4.5: Filling in Project Code: {project_code}")
+            print("="*60)
+            
+            js_fill_project_code = f"""
+            function FillProjectCode() {{
+                var projectCode = '{project_code}';
+                
+                // ลองหา input ด้วย id
+                var input = document.querySelector('input#b2aiee');
+                if (input) {{
+                    input.value = projectCode;
+                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    
+                    // กด Enter
+                    var enterEvent = new KeyboardEvent('keydown', {{
+                        key: 'Enter',
+                        code: 'Enter',
+                        keyCode: 13,
+                        which: 13,
+                        bubbles: true
+                    }});
+                    input.dispatchEvent(enterEvent);
+                    
+                    return 'Filled Project Code and pressed Enter (by id) in main document';
+                }}
+                
+                // ลองหาด้วย aria-labelledby
+                input = document.querySelector('input[aria-labelledby="b2ailbl"]');
+                if (input) {{
+                    input.value = projectCode;
+                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    
+                    var enterEvent = new KeyboardEvent('keydown', {{
+                        key: 'Enter',
+                        code: 'Enter',
+                        keyCode: 13,
+                        which: 13,
+                        bubbles: true
+                    }});
+                    input.dispatchEvent(enterEvent);
+                    
+                    return 'Filled Project Code and pressed Enter (by aria-labelledby) in main document';
+                }}
+                
+                // ลองหาด้วย class และ role และ maxlength="20"
+                var inputs = document.querySelectorAll('input.stringcontrol-edit[role="combobox"]');
+                for (var i = 0; i < inputs.length; i++) {{
+                    if (inputs[i].maxLength === 20 && inputs[i].id !== 'b2egee') {{
+                        inputs[i].value = projectCode;
+                        inputs[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        inputs[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        
+                        var enterEvent = new KeyboardEvent('keydown', {{
+                            key: 'Enter',
+                            code: 'Enter',
+                            keyCode: 13,
+                            which: 13,
+                            bubbles: true
+                        }});
+                        inputs[i].dispatchEvent(enterEvent);
+                        
+                        return 'Filled Project Code and pressed Enter (by class) in main document';
+                    }}
+                }}
+                
+                // ลองหาใน iframe
+                var iframes = document.querySelectorAll('iframe');
+                for (var j = 0; j < iframes.length; j++) {{
+                    try {{
+                        var iframeDoc = iframes[j].contentDocument || iframes[j].contentWindow.document;
+                        
+                        input = iframeDoc.querySelector('input#b2aiee');
+                        if (input) {{
+                            input.value = projectCode;
+                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            
+                            var enterEvent = new KeyboardEvent('keydown', {{
+                                key: 'Enter',
+                                code: 'Enter',
+                                keyCode: 13,
+                                which: 13,
+                                bubbles: true
+                            }});
+                            input.dispatchEvent(enterEvent);
+                            
+                            return 'Filled Project Code and pressed Enter (by id) in iframe ' + j;
+                        }}
+                        
+                        input = iframeDoc.querySelector('input[aria-labelledby="b2ailbl"]');
+                        if (input) {{
+                            input.value = projectCode;
+                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            
+                            var enterEvent = new KeyboardEvent('keydown', {{
+                                key: 'Enter',
+                                code: 'Enter',
+                                keyCode: 13,
+                                which: 13,
+                                bubbles: true
+                            }});
+                            input.dispatchEvent(enterEvent);
+                            
+                            return 'Filled Project Code and pressed Enter (by aria-labelledby) in iframe ' + j;
+                        }}
+                        
+                        inputs = iframeDoc.querySelectorAll('input.stringcontrol-edit[role="combobox"]');
+                        for (var i = 0; i < inputs.length; i++) {{
+                            if (inputs[i].maxLength === 20 && inputs[i].id !== 'b2egee') {{
+                                inputs[i].value = projectCode;
+                                inputs[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                inputs[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                
+                                var enterEvent = new KeyboardEvent('keydown', {{
+                                    key: 'Enter',
+                                    code: 'Enter',
+                                    keyCode: 13,
+                                    which: 13,
+                                    bubbles: true
+                                }});
+                                inputs[i].dispatchEvent(enterEvent);
+                                
+                                return 'Filled Project Code and pressed Enter (by class) in iframe ' + j;
+                            }}
+                        }}
+                    }} catch (e) {{}}
+                }}
+                
+                return 'Project Code input field not found';
+            }}
+            return FillProjectCode();
+            """
+            
+            try:
+                result = driver.execute_script(js_fill_project_code)
+                print(f"[OK] {result}")
+                if 'not found' in result:
+                    print("[WARNING]  Project Code input field not found - continuing anyway...")
+                else:
+                    time.sleep(2)
+            except Exception as e:
+                print(f"[WARNING]  Could not fill Project Code: {str(e)}")
+                print("   Continuing anyway...")
+        else:
+            print("\n[INFO] No Project Code provided - skipping Project Code field")
+        
         # STEP 5: Select Sales Admin from dropdown
         print("\n" + "="*60)
         print(f"STEP 5: Selecting Sales Admin: {sales_admin}")
@@ -1152,6 +1306,7 @@ class RPAHandler(BaseHTTPRequestHandler):
                     "customer_no": request_data.get('customer_no', ''),
                     "sales_admin": request_data.get('sales_admin', ''),
                     "your_reference": request_data.get('your_reference', ''),
+                    "project_code": request_data.get('project_code', ''),
                     "items": [
                         {
                             "item_code": item.get('sku', ''),

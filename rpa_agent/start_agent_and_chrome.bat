@@ -5,115 +5,138 @@ chcp 65001 > nul
 echo ============================================================
 echo 1) Starting Chrome with Remote Debugging Enabled...
 echo ============================================================
-echo We will launch Google Chrome to listen on port 9222.
-echo Please leave this command window open while working!
 
+:: ============================
+:: FIND CHROME
+:: ============================
 set CHROME_EXE=""
 
-:: Find the bundled Chrome for Testing
 if exist "%~dp0browser\chrome\chrome.exe" (
     set CHROME_EXE="%~dp0browser\chrome\chrome.exe"
-    goto :FOUND_CHROME
 )
 
-:FOUND_CHROME
 if %CHROME_EXE%=="" (
-    echo [ERROR] Bundled Chrome was not found!
-    echo Please make sure the 'browser' folder is extracted alongside this script.
+    echo [ERROR] Chrome not found!
     pause
     exit /b
 )
 
-echo [OK] Found Chrome at: %CHROME_EXE%
+echo [OK] Found Chrome: %CHROME_EXE%
 
-:: Detect Python architecture
-echo.
-echo ============================================================
-echo Detecting Python Architecture...
-echo ============================================================
-python -c "import struct; print('64-bit' if struct.calcsize('P') * 8 == 64 else '32-bit')" > "%TEMP%\python_arch.txt" 2>nul
-if errorlevel 1 (
-    echo [WARNING] Could not detect Python architecture
-) else (
-    set /p PYTHON_ARCH=<"%TEMP%\python_arch.txt"
-    echo [OK] Python Architecture: %PYTHON_ARCH%
-    del "%TEMP%\python_arch.txt"
+:: ============================
+:: SET RPA PROFILE
+:: ============================
+set CHROME_USER_DATA=%TEMP%\chrome_rpa_profile
+
+if not exist "%CHROME_USER_DATA%" (
+    echo Creating RPA profile...
+    mkdir "%CHROME_USER_DATA%"
 )
-echo.
 
-:: Create a dedicated User Data Directory for RPA Chrome to avoid profile locks
-set CHROME_USER_DATA="%TEMP%\chrome_rpa_profile"
+set PROFILE=%CHROME_USER_DATA%\Default
 
-:: Clear cookies by removing the profile directory
-echo Clearing Chrome cookies and cache...
-if exist %CHROME_USER_DATA% (
-    rmdir /s /q %CHROME_USER_DATA% >nul 2>&1
-    echo [OK] Cleared previous Chrome profile data
-)
-mkdir %CHROME_USER_DATA%
+:: ============================
+:: 🔥 CLEAR CACHE ONLY
+:: ============================
+echo Clearing cache...
 
-:: Close any existing Chrome instances running from the bundled folder
-echo Closing existing Chrome instances...
+if exist "%PROFILE%\Cache" rmdir /s /q "%PROFILE%\Cache"
+if exist "%PROFILE%\Code Cache" rmdir /s /q "%PROFILE%\Code Cache"
+if exist "%PROFILE%\GPUCache" rmdir /s /q "%PROFILE%\GPUCache"
+
+:: optional: clear history
+if exist "%PROFILE%\History" del /f /q "%PROFILE%\History"
+
+echo [OK] Cache cleared (password safe)
+
+:: ============================
+:: 🔥 CLEAR OLD TABS (SESSION)
+:: ============================
+echo Clearing old tabs/session...
+
+:: สำหรับ Chrome เวอร์ชันเก่า
+del /f /q "%PROFILE%\Current Session" >nul 2>&1
+del /f /q "%PROFILE%\Current Tabs" >nul 2>&1
+del /f /q "%PROFILE%\Last Session" >nul 2>&1
+del /f /q "%PROFILE%\Last Tabs" >nul 2>&1
+
+:: สำหรับ Chrome เวอร์ชันใหม่ (ลบโฟลเดอร์ Sessions ทิ้ง)
+if exist "%PROFILE%\Sessions" rmdir /s /q "%PROFILE%\Sessions"
+
+echo [OK] Old tabs cleared
+:: ============================
+:: CLOSE OLD CHROME (PORT 9222)
+:: ============================
+echo Closing old Chrome debug instances...
 wmic process where "name='chrome.exe' and CommandLine like '%%9222%%'" delete >nul 2>&1
 timeout /t 2 >nul
 
-:: Start Chrome in background with debugging port and dedicated profile
-:: --no-first-run prevents the welcome screen
-:: --no-default-browser-check prevents annoying popups
-:: --disable-features=BlockInsecurePrivateNetworkRequests disables PNA CORS checks so the frontend can talk to 127.0.0.1
-echo Launching Chrome with dedicated RPA profile...
-start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir=%CHROME_USER_DATA% --no-first-run --no-default-browser-check --disable-features=BlockInsecurePrivateNetworkRequests "http://192.192.0.37:8000/" "http://192.192.0.6:8080/BC23TNGLIV"
-echo [OK] Chrome started on port 9222
+:: ============================
+:: 🚀 LAUNCH CHROME
+:: ============================
+echo Launching Chrome...
 
-:: Give Chrome a moment to open and load the tabs
-echo Opening required tabs...
-timeout /t 3 >nul
-echo [OK] Opened tabs: http://192.192.0.37:8000/ and http://192.192.0.6:8080/BC23TNGLIV
+start "" %CHROME_EXE% ^
+--remote-debugging-port=9222 ^
+--user-data-dir="%CHROME_USER_DATA%" ^
+--restore-last-session=0 ^
+--no-first-run ^
+--no-default-browser-check ^
+--disable-features=PrivateNetworkAccessSendPreflights ^
+--disable-web-security ^
+--allow-running-insecure-content ^
+--disk-cache-size=0 ^
+--media-cache-size=0 ^
+--disable-application-cache ^
+"http://192.192.0.37:53683/hub" ^ "http://192.192.0.6:8080/BC23TNGLIV/"
 
+
+echo [OK] Chrome started (clean + no old tabs)
+
+timeout /t 2 >nul
+
+:: ============================================================
 echo.
-echo ============================================================
 echo 2) Starting the Local RPA Agent...
 echo ============================================================
-echo We will start the background Agent to listen for web requests.
 
-:: Look for the PyInstaller compiled EXE
+:: ============================
+:: START RPA AGENT
+:: ============================
+
 if exist "%~dp0rpa_agent.exe" (
-    echo [OK] Found compiled rpa_agent.exe
+    echo [OK] Found rpa_agent.exe
     start "RPA Agent" cmd /k "%~dp0rpa_agent.exe"
-    goto :AGENT_STARTED
+    goto :DONE
 )
 
-:: Look for the PyInstaller compiled EXE inside dist directory
 if exist "%~dp0dist\rpa_agent.exe" (
-    echo [OK] Found compiled rpa_agent.exe in dist folder
+    echo [OK] Found rpa_agent.exe in dist
     start "RPA Agent" cmd /k "%~dp0dist\rpa_agent.exe"
-    goto :AGENT_STARTED
+    goto :DONE
 )
 
-:: Fallback for Developers (Run Python directly)
 python --version >nul 2>&1
 if not errorlevel 1 (
     if exist "%~dp0rpa_agent.py" (
-        echo [INFO] No .exe found, but Python is installed. Running raw script...
+        echo [INFO] Running Python version...
         start "RPA Agent" cmd /k "python %~dp0rpa_agent.py"
-        goto :AGENT_STARTED
+        goto :DONE
     )
 )
 
-echo.
-echo [ERROR] RPA Agent executable (rpa_agent.exe) not found!
-echo Please make sure the .exe is in the same folder as this script.
+echo [ERROR] RPA Agent not found!
 pause
 exit /b
 
-:AGENT_STARTED
+:DONE
 echo.
 echo ============================================================
-echo [SUCCESS] Everything is ready!
-echo 1. Chrome is open and ready to receive commands.
-echo 2. The RPA Agent is running in a separate window.
-echo 3. You can now use "Send to Dynamics 365 BC" on the Web App!
+echo [SUCCESS] SYSTEM READY
+echo ============================================================
+echo Chrome: Clean (no cache + no old tabs)
+echo RPA Agent: Running
+echo Ready for Dynamics 365 BC
 echo ============================================================
 echo.
-echo NOTE: Do not close the black "RPA Agent" command window.
 pause

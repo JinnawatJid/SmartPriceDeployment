@@ -7,6 +7,36 @@
 import pandas as pd
 from functools import lru_cache
 from config.db_mssql import get_mssql_conn
+from sqlalchemy import create_engine
+from urllib.parse import quote_plus
+import os
+
+
+# ==================================================
+# SQLAlchemy Engine (cached) - ใช้ MSSQL
+# ==================================================
+
+@lru_cache(maxsize=1)
+def get_sqlalchemy_engine():
+    """สร้าง SQLAlchemy engine สำหรับ pandas"""
+    server = os.getenv("MSSQL_SERVER", "192.192.0.220,50681")
+    database = os.getenv("MSSQL_DATABASE", "SP681")
+    username = os.getenv("MSSQL_USERNAME", "sp681_user")
+    password = os.getenv("MSSQL_PASSWORD", "Tng#kmitl2")
+    driver = os.getenv("MSSQL_DRIVER", "ODBC Driver 17 for SQL Server")
+    
+    # สร้าง connection string สำหรับ SQLAlchemy
+    params = quote_plus(
+        f"DRIVER={{{driver}}};"
+        f"SERVER={server};"
+        f"DATABASE={database};"
+        f"UID={username};"
+        f"PWD={password};"
+        "TrustServerCertificate=yes;"
+    )
+    
+    connection_string = f"mssql+pyodbc:///?odbc_connect={params}"
+    return create_engine(connection_string)
 
 
 # ==================================================
@@ -15,9 +45,8 @@ from config.db_mssql import get_mssql_conn
 
 @lru_cache(maxsize=32)
 def load_mapping(table_name: str):
-    conn = get_mssql_conn()
-    df = pd.read_sql_query(f'SELECT * FROM {table_name}', conn)
-    conn.close()
+    engine = get_sqlalchemy_engine()
+    df = pd.read_sql_query(f'SELECT * FROM {table_name}', engine)
 
     return {
         str(r["Code"]).strip(): str(r["Name"]).strip()
@@ -31,9 +60,8 @@ def load_mapping(table_name: str):
 
 @lru_cache(maxsize=8)
 def load_glass_subgroup_mapping():
-    conn = get_mssql_conn()
-    df = pd.read_sql_query('SELECT Type, Code, Name FROM Glass_SubGroup', conn)
-    conn.close()
+    engine = get_sqlalchemy_engine()
+    df = pd.read_sql_query('SELECT Type, Code, Name FROM Glass_SubGroup', engine)
 
     out = {}
     for _, r in df.iterrows():

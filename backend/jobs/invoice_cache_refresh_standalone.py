@@ -160,6 +160,7 @@ class InvoiceCacheRecord:
     unit_price: float = 0.0
     line_amount: float = 0.0
     line_amount_include_vat: float = 0.0
+    project_no: Optional[str] = ""
 
 
 @dataclass
@@ -267,8 +268,9 @@ def parse_invoice_record(invoice_data: Dict, calculation_date: date) -> Optional
         order_no = invoice_data.get('Order No.') or invoice_data.get('order_no') or ""
         sell_to_customer_name = invoice_data.get('Sell_to_Customer_Name') or ""  # ✅ NEW
         description = invoice_data.get('Description') or invoice_data.get('description') or ""
-        variant_code = invoice_data.get('Variant_Code') or invoice_data.get('variant_code') or ""  # ✅ NEW
+        variant_code = invoice_data.get('Variant_Code') or invoice_data.get('variant_code') or ""  
         unit_of_measure = invoice_data.get('Unit of Measure') or invoice_data.get('unit_of_measure') or ""
+        project_no = invoice_data.get('Project_No') or invoice_data.get('project_no') or "" 
         
         # ตัวเลข (ใช้ field names ใหม่)
         try:
@@ -305,7 +307,8 @@ def parse_invoice_record(invoice_data: Dict, calculation_date: date) -> Optional
             unit_of_measure=unit_of_measure,
             unit_price=unit_price,
             line_amount=line_amount,
-            line_amount_include_vat=line_amount_vat
+            line_amount_include_vat=line_amount_vat,
+            project_no=project_no
         )
         
     except Exception as e:
@@ -327,11 +330,11 @@ def upsert_invoice_batch(invoices: List[InvoiceCacheRecord], conn: pyodbc.Connec
     
     merge_sql = """
     MERGE INTO Invoice AS target
-    USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) 
+    USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) 
         AS source (Document_No, Order_No, customer_code, Sell_to_Customer_Name,
                    Posting_Date, sku, Description, Variant_Code, Quantity,
                    Unit_of_Measure, Unit_Price, Line_Amount, Line_Amount_Include_VAT,
-                   updated_at)
+                   Project_No, updated_at)
     ON target.Document_No = source.Document_No AND target.sku = source.sku
     WHEN MATCHED THEN
         UPDATE SET
@@ -346,17 +349,18 @@ def upsert_invoice_batch(invoices: List[InvoiceCacheRecord], conn: pyodbc.Connec
             Unit_Price = source.Unit_Price,
             Line_Amount = source.Line_Amount,
             Line_Amount_Include_VAT = source.Line_Amount_Include_VAT,
+            Project_No = source.Project_No,
             updated_at = source.updated_at
     WHEN NOT MATCHED THEN
         INSERT (Document_No, Order_No, customer_code, Sell_to_Customer_Name,
                 Posting_Date, sku, Description, Variant_Code, Quantity,
                 Unit_of_Measure, Unit_Price, Line_Amount, Line_Amount_Include_VAT,
-                created_at, updated_at)
+                Project_No, created_at, updated_at)
         VALUES (source.Document_No, source.Order_No, source.customer_code,
                 source.Sell_to_Customer_Name, source.Posting_Date, source.sku,
                 source.Description, source.Variant_Code, source.Quantity,
                 source.Unit_of_Measure, source.Unit_Price, source.Line_Amount,
-                source.Line_Amount_Include_VAT, source.updated_at, source.updated_at);
+                source.Line_Amount_Include_VAT, source.Project_No, source.updated_at, source.updated_at);
     """
     
     for invoice in invoices:
@@ -375,6 +379,7 @@ def upsert_invoice_batch(invoices: List[InvoiceCacheRecord], conn: pyodbc.Connec
                 invoice.unit_price,
                 invoice.line_amount,
                 invoice.line_amount_include_vat,
+                invoice.project_no or None,
                 datetime.now()
             ))
             success_count += 1

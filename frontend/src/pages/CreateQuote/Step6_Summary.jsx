@@ -449,6 +449,7 @@ function Step6_Summary({ state, dispatch }) {
               sales_e_cust: Number(state.customer?.sales_e_cust || 0),
 
               shippingCustomerPay: Number(state.shippingCustomerPay || 0),
+              project_id: selectedProject, // 🔥 ส่ง project_id ที่เลือก
             },
 
             deliveryType: state.deliveryType,
@@ -578,6 +579,7 @@ function Step6_Summary({ state, dispatch }) {
             sales_e_cust: Number(state.customer?.sales_e_cust || 0),
 
             shippingCustomerPay: Number(state.shippingCustomerPay || 0),
+            project_id: selectedProject, // 🔥 ส่ง project_id ที่เลือก
           },
 
           deliveryType: state.deliveryType,
@@ -627,7 +629,7 @@ function Step6_Summary({ state, dispatch }) {
     };
 
     calc();
-  }, [state.status, cartItemsKey, state.customer, state.deliveryType, state.shippingCustomerPay]); // ⭐ ใช้ cartItemsKey แทน state.cart
+  }, [state.status, cartItemsKey, state.customer, state.deliveryType, state.shippingCustomerPay, selectedProject]); // ⭐ เพิ่ม selectedProject
 
   // ===============================
   // AUTO RECALC SHIPPING (AFTER PRICING)
@@ -1909,6 +1911,7 @@ function Step6_Summary({ state, dispatch }) {
         customer_no: payload.customer.code,
         sales_admin: payload.employee?.id || "20614", // ใช้ employee ID หรือค่า default
         your_reference: payload.quoteNo || "", // ใส่เลขที่ใบเสนอราคาในระบบเรา
+        project_code: selectedProject ? customerProjects.find(p => p.id === selectedProject)?.project_code : "", // ⭐ เพิ่ม project_code
         // ไม่ต้องใช้ remote_chrome_address อีกต่อไปเพราะ Local Agent รันที่เครื่องเดียวกัน (127.0.0.1) เสมอ
         remote_chrome_address: "127.0.0.1:9222",
         items: rpaItems,
