@@ -449,8 +449,8 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
             function FillProjectCode() {{
                 var projectCode = '{project_code}';
                 
-                // ลองหา input ด้วย id
-                var input = document.querySelector('input#b2aiee');
+                // ลองหา input ด้วย id ที่ถูกต้อง
+                var input = document.querySelector('input#b11uee');
                 if (input) {{
                     input.value = projectCode;
                     input.dispatchEvent(new Event('input', {{ bubbles: true }}));
@@ -466,11 +466,11 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                     }});
                     input.dispatchEvent(enterEvent);
                     
-                    return 'Filled Project Code and pressed Enter (by id) in main document';
+                    return 'Filled Project Code and pressed Enter (by id b11uee) in main document';
                 }}
                 
-                // ลองหาด้วย aria-labelledby
-                input = document.querySelector('input[aria-labelledby="b2ailbl"]');
+                // ลองหาด้วย aria-labelledby ที่ถูกต้อง
+                input = document.querySelector('input[aria-labelledby="b11ulbl"]');
                 if (input) {{
                     input.value = projectCode;
                     input.dispatchEvent(new Event('input', {{ bubbles: true }}));
@@ -485,13 +485,22 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                     }});
                     input.dispatchEvent(enterEvent);
                     
-                    return 'Filled Project Code and pressed Enter (by aria-labelledby) in main document';
+                    return 'Filled Project Code and pressed Enter (by aria-labelledby b11ulbl) in main document';
                 }}
                 
                 // ลองหาด้วย class และ role และ maxlength="20"
+                // ⭐ ต้องไม่ใช่ Customer No. field (b2egee) และต้องอยู่หลัง Customer No. field
                 var inputs = document.querySelectorAll('input.stringcontrol-edit[role="combobox"]');
+                var foundCustomerField = false;
                 for (var i = 0; i < inputs.length; i++) {{
-                    if (inputs[i].maxLength === 20 && inputs[i].id !== 'b2egee') {{
+                    // ข้าม Customer No. field
+                    if (inputs[i].id === 'b2egee') {{
+                        foundCustomerField = true;
+                        continue;
+                    }}
+                    
+                    // หา field ที่อยู่หลัง Customer No. และมี maxLength = 20
+                    if (foundCustomerField && inputs[i].maxLength === 20) {{
                         inputs[i].value = projectCode;
                         inputs[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
                         inputs[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
@@ -505,7 +514,7 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                         }});
                         inputs[i].dispatchEvent(enterEvent);
                         
-                        return 'Filled Project Code and pressed Enter (by class) in main document';
+                        return 'Filled Project Code and pressed Enter (by class) in main document, field id: ' + inputs[i].id;
                     }}
                 }}
                 
@@ -515,7 +524,7 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                     try {{
                         var iframeDoc = iframes[j].contentDocument || iframes[j].contentWindow.document;
                         
-                        input = iframeDoc.querySelector('input#b2aiee');
+                        input = iframeDoc.querySelector('input#b11uee');
                         if (input) {{
                             input.value = projectCode;
                             input.dispatchEvent(new Event('input', {{ bubbles: true }}));
@@ -530,10 +539,10 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                             }});
                             input.dispatchEvent(enterEvent);
                             
-                            return 'Filled Project Code and pressed Enter (by id) in iframe ' + j;
+                            return 'Filled Project Code and pressed Enter (by id b11uee) in iframe ' + j;
                         }}
                         
-                        input = iframeDoc.querySelector('input[aria-labelledby="b2ailbl"]');
+                        input = iframeDoc.querySelector('input[aria-labelledby="b11ulbl"]');
                         if (input) {{
                             input.value = projectCode;
                             input.dispatchEvent(new Event('input', {{ bubbles: true }}));
@@ -548,12 +557,20 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                             }});
                             input.dispatchEvent(enterEvent);
                             
-                            return 'Filled Project Code and pressed Enter (by aria-labelledby) in iframe ' + j;
+                            return 'Filled Project Code and pressed Enter (by aria-labelledby b11ulbl) in iframe ' + j;
                         }}
                         
                         inputs = iframeDoc.querySelectorAll('input.stringcontrol-edit[role="combobox"]');
+                        var foundCustomerFieldInIframe = false;
                         for (var i = 0; i < inputs.length; i++) {{
-                            if (inputs[i].maxLength === 20 && inputs[i].id !== 'b2egee') {{
+                            // ข้าม Customer No. field
+                            if (inputs[i].id === 'b2egee') {{
+                                foundCustomerFieldInIframe = true;
+                                continue;
+                            }}
+                            
+                            // หา field ที่อยู่หลัง Customer No. และมี maxLength = 20
+                            if (foundCustomerFieldInIframe && inputs[i].maxLength === 20) {{
                                 inputs[i].value = projectCode;
                                 inputs[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
                                 inputs[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
@@ -567,7 +584,7 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                                 }});
                                 inputs[i].dispatchEvent(enterEvent);
                                 
-                                return 'Filled Project Code and pressed Enter (by class) in iframe ' + j;
+                                return 'Filled Project Code and pressed Enter (by class) in iframe ' + j + ', field id: ' + inputs[i].id;
                             }}
                         }}
                     }} catch (e) {{}}
