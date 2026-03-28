@@ -55,9 +55,15 @@ const ItemCard = ({ item, onAdd }) => {
       <div className="flex gap-3 p-3 items-center">
         <div className="w-16 h-16 rounded-lg border bg-white overflow-hidden">
           <img
-            src={item.image_url || "/assets/placeholder.png"}
+            src={`/api/product-images/${item.sku}`}
             alt={item.name}
             className="w-full h-full object-contain"
+            onError={(e) => {
+              // ถ้าไม่มีรูปจาก API ให้ใช้ image_url เดิม (เฉพาะครั้งแรก)
+              if (e.target.src.includes('/api/product-images/')) {
+                e.target.src = item.image_url || "/assets/placeholder.png";
+              }
+            }}
           />
         </div>
 

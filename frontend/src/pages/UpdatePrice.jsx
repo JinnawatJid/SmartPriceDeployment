@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Tag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
+import api from "../services/api.js";
 import UploadPriceExcel from "../components/updatePrice/UploadPriceExcel";
 import PromotionManagement from "./PromotionManagement";
+import ProductImageManager from "../components/productImage/ProductImageManager";
 
 // รหัสพนักงานที่มีสิทธิ์เข้าถึงหน้า "เพิ่ม/อัปเดตราคา"
 const ALLOWED_PRICE_UPDATE_EMPLOYEES = ['90038', '20061', '11186', '21702', '21367', '20614', '20194', '20785', '20093', '20686', '16647', '20595', '20091', '16053', '16654', '16725', '10011', '20040', '10254', '16646', '16702', '20037', '16723', '20974', '20129', '10073', '20084', '21094', '20813'];
@@ -13,7 +15,7 @@ export default function UpdatePrice() {
   const navigate = useNavigate();
   const [allowedEmployees, setAllowedEmployees] = useState(ALLOWED_PRICE_UPDATE_EMPLOYEES);
   const [uploadResult, setUploadResult] = useState(null);
-  const [activeTab, setActiveTab] = useState("price"); // "price" | "promotion" | "project"
+  const [activeTab, setActiveTab] = useState("price"); // "price" | "promotion" | "image"
 
   // ตรวจสอบสิทธิ์เข้าถึง
   useEffect(() => {
@@ -85,6 +87,20 @@ export default function UpdatePrice() {
             </svg>
             จัดการโปรโมชั่น
           </button>
+
+          <button
+            onClick={() => setActiveTab("image")}
+            className={`px-6 py-3 font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === "image"
+                ? "border-red-500 text-red-600"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            จัดการรูปภาพสินค้า
+          </button>
         </div>
       </div>
 
@@ -136,6 +152,10 @@ export default function UpdatePrice() {
 
       {activeTab === "promotion" && (
         <PromotionManagement />
+      )}
+
+      {activeTab === "image" && (
+        <ProductImageManager />
       )}
     </div>
   );

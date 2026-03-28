@@ -29,6 +29,7 @@ from project_price_router import router as project_price_router
 from special_price_request_router import router as special_price_request_router
 from approver_info_router import router as approver_info_router
 from print_router import router as print_router
+from product_image_router import router as product_image_router
 
 
 from config.config_external_api import CUSTOMER_API_KEY
@@ -130,6 +131,7 @@ app.include_router(project_price_router)  # Project price management
 app.include_router(special_price_request_router)  # Special price request management
 app.include_router(approver_info_router)  # Approver information
 app.include_router(print_router, prefix="/api")
+app.include_router(product_image_router)  # Product image management
 
 
 
@@ -145,6 +147,11 @@ if not os.path.exists(dist_path):
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
+
+# Mount product images directory
+product_images_path = os.path.join(BASE_DIR, "static", "product-images")
+os.makedirs(product_images_path, exist_ok=True)
+app.mount("/static/product-images", StaticFiles(directory=product_images_path), name="product-images")
 
 if os.path.exists(dist_path):
     print(f"Serving static files from: {dist_path}")

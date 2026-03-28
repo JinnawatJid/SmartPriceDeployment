@@ -215,6 +215,90 @@ def get_item_detail(
         conn.close()
 
 
+@router.get("/{sku}/master-data")
+def get_item_master_data(sku: str):
+    """
+    Get item master data by SKU for invoice line item calculations.
+    
+    Returns minimal master data needed for quantity calculations:
+    - Product type (Glass/Aluminum/Other) - determined by first character of SKU
+    - Variant_Mandatory flag - indicates if size comes from SKU or Description
+    - Product name
+    
+    Handles missing item master data gracefully (Requirement 8.3).
+    
+    Args:
+        sku: Item SKU to query
+    
+    Returns:
+        {
+            "sku": str,
+            "product_type": str (G/A/Other),
+            "variant_mandatory": int (1 or 2),
+            "product_name": str
+        }
+    
+    Raises:
+        HTTPException 404: When SKU not found (but returns graceful default)
+    """
+    logger.info(f"Fetching item master data for SKU: {sku}")
+    
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+    
+    try:
+        # Query Item_Master by SKU or No_2
+        query = """
+            SELECT 
+                im.SKU,
+                LEFT(im.SKU, 1) AS product_type,
+                im.Variant_Mandatory,
+                im.Description
+            FROM Item_Master im
+            WHERE im.SKU = ? OR im.No_2 = ?
+        """
+        
+        cursor.execute(query, (sku, sku))
+        row = cursor.fetchone()
+        
+        # Handle missing item master data gracefully (Requirement 8.3)
+        if not row:
+            logger.warning(f"Item master data not found for SKU: {sku}, returning default")
+            return {
+                "sku": sku,
+                "product_type": "Other",  # Default to Other if not found
+                "variant_mandatory": 1,  # Default to 1 (no variant)
+                "product_name": sku,  # Use SKU as fallback name
+            }
+        
+        # Parse item master data
+        item_sku = row[0] or ""
+        product_type = row[1] or "Other"
+        variant_mandatory = int(row[2]) if row[2] is not None else 1
+        product_name = row[3] or item_sku
+        
+        # Map product type: G=Glass, A=Aluminum, others=Other
+        if product_type == "G":
+            product_type = "Glass"
+        elif product_type == "A":
+            product_type = "Aluminum"
+        else:
+            product_type = "Other"
+        
+        logger.info(f"Successfully fetched item master data for SKU: {sku}")
+        
+        return {
+            "sku": item_sku,
+            "product_type": product_type,
+            "variant_mandatory": variant_mandatory,
+            "product_name": product_name,
+        }
+    
+    finally:
+        cursor.close()
+        conn.close()
+
+
 
 @router.get("", response_model=ItemListResponse)
 def list_items(

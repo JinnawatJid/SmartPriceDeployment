@@ -2,14 +2,13 @@
 import React, { useState, useEffect } from "react";
 import api from "../../services/api.js";
 import { formatDateThai } from "../../utils/dateFormatter.js";
+import PurchaseHistory from "./PurchaseHistory.jsx";
 
 const CustomerInfoTab = ({ customer, customerCode }) => {
   const [customerData, setCustomerData] = useState(null);
   const [creditData, setCreditData] = useState(null);
-  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creditLoading, setCreditLoading] = useState(false);
-  const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [error, setError] = useState(null);
 
   console.log("📋 [CustomerInfoTab] Received props:", { customer, customerCode });
@@ -97,48 +96,7 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
     loadCreditData();
   }, [customerCode]);
 
-  // โหลดประวัติการซื้อจาก Invoice
-  useEffect(() => {
-    const loadInvoices = async () => {
-      if (!customerCode || customerCode.toUpperCase() === "N/A") {
-        setInvoices([]);
-        return;
-      }
-
-      setInvoiceLoading(true);
-      try {
-        // ใช้ endpoint /api/invoice/list กับ filter customer_no
-        const res = await api.get(`/api/invoice/list`, {
-          params: {
-            customer_no: customerCode,
-            limit: 5
-          }
-        });
-        
-        console.log("✅ Invoices loaded:", res.data);
-        
-        // เรียงตามวันที่ล่าสุดก่อน
-        const sortedInvoices = (res.data || [])
-          .sort((a, b) => {
-            const dateA = new Date(a["Posting Date"] || a.posting_date || 0);
-            const dateB = new Date(b["Posting Date"] || b.posting_date || 0);
-            return dateB - dateA;
-          })
-          .slice(0, 5);
-        
-        setInvoices(sortedInvoices);
-      } catch (err) {
-        console.error("❌ Load invoices error:", err);
-        setInvoices([]);
-      } finally {
-        setInvoiceLoading(false);
-      }
-    };
-
-    loadInvoices();
-  }, [customerCode]);
-
-  if (loading || creditLoading || invoiceLoading) {
+  if (loading || creditLoading) {
     return (
       <div className="flex items-center justify-center h-64 border-t-4 border-gray-200">
         <div className="flex items-center gap-2">
@@ -313,57 +271,11 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
             ประวัติการซื้อ
           </h3>
           
-          <div className="text-center mb-4">
+          <div className="text-center">
             <p className="text-xs text-gray-500 mb-1">ยอดซื้อเฉลี่ย 6 เดือน</p>
             <p className="text-3xl font-bold text-gray-800">
               {formatCurrency(customerData?.accum_6m || 0)} บาท
             </p>
-          </div>
-
-          {/* ตารางประวัติ */}
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">เลขที่ใบเสร็จ</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">วันที่</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600">มูลค่า</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {invoiceLoading ? (
-                  <tr>
-                    <td colSpan="3" className="px-3 py-4 text-center text-gray-500">
-                      กำลังโหลด...
-                    </td>
-                  </tr>
-                ) : invoices.length === 0 ? (
-                  <tr>
-                    <td colSpan="3" className="px-3 py-4 text-center text-gray-500">
-                      ไม่มีประวัติการซื้อ
-                    </td>
-                  </tr>
-                ) : (
-                  invoices.map((invoice, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-3 py-2">{invoice["Document No."] || invoice.document_no || "-"}</td>
-                      <td className="px-3 py-2">
-                        {invoice["Posting Date"] 
-                          ? new Date(invoice["Posting Date"]).toLocaleDateString('th-TH', { 
-                              day: '2-digit', 
-                              month: '2-digit', 
-                              year: 'numeric' 
-                            })
-                          : "-"}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {formatCurrency(invoice["Amount Including VAT"] || invoice.amount_including_vat || 0)} บาท
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
 
@@ -443,6 +355,11 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Detailed Purchase History Section (Requirements 1.1-1.4, 2.1-2.4) */}
+      <div className="mt-6">
+        <PurchaseHistory customerCode={customerCode} />
       </div>
     </div>
   );

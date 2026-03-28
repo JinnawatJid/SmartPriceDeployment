@@ -104,9 +104,23 @@ def list_invoice(
     customer_no: Optional[str] = Query(None),
     posting_date: Optional[str] = Query(None),
     limit: int = 200,
+    return_line_items: bool = Query(False),
 ):
     """
     ดึงรายการ Invoice จาก MSSQL Database
+    
+    Query Parameters:
+    - customer_no: Filter by customer code (Requirement 1.1, 1.2)
+    - document_no: Filter by specific invoice number
+    - posting_date: Filter by posting date
+    - limit: Maximum number of invoices to return (default: 200)
+    - return_line_items: If True, return line items with calculated quantities
+    
+    Returns:
+    - If return_line_items=False: List of invoices sorted by posting date descending (Requirement 1.3)
+      Each invoice includes: Document No., Posting Date, Total Amount (Requirement 1.2)
+    - If return_line_items=True: List of all line items with product type and calculated quantities
+      Each line includes: Document No., Posting Date, SKU, Description, Quantity, Unit of Measure, product_type, calculated quantities
     """
     rows = load_invoice_from_db(
         document_no=document_no,
@@ -115,7 +129,97 @@ def list_invoice(
         limit=limit,
     )
     
-    return rows
+    # If return_line_items is True, enrich with product type and calculated quantities
+    if return_line_items:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        try:
+            # Get all unique SKUs from invoice lines
+            skus = list(set([row.get("sku") for row in rows if row.get("sku")]))
+            
+            if not skus:
+                return rows
+            
+            # Fetch product info from Item_Master
+            placeholders = ",".join(["?" for _ in skus])
+            sql = f"""
+                SELECT SKU, Product_Group, Variant_Mandatory, Product_Weight
+                FROM Item_Master
+                WHERE SKU IN ({placeholders})
+            """
+            cursor.execute(sql, skus)
+            
+            # Build SKU lookup map
+            sku_info = {}
+            for row in cursor.fetchall():
+                sku_info[row[0]] = {
+                    "product_group": row[1],
+                    "variant_mandatory": row[2],
+                    "product_weight": row[3] or 0,
+                }
+            
+            # Enrich invoice lines with product type and calculated quantities
+            from utils.invoice_quantity_calculator import calculate_line_item_quantity
+            
+            enriched_rows = []
+            for row in rows:
+                sku = row.get("sku")
+                info = sku_info.get(sku, {})
+                
+                # Determine product type from SKU first character
+                product_type = "Other"
+                if sku and len(sku) > 0:
+                    first_char = sku[0].upper()
+                    if first_char == "G":
+                        product_type = "Glass"
+                    elif first_char == "A":
+                        product_type = "Aluminum"
+                
+                # Calculate quantities
+                quantity = int(row.get("Quantity") or 0)
+                variant_mandatory = info.get("variant_mandatory", 1)
+                description = row.get("Description", "")
+                
+                calculated = calculate_line_item_quantity(
+                    product_type=product_type,
+                    variant_mandatory=variant_mandatory,
+                    sku=sku,
+                    description=description,
+                    quantity=quantity,
+                )
+                
+                # Add calculated data to row
+                row["product_type"] = product_type
+                row["variant_mandatory"] = variant_mandatory
+                row["product_weight"] = info.get("product_weight", 0)
+                row["calculated_quantity"] = calculated
+                
+                enriched_rows.append(row)
+            
+            return enriched_rows
+            
+        except Exception as e:
+            print(f"❌ Error enriching line items: {e}")
+            import traceback
+            traceback.print_exc()
+            return rows
+        finally:
+            cursor.close()
+            conn.close()
+    
+    # Transform to match frontend expectations (Requirement 1.2)
+    result = []
+    for row in rows:
+        result.append({
+            "document_no": row.get("Document No."),
+            "posting_date": row.get("Posting Date"),
+            "total_amount": row.get("Amount Including VAT", 0),
+            "customer_code": row.get("customer_code"),
+            "customer_name": row.get("Sell-to Customer Name"),
+        })
+    
+    return result
 
 
 # -------------------------------------------------------
@@ -181,6 +285,11 @@ def item_price_history(
 def get_invoice(document_no: str):
     """
     ดึงรายละเอียด Invoice จาก MSSQL Database
+    
+    Returns:
+    - Invoice header with: document_no, posting_date, customer info, total amount
+    - Line items with: SKU, product name, quantity, unit price, total price, description, variant code
+    (Requirements: 2.1, 2.2, 7.2)
     """
     rows = load_invoice_from_db(document_no=document_no, limit=1000)
 
@@ -200,17 +309,18 @@ def get_invoice(document_no: str):
         "amount_including_vat": float(df["Amount Including VAT"].fillna(0).sum()),
     }
 
-    # สร้าง lines
+    # สร้าง lines with all required fields (Requirement 2.1, 2.2)
     lines = []
     for _, r in df.iterrows():
         lines.append({
             "sku": r.get("sku"),
+            "product_name": r.get("Description"),  # Product name from description
             "description": r.get("Description"),
             "unit": r.get("Unit of Measure"),
-            "qty": int(r.get("Quantity") or 0),
+            "quantity": int(r.get("Quantity") or 0),
             "unit_price": float(r.get("Unit Price") or 0),
-            "amount": float(r.get("Amount") or 0),
-            "variantCode": r.get("Variant Code"),
+            "total_price": float(r.get("Amount") or 0),
+            "variant_code": r.get("Variant Code"),
         })
 
     return {
