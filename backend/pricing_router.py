@@ -489,6 +489,9 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
                 "priceSDM": float(row.get("priceSDM", 0) or 0),
                 "priceSource": row.get("price_source", "system"),
                 "isSoldByPack": is_sold_by_pack,  # ⭐ เพิ่ม flag
+                "project_code": row.get("project_code", ""),  # ⭐ เพิ่ม project_code
+                "project_name": row.get("project_name", ""),  # ⭐ เพิ่ม project_name
+                "project_valid_until": row.get("project_valid_until", ""),  # ⭐ เพิ่ม project_valid_until
             })
 
 
@@ -1003,6 +1006,9 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
             "priceSDM": float(row.get("priceSDM", 0) or 0),
             "isSoldByPack": bool(row.get("isSoldByPack", False)),  # ⭐ เพิ่ม flag
             "isPromotion": bool(row.get("_isPromotion", False)),  # ⭐ เพิ่ม flag โปรโมชั่น
+            "project_code": row.get("project_code", ""),  # ⭐ เพิ่ม project_code
+            "project_name": row.get("project_name", ""),  # ⭐ เพิ่ม project_name
+            "project_valid_until": row.get("project_valid_until", ""),  # ⭐ เพิ่ม project_valid_until
         })
 
     print(

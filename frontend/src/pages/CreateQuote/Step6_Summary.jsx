@@ -1906,12 +1906,16 @@ function Step6_Summary({ state, dispatch }) {
         });
       }
 
+      // ⭐ ดึง project_code จาก pricing response (ถ้ามี)
+      // ใช้ project_code จากรายการแรกที่มี project_code
+      const projectCodeFromPricing = payload.cart?.find(it => it.project_code)?.project_code || "";
+
       const rpaPayload = {
         quote_code: payload.quoteNo?.substring(0, 4) || "TRQT", // เอา 4 ตัวแรกของเลขที่ใบเสนอราคา
         customer_no: payload.customer.code,
         sales_admin: payload.employee?.id || "20614", // ใช้ employee ID หรือค่า default
         your_reference: payload.quoteNo || "", // ใส่เลขที่ใบเสนอราคาในระบบเรา
-        project_code: selectedProject ? customerProjects.find(p => p.id === selectedProject)?.project_code : "", // ⭐ เพิ่ม project_code
+        project_code: projectCodeFromPricing || (selectedProject ? customerProjects.find(p => p.id === selectedProject)?.project_code : ""), // ⭐ ใช้ project_code จาก pricing response ก่อน
         // ไม่ต้องใช้ remote_chrome_address อีกต่อไปเพราะ Local Agent รันที่เครื่องเดียวกัน (127.0.0.1) เสมอ
         remote_chrome_address: "127.0.0.1:9222",
         items: rpaItems,
