@@ -448,44 +448,101 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
             js_fill_project_code = f"""
             function FillProjectCode() {{
                 var projectCode = '{project_code}';
+                console.log('=== Looking for Project No. input field ===');
                 
-                // ลองหา input ด้วย id ที่ถูกต้อง
-                var input = document.querySelector('input#b11uee');
-                if (input) {{
-                    input.value = projectCode;
-                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                function tryFillInDoc(doc, location) {{
+                    console.log('Searching in: ' + location);
                     
-                    // กด Enter
-                    var enterEvent = new KeyboardEvent('keydown', {{
-                        key: 'Enter',
-                        code: 'Enter',
-                        keyCode: 13,
-                        which: 13,
-                        bubbles: true
-                    }});
-                    input.dispatchEvent(enterEvent);
+                    // วิธีที่ 1: หาด้วย controlname="Project No." (ที่แน่นอนที่สุด)
+                    var containers = doc.querySelectorAll('div[controlname]');
+                    for (var i = 0; i < containers.length; i++) {{
+                        var controlName = containers[i].getAttribute('controlname');
+                        if (controlName && controlName.trim() === 'Project No.') {{
+                            console.log('Found container with controlname="Project No."');
+                            var input = containers[i].querySelector('input[type="text"][maxlength="20"]');
+                            if (input) {{
+                                console.log('Found Project No. input by controlname, id: ' + input.id);
+                                input.focus();
+                                input.value = projectCode;
+                                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                
+                                var enterEvent = new KeyboardEvent('keydown', {{
+                                    key: 'Enter',
+                                    code: 'Enter',
+                                    keyCode: 13,
+                                    which: 13,
+                                    bubbles: true
+                                }});
+                                input.dispatchEvent(enterEvent);
+                                return true;
+                            }}
+                        }}
+                    }}
                     
-                    return 'Filled Project Code and pressed Enter (by id b11uee) in main document';
+                    // วิธีที่ 2: หาด้วย aria-label="Choose a value for Project No."
+                    var button = doc.querySelector('a[aria-label="Choose a value for Project No."]');
+                    if (button) {{
+                        console.log('Found button with aria-label for Project No.');
+                        var ariaControls = button.getAttribute('aria-controls');
+                        if (ariaControls) {{
+                            var input = doc.getElementById(ariaControls);
+                            if (input) {{
+                                console.log('Found Project No. input by aria-controls: ' + ariaControls);
+                                input.focus();
+                                input.value = projectCode;
+                                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                
+                                var enterEvent = new KeyboardEvent('keydown', {{
+                                    key: 'Enter',
+                                    code: 'Enter',
+                                    keyCode: 13,
+                                    which: 13,
+                                    bubbles: true
+                                }});
+                                input.dispatchEvent(enterEvent);
+                                return true;
+                            }}
+                        }}
+                    }}
+                    
+                    // วิธีที่ 3: หา label ที่มีข้อความ "Project No." แล้วหา input ที่เชื่อมโยง
+                    var labels = doc.querySelectorAll('a.ms-nav-edit-control-caption');
+                    for (var i = 0; i < labels.length; i++) {{
+                        var text = labels[i].textContent?.trim().replace(/\\s+/g, ' ');
+                        if (text === 'Project No.' || text === 'Project No') {{
+                            console.log('Found Project No. label, id: ' + labels[i].id);
+                            var labelId = labels[i].id;
+                            if (labelId) {{
+                                var input = doc.querySelector('input[aria-labelledby="' + labelId + '"]');
+                                if (input && input.maxLength === 20) {{
+                                    console.log('Found Project No. input by aria-labelledby: ' + labelId);
+                                    input.focus();
+                                    input.value = projectCode;
+                                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                    
+                                    var enterEvent = new KeyboardEvent('keydown', {{
+                                        key: 'Enter',
+                                        code: 'Enter',
+                                        keyCode: 13,
+                                        which: 13,
+                                        bubbles: true
+                                    }});
+                                    input.dispatchEvent(enterEvent);
+                                    return true;
+                                }}
+                            }}
+                        }}
+                    }}
+                    
+                    return false;
                 }}
                 
-                // ลองหาด้วย aria-labelledby ที่ถูกต้อง
-                input = document.querySelector('input[aria-labelledby="b11ulbl"]');
-                if (input) {{
-                    input.value = projectCode;
-                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    
-                    var enterEvent = new KeyboardEvent('keydown', {{
-                        key: 'Enter',
-                        code: 'Enter',
-                        keyCode: 13,
-                        which: 13,
-                        bubbles: true
-                    }});
-                    input.dispatchEvent(enterEvent);
-                    
-                    return 'Filled Project Code and pressed Enter (by aria-labelledby b11ulbl) in main document';
+                // ลองใน main document
+                if (tryFillInDoc(document, 'main document')) {{
+                    return 'Filled Project Code and pressed Enter in main document';
                 }}
                 
                 // ลองหาด้วย class และ role และ maxlength="20"
@@ -518,78 +575,20 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                     }}
                 }}
                 
-                // ลองหาใน iframe
+                // ลองใน iframe
                 var iframes = document.querySelectorAll('iframe');
                 for (var j = 0; j < iframes.length; j++) {{
                     try {{
                         var iframeDoc = iframes[j].contentDocument || iframes[j].contentWindow.document;
-                        
-                        input = iframeDoc.querySelector('input#b11uee');
-                        if (input) {{
-                            input.value = projectCode;
-                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                            
-                            var enterEvent = new KeyboardEvent('keydown', {{
-                                key: 'Enter',
-                                code: 'Enter',
-                                keyCode: 13,
-                                which: 13,
-                                bubbles: true
-                            }});
-                            input.dispatchEvent(enterEvent);
-                            
-                            return 'Filled Project Code and pressed Enter (by id b11uee) in iframe ' + j;
+                        if (tryFillInDoc(iframeDoc, 'iframe ' + j)) {{
+                            return 'Filled Project Code and pressed Enter in iframe ' + j;
                         }}
-                        
-                        input = iframeDoc.querySelector('input[aria-labelledby="b11ulbl"]');
-                        if (input) {{
-                            input.value = projectCode;
-                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                            
-                            var enterEvent = new KeyboardEvent('keydown', {{
-                                key: 'Enter',
-                                code: 'Enter',
-                                keyCode: 13,
-                                which: 13,
-                                bubbles: true
-                            }});
-                            input.dispatchEvent(enterEvent);
-                            
-                            return 'Filled Project Code and pressed Enter (by aria-labelledby b11ulbl) in iframe ' + j;
-                        }}
-                        
-                        inputs = iframeDoc.querySelectorAll('input.stringcontrol-edit[role="combobox"]');
-                        var foundCustomerFieldInIframe = false;
-                        for (var i = 0; i < inputs.length; i++) {{
-                            // ข้าม Customer No. field
-                            if (inputs[i].id === 'b2egee') {{
-                                foundCustomerFieldInIframe = true;
-                                continue;
-                            }}
-                            
-                            // หา field ที่อยู่หลัง Customer No. และมี maxLength = 20
-                            if (foundCustomerFieldInIframe && inputs[i].maxLength === 20) {{
-                                inputs[i].value = projectCode;
-                                inputs[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                inputs[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                
-                                var enterEvent = new KeyboardEvent('keydown', {{
-                                    key: 'Enter',
-                                    code: 'Enter',
-                                    keyCode: 13,
-                                    which: 13,
-                                    bubbles: true
-                                }});
-                                inputs[i].dispatchEvent(enterEvent);
-                                
-                                return 'Filled Project Code and pressed Enter (by class) in iframe ' + j + ', field id: ' + inputs[i].id;
-                            }}
-                        }}
-                    }} catch (e) {{}}
+                    }} catch (e) {{
+                        console.log('Error accessing iframe ' + j + ': ' + e.message);
+                    }}
                 }}
                 
+                console.log('❌ Project Code input field not found');
                 return 'Project Code input field not found';
             }}
             return FillProjectCode();
@@ -927,12 +926,12 @@ def execute_create_sales_quote(quote_code, rpa_data=None):
                 return false;
             }}
             
-            // 1️⃣ ลองใน main document
+            // ลองใน main document
             if (tryFill(document)) {{
                 return "Filled Your Reference in main document";
             }}
             
-            // 2️⃣ ลองใน iframe
+            // ลองใน iframe
             var iframes = document.querySelectorAll("iframe");
             for (var i = 0; i < iframes.length; i++) {{
                 try {{

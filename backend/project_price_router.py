@@ -100,7 +100,7 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
             WHERE project_code LIKE ?
         """, (f"{prefix}%",))
         count = cursor.fetchone()[0]
-        running_number = str(count + 1).zfill(4)
+        running_number = str(count + 1).zfill(3)
         generated_code = f"{prefix}{running_number}"
         
         print(f"🏗️ [CREATE PROJECT PRICE] Generated Code: {generated_code}")
@@ -185,7 +185,7 @@ async def get_next_project_code(mode: str, branch_code: Optional[str] = None, cu
             """, (f"{prefix}%",))
             result = cursor.fetchone()
             count = (result[0] if result else 0) + 1
-            run_num = str(count).zfill(2)
+            run_num = str(count).zfill(3)
             next_code = f"{prefix}{run_num}"
             return {"next_code": next_code}
         
@@ -204,7 +204,7 @@ async def get_next_project_code(mode: str, branch_code: Optional[str] = None, cu
             """, (f"{prefix}%",))
             result = cursor.fetchone()
             count = (result[0] if result else 0) + 1
-            run_num = str(count).zfill(2)
+            run_num = str(count).zfill(3)
             next_code = f"{prefix}{run_num}"
             return {"next_code": next_code}
         

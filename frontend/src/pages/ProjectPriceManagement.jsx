@@ -682,7 +682,7 @@ const ProjectPriceManagement = () => {
                     ← เปลี่ยนประเภท
                   </button>
                   <span className="text-sm font-medium text-gray-600">
-                    {priceMode === 'project' && 'โหมด: โครงการ (PJYYMMXX)'}
+                    {priceMode === 'project' && 'โหมด: โครงการ (PJYYMMXXX)'}
                     {priceMode === 'branch' && 'โหมด: สาขา (BRYYMMXX)'}
                     {priceMode === 'customer' && 'โหมด: ลูกค้าพิเศษ (YYMMCUSTCODE)'}
                   </span>
