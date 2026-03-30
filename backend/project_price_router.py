@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from config.db_mssql import get_mssql_conn
+from branch_region_mapping import BRANCH_REGION_MAP
 import jwt
 import os
 
@@ -10,6 +11,65 @@ router = APIRouter(prefix="/api/project-prices", tags=["project-prices"])
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-this")
 JWT_ALG = "HS256"
+
+def get_branch_code_from_numeric(numeric_code: str) -> str:
+    """
+    Map numeric branch code (e.g., 056903002) to 2-letter code (e.g., AY)
+    
+    Pattern analysis:
+    - 05 = region code
+    - 6903 = branch identifier  
+    - 002 = sub-branch
+    
+    We'll create a mapping based on known patterns
+    """
+    if not numeric_code or len(numeric_code) < 2:
+        return 'XX'
+    
+    # Hardcoded mapping based on known branch codes
+    # Format: numeric_prefix -> 2-letter code
+    numeric_to_letter = {
+        '00': 'TR',  # 00TR
+        '01': 'TJ',  # 01TJ
+        '03': 'TS',  # 03TS
+        '04': 'TP',  # 04TP
+        '05': 'AY',  # 05AY
+        '06': 'RY',  # 06RY
+        '07': 'RB',  # 07RB
+        '08': 'NR',  # 08NR
+        '09': 'UB',  # 09UB
+        '10': 'KK',  # 10KK
+        '11': 'PL',  # 11PL
+        '12': 'CM',  # 12CM
+        '13': 'SR',  # 13SR
+        '14': 'HY',  # 14HY
+        '15': 'CB',  # 15CB
+        '16': 'PK',  # 16PK
+        '17': 'CR',  # 17CR
+        '18': 'UD',  # 18UD
+        '19': 'PC',  # 19PC
+        '20': 'SK',  # 20SK
+        '21': 'BS',  # 21BS
+        '23': 'NS',  # 23NS
+        '24': 'TL',  # 24TL
+        '25': 'SB',  # 25SB
+        '90': 'HO',  # 90HO
+    }
+    
+    # Extract first 2 digits from numeric code
+    prefix = numeric_code[:2]
+    
+    if prefix in numeric_to_letter:
+        return numeric_to_letter[prefix]
+    
+    # Fallback: return last 2 characters uppercase
+    return numeric_code[-2:].upper()
+
+def get_branch_code_from_db(numeric_code: str) -> str:
+    """
+    Get 2-letter branch code using the mapping function
+    """
+    return get_branch_code_from_numeric(numeric_code)
 
 def get_current_user_from_token(authorization: str = Header(None)) -> dict:
     """Extract user info from JWT token"""
@@ -25,7 +85,8 @@ def get_current_user_from_token(authorization: str = Header(None)) -> dict:
             "username": payload.get("name", "unknown"),
             "id": employee_id,
             "employee_id": employee_id,
-            "branchId": payload.get("branchId")
+            "branchId": payload.get("branchId"),
+            "branch_code": payload.get("branchId") or payload.get("branch_code")
         }
     except Exception as e:
         print(f"❌ Error decoding JWT token: {e}")
@@ -43,14 +104,15 @@ class ProjectPriceCreate(BaseModel):
     project_name: Optional[str] = None
     customer_code: Optional[str] = None
     customer_name: Optional[str] = None
-    branch_code: Optional[str] = None
+    branch_code: Optional[str] = None  # สาขาที่พนักงานเลือก (บันทึกลง database)
     price_start_date: str
     price_end_date: str
     request_by: Optional[str] = None
     request_date: Optional[str] = None
     remark: Optional[str] = None
-    created_by_employee_code: Optional[str] = None  # ✅ เพิ่ม field นี้
-    items: List[ProjectPriceLine]
+    created_by_employee_code: Optional[str] = None
+    price_mode: Optional[str] = None  # price_mode flag (project/branch/customer)
+    items: List[ProjectPriceLine] = []
 
 @router.post("/")
 async def create_project_price(project: ProjectPriceCreate, authorization: str = Header(None)):
@@ -70,38 +132,46 @@ async def create_project_price(project: ProjectPriceCreate, authorization: str =
         conn = get_mssql_conn()
         cursor = conn.cursor()
         
-        # สร้างเลขที่เอกสารอัตโนมัติ (เหมือนใบเสนอราคา)
-        # ดึง mode จาก project_code ที่ส่งมา (ถ้ามี) หรือใช้ default
-        mode = 'project'  # default
-        if project.project_code:
-            if project.project_code.startswith('PJ'):
-                mode = 'project'
-            elif project.branch_code:
-                mode = 'branch'
-            elif project.customer_code:
-                mode = 'customer'
+        # ⭐ ดึง branch code จาก employee
+        employee_branch = current_user.get('branch_code', '00TR')
         
-        # สร้างเลขที่เอกสารใหม่
+        # ⭐ ตรวจสอบ mode จาก price_mode flag
+        mode = project.price_mode or 'project'  # default
+        
+        # ⭐ แปลง branch_code ถ้าเป็นรหัสตัวเลข (เช่น 056903002) เป็น 2 ตัวอักษร
+        if project.branch_code and len(project.branch_code) > 4:
+            project.branch_code = get_branch_code_from_db(project.branch_code)
+        
+        print(f"🏗️ [CREATE PROJECT PRICE] Mode: {mode}, Employee Branch: {employee_branch}, Selected Branch: {project.branch_code}")
+        
+        # สร้างเลขที่เอกสารอัตโนมัติ
         now = datetime.now()
         buddhist_year = str(now.year + 543)[-2:]
         month = str(now.month).zfill(2)
         
-        if mode == 'project':
-            prefix = f"PJ{buddhist_year}{month}"
-        elif mode == 'branch':
-            branch_prefix = project.branch_code[:2] if project.branch_code else 'XX'
-            prefix = f"{branch_prefix}{buddhist_year}{month}"
-        else:  # customer
+        if mode == 'customer':
+            # Customer mode: YYMMCUSTCODE (ไม่มี running number)
             prefix = f"{buddhist_year}{month}{project.customer_code}"
+        elif mode == 'branch':
+            # Branch mode: BRYYMMXXX (BR = branch code 2 ตัวอักษรของคนสร้าง)
+            branch_code = employee_branch[-2:].upper() if employee_branch else 'XX'
+            prefix = f"{branch_code}{buddhist_year}{month}"
+        else:  # project
+            # Project mode: PJYYMMXXX (PJ = Project, ไม่มี branch)
+            prefix = f"PJ{buddhist_year}{month}"
         
-        # นับจำนวนเอกสารที่มี prefix เดียวกัน
-        cursor.execute("""
-            SELECT COUNT(*) as cnt FROM Project_Price_Header
-            WHERE project_code LIKE ?
-        """, (f"{prefix}%",))
-        count = cursor.fetchone()[0]
-        running_number = str(count + 1).zfill(3)
-        generated_code = f"{prefix}{running_number}"
+        # ⭐ Customer mode ไม่ต้องมี running number
+        if mode == 'customer':
+            generated_code = prefix
+        else:
+            # นับจำนวนเอกสารที่มี prefix เดียวกัน
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM Project_Price_Header
+                WHERE project_code LIKE ?
+            """, (f"{prefix}%",))
+            count = cursor.fetchone()[0]
+            running_number = str(count + 1).zfill(3)
+            generated_code = f"{prefix}{running_number}"
         
         print(f"🏗️ [CREATE PROJECT PRICE] Generated Code: {generated_code}")
         
@@ -452,9 +522,9 @@ async def update_project_status(
     status: str,
     authorization: str = Header(None)
 ):
-    """อัพเดทสถานะราคาโครงการ (active/expired/cancel)"""
+    """อัพเดทสถานะราคาโครงการ (active/expired/canceled)"""
     current_user = get_current_user_from_token(authorization)
-    if status not in ['active', 'expired', 'cancel']:
+    if status not in ['active', 'expired', 'canceled']:
         raise HTTPException(status_code=400, detail="Invalid status")
     
     conn = None

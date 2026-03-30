@@ -1431,7 +1431,16 @@ def get_glass_filter_options(
     
     ส่งกลับ options สำหรับแต่ละฟิลเตอร์ที่ยังไม่ได้เลือก
     เช่น ถ้าเลือก brand แล้ว ให้ส่ง type/subGroup/color/thickness ที่มีอยู่ใน brand นั้น
+    
+    รองรับ multiple values (comma-separated) เช่น brand=01,02
     """
+    
+    # แปลง comma-separated values เป็น list
+    brand_list = brand.split(',') if brand else []
+    type_list = type.split(',') if type else []
+    subGroup_list = subGroup.split(',') if subGroup else []
+    color_list = color.split(',') if color else []
+    thickness_list = thickness.split(',') if thickness else []
     
     # Query จาก database พร้อมกรองตาม branch_code
     conn = get_mssql_conn()
@@ -1464,7 +1473,7 @@ def get_glass_filter_options(
     
     conn.close()
     
-    # ⭐ กรอง SKU ตามเงื่อนไขปัจจุบัน
+    # ⭐ กรอง SKU ตามเงื่อนไขปัจจุบัน (รองรับ multiple values)
     filtered_skus = []
     for sku in skus:
         parsed = parse_glass_sku(sku)
@@ -1472,15 +1481,15 @@ def get_glass_filter_options(
             continue
         
         # ตรวจสอบว่า SKU ตรงกับ filter ทั้งหมด
-        if brand and parsed["brand"] != brand:
+        if brand_list and parsed["brand"] not in brand_list:
             continue
-        if type and parsed["type"] != type:
+        if type_list and parsed["type"] not in type_list:
             continue
-        if subGroup and parsed["subGroup"] != subGroup:
+        if subGroup_list and parsed["subGroup"] not in subGroup_list:
             continue
-        if color and parsed["color"] != color:
+        if color_list and parsed["color"] not in color_list:
             continue
-        if thickness and parsed["thickness"] != thickness:
+        if thickness_list and parsed["thickness"] not in thickness_list:
             continue
         
         filtered_skus.append(sku)

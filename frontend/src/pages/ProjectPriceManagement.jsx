@@ -35,6 +35,7 @@ const ProjectPriceManagement = () => {
     customer_code: '',
     customer_name: '',
     branch_code: '',
+    site_branch_code: '',  // สาขาของไซต์งาน (สำหรับโหมดสาขา)
     price_start_date: '',
     price_end_date: '',
     request_by: '',
@@ -141,7 +142,7 @@ const ProjectPriceManagement = () => {
     if (priceMode === 'project') {
       return `PJ${buddhistYear}${month}`;
     } else if (priceMode === 'branch') {
-      const branchCode = formData.branch_code || 'XX';
+      const branchCode = (employee?.branchId || 'XX').slice(-2).toUpperCase();
       return `${branchCode}${buddhistYear}${month}`;
     } else if (priceMode === 'customer') {
       const custCode = formData.customer_code || '';
@@ -159,6 +160,7 @@ const ProjectPriceManagement = () => {
       customer_code: '',
       customer_name: '',
       branch_code: '',
+      site_branch_code: '',
       price_start_date: '',
       price_end_date: '',
       request_by: '',
@@ -226,13 +228,23 @@ const ProjectPriceManagement = () => {
               ? '/api/glass/filter-options'
               : `/api/items/categories/${categoryCode}/filter-options`;
             
-            // ⭐ Build filter params - pass individual values, not arrays
+            // ⭐ Build filter params - ส่งทุกค่าที่เลือก (ไม่ใช่แค่ค่าแรก)
             const params = {};
-            if (filterCriteria.brands?.length > 0) params.brand = filterCriteria.brands[0];
-            if (filterCriteria.groups?.length > 0) params.group = filterCriteria.groups[0];
-            if (filterCriteria.subGroups?.length > 0) params.subGroup = filterCriteria.subGroups[0];
-            if (filterCriteria.colors?.length > 0) params.color = filterCriteria.colors[0];
-            if (filterCriteria.thicknesses?.length > 0) params.thickness = filterCriteria.thicknesses[0];
+            
+            // สำหรับกระจก ใช้ 'type' แทน 'group'
+            if (categoryCode === 'G') {
+              if (filterCriteria.brands?.length > 0) params.brand = filterCriteria.brands.join(',');
+              if (filterCriteria.groups?.length > 0) params.type = filterCriteria.groups.join(',');
+              if (filterCriteria.subGroups?.length > 0) params.subGroup = filterCriteria.subGroups.join(',');
+              if (filterCriteria.colors?.length > 0) params.color = filterCriteria.colors.join(',');
+              if (filterCriteria.thicknesses?.length > 0) params.thickness = filterCriteria.thicknesses.join(',');
+            } else {
+              if (filterCriteria.brands?.length > 0) params.brand = filterCriteria.brands.join(',');
+              if (filterCriteria.groups?.length > 0) params.group = filterCriteria.groups.join(',');
+              if (filterCriteria.subGroups?.length > 0) params.subGroup = filterCriteria.subGroups.join(',');
+              if (filterCriteria.colors?.length > 0) params.color = filterCriteria.colors.join(',');
+              if (filterCriteria.thicknesses?.length > 0) params.thickness = filterCriteria.thicknesses.join(',');
+            }
             
             const response = await api.get(url, { params });
             const data = response.data;
@@ -422,19 +434,77 @@ const ProjectPriceManagement = () => {
       return;
     }
 
-    // เพิ่มสินค้าทั้งหมดด้วยราคาและจำนวนเดียวกัน
-    // ดึง brand, thickness จาก SKU ที่เลือก, unit ใช้ที่กรอกมา
-    const newItems = matchedSkus.map(sku => ({
-      sku: sku.sku,
-      product_name: sku.description || '',
-      brand: sku.brand || '',
-      thickness: sku.thickness || '',
-      unit: globalUnit || sku.unit || '',
+    // สร้างชื่อสินค้าจาก filter ที่เลือก (ไม่มี code และไม่มี "-")
+    const filterSummaryParts = [];
+    
+    // Category
+    if (filterCriteria.categories.length > 0) {
+      filterSummaryParts.push(filterCriteria.categories.join(', '));
+    }
+    
+    // Brand
+    if (filterCriteria.brands.length > 0) {
+      const brandNames = filterCriteria.brands.map(b => {
+        const option = filterOptions.brands.find(opt => opt.value === b);
+        return option ? extractNameFromLabel(option.label) : b;
+      });
+      filterSummaryParts.push(brandNames.join(', '));
+    }
+    
+    // Group
+    if (filterCriteria.groups.length > 0) {
+      const groupNames = filterCriteria.groups.map(g => {
+        const option = filterOptions.groups.find(opt => opt.value === g);
+        return option ? extractNameFromLabel(option.label) : g;
+      });
+      filterSummaryParts.push(groupNames.join(', '));
+    }
+    
+    // SubGroup
+    if (filterCriteria.subGroups.length > 0) {
+      const subGroupNames = filterCriteria.subGroups.map(s => {
+        const option = filterOptions.subGroups.find(opt => opt.value === s);
+        return option ? extractNameFromLabel(option.label) : s;
+      });
+      filterSummaryParts.push(subGroupNames.join(', '));
+    }
+    
+    // Color
+    if (filterCriteria.colors.length > 0) {
+      const colorNames = filterCriteria.colors.map(c => {
+        const option = filterOptions.colors.find(opt => opt.value === c);
+        return option ? extractNameFromLabel(option.label) : c;
+      });
+      filterSummaryParts.push(colorNames.join(', '));
+    }
+    
+    // Thickness
+    if (filterCriteria.thicknesses.length > 0) {
+      const thicknessNames = filterCriteria.thicknesses.map(t => {
+        const option = filterOptions.thicknesses.find(opt => opt.value === t);
+        return option ? extractNameFromLabel(option.label) : t;
+      });
+      filterSummaryParts.push(thicknessNames.join(', '));
+    }
+    
+    const productName = filterSummaryParts.join(' ');
+    
+    // เพิ่มเป็นแถวเดียวที่สรุป filter ทั้งหมด (แต่เก็บ SKU list ไว้สำหรับบันทึก)
+    const newItem = {
+      product_name: productName,
+      unit: globalUnit || '',
       price: globalPrice,
       quantity: globalQuantity || '',
-    }));
+      // ⭐ เก็บ SKU list ไว้สำหรับบันทึกลง database (ไม่แสดงบนหน้าจอ)
+      skus: matchedSkus.map(sku => ({
+        sku: sku.sku,
+        product_name: sku.description || '',
+        brand: sku.brand || '',
+        thickness: sku.thickness || ''
+      }))
+    };
 
-    setItems([...items, ...newItems]);
+    setItems([...items, newItem]);
     setShowFilterModal(false);
     
     // Reset filter and global values
@@ -452,16 +522,14 @@ const ProjectPriceManagement = () => {
     setGlobalUnit('');
     setOpenDropdown({});
     
-    alert(`เพิ่มสินค้า ${newItems.length} รายการเรียบร้อยแล้ว`);
+    alert(`เพิ่มรายการสินค้า (${matchedSkus.length} SKUs) เรียบร้อยแล้ว`);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (items.length === 0) {
-      alert('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ');
-      return;
-    }
+    // ⭐ ไม่บังคับให้ใส่สินค้า แต่ต้องใส่ชื่อโครงการ
+    // items.length === 0 ไม่ต้องแจ้งเตือน
 
     // Validate วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มใช้ราคา
     if (formData.price_end_date && formData.price_start_date) {
@@ -472,19 +540,43 @@ const ProjectPriceManagement = () => {
     }
 
     try {
+      // ⭐ แยก items ที่มี skus array ออกเป็นแต่ละ SKU
+      const expandedItems = [];
+      items.forEach(item => {
+        if (item.skus && item.skus.length > 0) {
+          // ถ้ามี skus array แปลว่าเป็น item จาก filter - แยกเป็นแต่ละ SKU
+          item.skus.forEach(skuData => {
+            expandedItems.push({
+              sku: skuData.sku,
+              product_name: skuData.product_name,
+              brand: skuData.brand,
+              thickness: skuData.thickness,
+              unit: item.unit,
+              price: item.price,
+              quantity: item.quantity
+            });
+          });
+        } else {
+          // ถ้าไม่มี skus array แปลว่าเป็น item ที่เพิ่มทีละรายการ
+          expandedItems.push({
+            sku: item.sku || '',
+            product_name: item.product_name,
+            brand: item.brand || '',
+            thickness: item.thickness || '',
+            unit: item.unit,
+            price: item.price,
+            quantity: item.quantity
+          });
+        }
+      });
+      
       const payload = {
         ...formData,
         // ✅ เพิ่ม employee code
         created_by_employee_code: employee?.id,
-        items: items.map(item => ({
-          sku: item.sku,
-          product_name: item.product_name,
-          brand: item.brand,
-          thickness: item.thickness,
-          unit: item.unit,
-          price: parseFloat(item.price),
-          quantity: item.quantity ? parseFloat(item.quantity) : null,
-        }))
+        // ⭐ เพิ่ม price_mode flag
+        price_mode: priceMode,
+        items: expandedItems
       };
 
       if (editingProjectId) {
@@ -506,6 +598,7 @@ const ProjectPriceManagement = () => {
         customer_code: '',
         customer_name: '',
         branch_code: '',
+        site_branch_code: '',
         price_start_date: '',
         price_end_date: '',
         request_by: '',
@@ -525,10 +618,7 @@ const ProjectPriceManagement = () => {
 
   const addItem = () => {
     setItems([...items, {
-      sku: '',
       product_name: '',
-      brand: '',
-      thickness: '',
       unit: '',
       price: '',
       quantity: '',
@@ -546,15 +636,18 @@ const ProjectPriceManagement = () => {
   };
 
   const deleteProject = async (projectId) => {
-    if (!confirm('ต้องการลบราคาโครงการนี้หรือไม่?')) return;
+    if (!confirm('ต้องการยกเลิกราคาโครงการนี้หรือไม่?')) return;
     
     try {
-      await api.delete(`/api/project-prices/${projectId}`);
-      alert('ลบราคาโครงการเรียบร้อยแล้ว');
+      // ⭐ เปลี่ยนสถานะเป็น "canceled" แทนการลบ
+      await api.put(`/api/project-prices/${projectId}/status`, null, {
+        params: { status: 'canceled' }
+      });
+      alert('ยกเลิกราคาโครงการเรียบร้อยแล้ว');
       loadProjects();
     } catch (err) {
-      console.error('Error deleting project:', err);
-      alert('เกิดข้อผิดพลาดในการลบ');
+      console.error('Error canceling project:', err);
+      alert('เกิดข้อผิดพลาดในการยกเลิก');
     }
   };
 
@@ -572,11 +665,113 @@ const ProjectPriceManagement = () => {
   // Check if project is within date range
   const isProjectActive = (project) => {
     const today = new Date().toISOString().split('T')[0];
+    
+    // ⭐ ถ้าเลยวันสิ้นสุด ให้อัปเดตสถานะเป็น "expired" อัตโนมัติ
+    if (project.status !== 'canceled' && today > project.price_end_date) {
+      if (project.status !== 'expired') {
+        updateStatus(project.project_id, 'expired');
+      }
+      return false;
+    }
+    
     return project.price_start_date <= today && today <= project.price_end_date;
   };
 
   // Start editing project
-  const startEditProject = (project) => {
+  // ⭐ Helper function: แยกชื่อจาก label (เอาส่วนหลัง " - ")
+  const extractNameFromLabel = (label) => {
+    if (!label) return '';
+    const parts = label.split(' - ');
+    return parts.length > 1 ? parts[1] : label;
+  };
+
+  // ⭐ Helper function: แปลง SKU เป็นชื่อสินค้า (ใช้ filterOptions ที่ส่งเข้ามา)
+  const getProductNameFromSku = (sku, options = filterOptions) => {
+    if (!sku) return '';
+    
+    const categoryMap = {
+      'G': 'Glass',
+      'A': 'Aluminum',
+      'S': 'Sealant',
+      'Y': 'Gypsum',
+      'C': 'C-Line',
+      'E': 'Accessories'
+    };
+    
+    const parts = [];
+    const categoryCode = sku[0];
+    
+    // ตัวอักษรแรก = Category
+    const category = categoryMap[categoryCode] || categoryCode;
+    parts.push(category);
+    
+    // ⭐ SKU Structure:
+    // Glass (G): G + Brand(2) + Type(2) + SubGroup(3) + Color(2) + Thickness(2) + Width(3) + Length(3) = 18 chars
+    // Others: X + Brand(2) + Group(2) + SubGroup(3) + Color(2) + Thickness(2) = 12 chars
+    // เราจะดูแค่ 12 ตัวแรก (ไม่รวม Width/Length ของกระจก)
+    
+    const skuCore = sku.substring(0, Math.min(12, sku.length));
+    
+    // ตำแหน่ง 2-3: Brand
+    if (skuCore.length >= 3) {
+      const brandCode = skuCore.substring(1, 3);
+      const brandOption = options.brands?.find(b => b.value === brandCode);
+      if (brandOption) {
+        parts.push(extractNameFromLabel(brandOption.label));
+      }
+    }
+    
+    // ตำแหน่ง 4-5: Group/Type
+    let groupCode = null;
+    if (skuCore.length >= 5) {
+      groupCode = skuCore.substring(3, 5);
+      const groupOption = options.groups?.find(g => g.value === groupCode);
+      if (groupOption) {
+        parts.push(extractNameFromLabel(groupOption.label));
+      }
+    }
+    
+    // ตำแหน่ง 6-8: SubGroup (สำหรับกระจก ต้องหา SubGroup ที่ตรงกับ Group)
+    if (skuCore.length >= 8) {
+      const subGroupCode = skuCore.substring(5, 8);
+      
+      // ⭐ สำหรับกระจก ต้องหา SubGroup ที่มี groupCode ตรงกัน
+      let subGroupOption;
+      if (categoryCode === 'G' && groupCode) {
+        subGroupOption = options.subGroups?.find(s => 
+          s.value === subGroupCode && s.groupCode === groupCode
+        );
+      } else {
+        subGroupOption = options.subGroups?.find(s => s.value === subGroupCode);
+      }
+      
+      if (subGroupOption) {
+        parts.push(extractNameFromLabel(subGroupOption.label));
+      }
+    }
+    
+    // ตำแหน่ง 9-10: Color
+    if (skuCore.length >= 10) {
+      const colorCode = skuCore.substring(8, 10);
+      const colorOption = options.colors?.find(c => c.value === colorCode);
+      if (colorOption) {
+        parts.push(extractNameFromLabel(colorOption.label));
+      }
+    }
+    
+    // ตำแหน่ง 11-12: Thickness
+    if (skuCore.length >= 12) {
+      const thicknessCode = skuCore.substring(10, 12);
+      const thicknessOption = options.thicknesses?.find(t => t.value === thicknessCode);
+      if (thicknessOption) {
+        parts.push(extractNameFromLabel(thicknessOption.label));
+      }
+    }
+    
+    return parts.join(' ');
+  };
+
+  const startEditProject = async (project) => {
     setEditingProjectId(project.project_id);
     setFormData({
       project_code: project.project_code,
@@ -584,18 +779,296 @@ const ProjectPriceManagement = () => {
       customer_code: project.customer_code || '',
       customer_name: project.customer_name || '',
       branch_code: project.branch_code || '',
+      site_branch_code: project.site_branch_code || '',
       price_start_date: project.price_start_date || '',
       price_end_date: project.price_end_date || '',
       request_by: project.request_by || '',
       request_date: project.request_date || new Date().toISOString().split('T')[0],
       remark: project.remark || '',
     });
-    setItems(project.items || []);
+    
+    // ⭐ ดึง categories จาก items เพื่อโหลด filterOptions
+    const categories = new Set();
+    (project.items || []).forEach(item => {
+      if (item.sku && item.sku.length > 0) {
+        const categoryCode = item.sku[0];
+        const categoryMap = {
+          'G': 'Glass',
+          'A': 'Aluminum',
+          'S': 'Sealant',
+          'Y': 'Gypsum',
+          'C': 'C-Line',
+          'E': 'Accessories'
+        };
+        if (categoryMap[categoryCode]) {
+          categories.add(categoryMap[categoryCode]);
+        }
+      }
+    });
+    
+    // ⭐ โหลด filterOptions สำหรับ categories ที่พบ (แยกตามประเภท)
+    const filterOptionsByCategory = {};
+    if (categories.size > 0) {
+      try {
+        const categoryMap = {
+          'Glass': 'G',
+          'Aluminum': 'A',
+          'Sealant': 'S',
+          'Gypsum': 'Y',
+          'C-Line': 'C',
+          'Accessories': 'E'
+        };
+
+        await Promise.all(
+          Array.from(categories).map(async (cat) => {
+            const categoryCode = categoryMap[cat];
+            if (!categoryCode) return;
+
+            try {
+              // ⭐ สำหรับกระจก ต้องดึง SubGroup ตาม Group ที่มีใน SKU
+              if (categoryCode === 'G') {
+                // หา Group codes ทั้งหมดที่มีในกระจก
+                const glassGroupCodes = new Set();
+                (project.items || []).forEach(item => {
+                  if (item.sku && item.sku[0] === 'G' && item.sku.length >= 5) {
+                    glassGroupCodes.add(item.sku.substring(3, 5));
+                  }
+                });
+
+                filterOptionsByCategory[cat] = {
+                  brands: [],
+                  groups: [],
+                  subGroups: [],
+                  colors: [],
+                  thicknesses: []
+                };
+
+                // ดึง options พื้นฐาน (ไม่มี filter)
+                const baseResponse = await api.get('/api/glass/filter-options');
+                const baseData = baseResponse.data;
+
+                if (baseData.brands) {
+                  filterOptionsByCategory[cat].brands = baseData.brands.map(b => ({
+                    value: b.value,
+                    label: b.label
+                  }));
+                }
+
+                if (baseData.types) {
+                  filterOptionsByCategory[cat].groups = baseData.types.map(g => ({
+                    value: g.value,
+                    label: g.label
+                  }));
+                }
+
+                if (baseData.colors) {
+                  filterOptionsByCategory[cat].colors = baseData.colors.map(c => ({
+                    value: c.value,
+                    label: c.label
+                  }));
+                }
+
+                if (baseData.thicknesses) {
+                  filterOptionsByCategory[cat].thicknesses = baseData.thicknesses.map(t => ({
+                    value: t.value,
+                    label: t.label
+                  }));
+                }
+
+                // ⭐ ดึง SubGroup แยกตาม Group
+                for (const groupCode of glassGroupCodes) {
+                  try {
+                    const subGroupResponse = await api.get('/api/glass/filter-options', {
+                      params: { type: groupCode }
+                    });
+                    if (subGroupResponse.data.subGroups) {
+                      subGroupResponse.data.subGroups.forEach(s => {
+                        // เก็บ SubGroup พร้อม Group code เพื่อใช้ในการ match
+                        filterOptionsByCategory[cat].subGroups.push({
+                          value: s.value,
+                          label: s.label,
+                          groupCode: groupCode
+                        });
+                      });
+                    }
+                  } catch (err) {
+                    console.error(`Error loading subgroups for glass group ${groupCode}:`, err);
+                  }
+                }
+              } else {
+                // สำหรับประเภทอื่นๆ ดึงแบบปกติ
+                const url = `/api/items/categories/${categoryCode}/filter-options`;
+                const response = await api.get(url);
+                const data = response.data;
+
+                filterOptionsByCategory[cat] = {
+                  brands: [],
+                  groups: [],
+                  subGroups: [],
+                  colors: [],
+                  thicknesses: []
+                };
+
+                if (data.brand) {
+                  filterOptionsByCategory[cat].brands = data.brand.map(b => ({
+                    value: b.code,
+                    label: b.name
+                  }));
+                }
+
+                if (data.group) {
+                  filterOptionsByCategory[cat].groups = data.group.map(g => ({
+                    value: g.code,
+                    label: g.name
+                  }));
+                }
+
+                if (data.subGroup) {
+                  filterOptionsByCategory[cat].subGroups = data.subGroup.map(s => ({
+                    value: s.code,
+                    label: s.name
+                  }));
+                }
+
+                if (data.color) {
+                  filterOptionsByCategory[cat].colors = data.color.map(c => ({
+                    value: c.code,
+                    label: c.name
+                  }));
+                }
+
+                if (data.thickness) {
+                  filterOptionsByCategory[cat].thicknesses = data.thickness.map(t => ({
+                    value: t.code,
+                    label: t.name
+                  }));
+                }
+              }
+            } catch (err) {
+              console.error(`Error loading filter options for category ${categoryCode}:`, err);
+            }
+          })
+        );
+
+        // รวม options ทั้งหมดเพื่อ set state (สำหรับใช้ใน filter modal)
+        const allOptions = {
+          brands: new Set(),
+          groups: new Set(),
+          subGroups: new Set(),
+          colors: new Set(),
+          thicknesses: new Set()
+        };
+
+        Object.values(filterOptionsByCategory).forEach(opts => {
+          opts.brands.forEach(b => allOptions.brands.add(JSON.stringify({ value: b.value, label: b.label })));
+          opts.groups.forEach(g => allOptions.groups.add(JSON.stringify({ value: g.value, label: g.label })));
+          opts.subGroups.forEach(s => allOptions.subGroups.add(JSON.stringify({ value: s.value, label: s.label })));
+          opts.colors.forEach(c => allOptions.colors.add(JSON.stringify({ value: c.value, label: c.label })));
+          opts.thicknesses.forEach(t => allOptions.thicknesses.add(JSON.stringify({ value: t.value, label: t.label })));
+        });
+
+        tempFilterOptions = {
+          categories: CATEGORY_OPTIONS,
+          brands: Array.from(allOptions.brands).map(b => JSON.parse(b)).sort((a, b) => a.label.localeCompare(b.label)),
+          groups: Array.from(allOptions.groups).map(g => JSON.parse(g)).sort((a, b) => a.label.localeCompare(b.label)),
+          subGroups: Array.from(allOptions.subGroups).map(s => JSON.parse(s)).sort((a, b) => a.label.localeCompare(b.label)),
+          colors: Array.from(allOptions.colors).map(c => JSON.parse(c)).sort((a, b) => a.label.localeCompare(b.label)),
+          thicknesses: Array.from(allOptions.thicknesses).map(t => JSON.parse(t)).sort((a, b) => a.label.localeCompare(b.label))
+        };
+        
+        setFilterOptions(tempFilterOptions);
+      } catch (error) {
+        console.error('Error loading filter options for edit:', error);
+      }
+    }
+    
+    // ⭐ รวมกลุ่ม SKU ที่มีราคา, หน่วย, จำนวนเหมือนกัน
+    const groupedItems = [];
+    const itemGroups = {};
+    
+    (project.items || []).forEach(item => {
+      // สร้าง key สำหรับจัดกลุ่ม (ราคา + หน่วย + จำนวน + ประเภท)
+      const groupKey = `${item.price}_${item.unit}_${item.quantity || ''}_${item.sku?.[0] || ''}`;
+      
+      if (!itemGroups[groupKey]) {
+        itemGroups[groupKey] = {
+          product_name: item.product_name || '',
+          unit: item.unit,
+          price: item.price,
+          quantity: item.quantity,
+          skus: []
+        };
+      }
+      
+      // เพิ่ม SKU เข้ากลุ่ม
+      itemGroups[groupKey].skus.push({
+        sku: item.sku,
+        product_name: item.product_name,
+        brand: item.brand,
+        thickness: item.thickness
+      });
+    });
+    
+    // แปลงเป็น array และสร้างชื่อสินค้าจากกลุ่ม
+    Object.values(itemGroups).forEach(group => {
+      if (group.skus.length > 1) {
+        // ⭐ ดูที่ SKU - หาตำแหน่งที่ตรงกันทั้งหมด
+        const skus = group.skus.map(s => s.sku);
+        
+        // หาความยาวของ SKU ที่ตรงกัน (ดูแค่ 12 ตัวแรก)
+        let commonSkuLength = 0;
+        if (skus.length > 0) {
+          const firstSku = skus[0].substring(0, 12);
+          for (let i = 0; i < firstSku.length; i++) {
+            // ตรวจสอบว่าตำแหน่ง i ตรงกันทั้งหมด
+            if (skus.every(sku => sku.substring(0, 12)[i] === firstSku[i])) {
+              commonSkuLength = i + 1;
+            } else {
+              break;
+            }
+          }
+        }
+        
+        // ถ้ามีส่วนที่ตรงกัน ให้สร้างชื่อจาก common SKU
+        if (commonSkuLength > 0) {
+          const commonSku = skus[0].substring(0, commonSkuLength);
+          
+          // ⭐ หาประเภทของ SKU และใช้ options ที่ถูกต้อง
+          const categoryCode = commonSku[0];
+          const categoryMap = {
+            'G': 'Glass',
+            'A': 'Aluminum',
+            'S': 'Sealant',
+            'Y': 'Gypsum',
+            'C': 'C-Line',
+            'E': 'Accessories'
+          };
+          const categoryName = categoryMap[categoryCode];
+          const categoryOptions = filterOptionsByCategory[categoryName] || tempFilterOptions;
+          
+          group.product_name = `${getProductNameFromSku(commonSku, categoryOptions)} (${group.skus.length} SKUs)`;
+        } else {
+          group.product_name = `${group.skus.length} SKUs`;
+        }
+      } else {
+        // ถ้ามี SKU เดียว ไม่ต้องมี skus array
+        const singleSku = group.skus[0];
+        group.product_name = singleSku.product_name;
+        // ไม่เก็บ skus array ถ้ามีแค่ตัวเดียว (เพื่อให้แก้ไขได้ปกติ)
+        delete group.skus;
+      }
+      groupedItems.push(group);
+    });
+    
+    setItems(groupedItems);
     setShowForm(true);
   };
 
-  // Filter projects by customer search term
+  // ⭐ Filter projects by customer search term และซ่อน canceled
   const filteredProjects = projects.filter(project => {
+    // ⭐ ซ่อนรายการที่เป็น canceled
+    if (project.status === 'canceled') return false;
+    
     if (!customerSearchTerm.trim()) return true;
     
     const searchLower = customerSearchTerm.toLowerCase();
@@ -683,7 +1156,7 @@ const ProjectPriceManagement = () => {
                   </button>
                   <span className="text-sm font-medium text-gray-600">
                     {priceMode === 'project' && 'โหมด: โครงการ (PJYYMMXXX)'}
-                    {priceMode === 'branch' && 'โหมด: สาขา (BRYYMMXX)'}
+                    {priceMode === 'branch' && 'โหมด: สาขา (BRYYMMXXX)'}
                     {priceMode === 'customer' && 'โหมด: ลูกค้าพิเศษ (YYMMCUSTCODE)'}
                   </span>
                 </>
@@ -702,10 +1175,11 @@ const ProjectPriceManagement = () => {
             {(priceMode === 'branch' || (editingProjectId && formData.branch_code)) && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                ชื่อโครงการ
+                ชื่อโครงการ *
               </label>
               <input
                 type="text"
+                required
                 value={formData.project_name}
                 onChange={(e) => setFormData({...formData, project_name: e.target.value})}
                 className="w-full border rounded-lg px-3 py-2"
@@ -818,10 +1292,9 @@ const ProjectPriceManagement = () => {
               {(priceMode === 'branch' || (editingProjectId && formData.branch_code)) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  สาขา *
+                  สาขา
                 </label>
                 <select
-                  required
                   value={formData.branch_code}
                   onChange={(e) => setFormData({...formData, branch_code: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2"
@@ -846,7 +1319,7 @@ const ProjectPriceManagement = () => {
                 >
                   <option value="">เลือกสาขา</option>
                   {Array.isArray(branches) && branches.map(b => (
-                    <option key={b.Code} value={b.Code}>{b.Name}</option>
+                    <option key={b.Code} value={b.Code}>{b.Name} ({b.Code})</option>
                   ))}
                 </select>
               </div>
@@ -854,7 +1327,7 @@ const ProjectPriceManagement = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  วันที่เริ่มใช้ราคา *
+                  วันที่เริ่มใช้ราคา 
                 </label>
                 <input
                   type="date"
@@ -867,7 +1340,7 @@ const ProjectPriceManagement = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  วันที่สิ้นสุด *
+                  วันที่สิ้นสุด 
                 </label>
                 <input
                   type="date"
@@ -891,21 +1364,7 @@ const ProjectPriceManagement = () => {
               </div>
             </div>
 
-            {/* ⭐ Row 3.5: Project Name for Branch Mode */}
-            {(priceMode === 'branch' || (editingProjectId && formData.branch_code)) && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                ชื่อโครงการ
-              </label>
-              <input
-                type="text"
-                value={formData.project_name}
-                onChange={(e) => setFormData({...formData, project_name: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2"
-                placeholder="เช่น โครงการคอนโดXXX"
-              />
-            </div>
-            )}
+
 
             {/* Row 4: Request By & Remark */}
             <div className="grid grid-cols-2 gap-4">
@@ -963,65 +1422,54 @@ const ProjectPriceManagement = () => {
               <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
                 <div className="space-y-2 p-2">
                   {items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-8 gap-2 items-end bg-gray-50 p-2 rounded">
-                      <input
-                        type="text"
-                        placeholder="SKU"
-                        value={item.sku}
-                        onChange={(e) => updateItem(index, 'sku', e.target.value)}
-                        className="border rounded px-2 py-1 text-sm"
-                      />
-                      <input
-                        type="text"
-                        placeholder="ชื่อสินค้า"
-                        value={item.product_name}
-                        onChange={(e) => updateItem(index, 'product_name', e.target.value)}
-                        className="border rounded px-2 py-1 text-sm col-span-2"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Brand"
-                        value={item.brand}
-                        onChange={(e) => updateItem(index, 'brand', e.target.value)}
-                        className="border rounded px-2 py-1 text-sm"
-                      />
-                      <input
-                        type="text"
-                        placeholder="ความหนา"
-                        value={item.thickness}
-                        onChange={(e) => updateItem(index, 'thickness', e.target.value)}
-                        className="border rounded px-2 py-1 text-sm"
-                      />
-                      <input
-                        type="text"
-                        placeholder="หน่วย"
-                        value={item.unit}
-                        onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                        className="border rounded px-2 py-1 text-sm"
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="ราคา"
-                        value={item.price}
-                        onChange={(e) => updateItem(index, 'price', e.target.value)}
-                        className="border rounded px-2 py-1 text-sm"
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="จำนวน"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                        className="border rounded px-2 py-1 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeItem(index)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div key={index} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-2 rounded">
+                      <div className="col-span-5">
+                        <input
+                          type="text"
+                          placeholder="ชื่อสินค้า / รายละเอียด"
+                          value={item.product_name}
+                          onChange={(e) => updateItem(index, 'product_name', e.target.value)}
+                          className="w-full border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          placeholder="หน่วย"
+                          value={item.unit}
+                          onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                          className="w-full border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="ราคา"
+                          value={item.price}
+                          onChange={(e) => updateItem(index, 'price', e.target.value)}
+                          className="w-full border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="จำนวน"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                          className="w-full border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-1 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1301,7 +1749,7 @@ const ProjectPriceManagement = () => {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {isProjectActive(project) && (
+                    {project.status !== 'canceled' && (
                       <button
                         onClick={() => startEditProject(project)}
                         className="text-blue-600 hover:text-blue-800 px-2 py-1 border rounded-md font-bold"
@@ -1315,16 +1763,18 @@ const ProjectPriceManagement = () => {
                       className={`px-2 py-1 rounded text-sm font-medium ${
                         project.status === 'active' ? 'bg-white text-green-800' :
                         project.status === 'expired' ? 'bg-gray-100 text-gray-800' :
-                        'bg-red-100 text-red-800'
+                        project.status === 'canceled' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
                       }`}
                     >
                       <option value="active">Active</option>
                       <option value="expired">Expired</option>
-                      <option value="cancel">Cancel</option>
+                      <option value="canceled">Canceled</option>
                     </select>
                     <button
                       onClick={() => deleteProject(project.project_id)}
                       className="text-red-600 hover:text-red-800"
+                      title="ยกเลิกราคาโครงการ"
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>

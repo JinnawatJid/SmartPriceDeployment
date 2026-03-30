@@ -704,6 +704,19 @@ def get_filter_options(
     thickness: str = None,
     character: str = None,
 ):
+    """ดึง filter options ที่ถูกกรองแล้วตามเงื่อนไขปัจจุบัน
+    
+    รองรับ multiple values (comma-separated) เช่น brand=01,02
+    """
+    
+    # แปลง comma-separated values เป็น list
+    brand_list = brand.split(',') if brand else []
+    group_list = group.split(',') if group else []
+    subGroup_list = subGroup.split(',') if subGroup else []
+    color_list = color.split(',') if color else []
+    thickness_list = thickness.split(',') if thickness else []
+    character_list = character.split(',') if character else []
+    
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
@@ -711,19 +724,20 @@ def get_filter_options(
     where_clauses = ["LEFT(im.SKU, 1) = ?", "im.Blocked = 0"]
     params = [category_name.upper()]
 
-    # Helper function สำหรับเพิ่ม filter
-    def add_filter(field_slice, value, pad_len):
-        if value:
-            where_clauses.append(f"SUBSTRING(im.SKU, {field_slice[0]}, {field_slice[1]}) = ?")
-            params.append(value.zfill(pad_len))
+    # Helper function สำหรับเพิ่ม filter (รองรับ multiple values)
+    def add_filter(field_slice, value_list, pad_len):
+        if value_list:
+            placeholders = ','.join(['?'] * len(value_list))
+            where_clauses.append(f"SUBSTRING(im.SKU, {field_slice[0]}, {field_slice[1]}) IN ({placeholders})")
+            params.extend([v.zfill(pad_len) for v in value_list])
 
     # ⭐ Filter by SKU pattern ตาม category
     if category_name.upper() == "A":
-        add_filter((2, 2), brand, 2)
-        add_filter((4, 2), group, 2)
-        add_filter((6, 3), subGroup, 3)
-        add_filter((9, 2), color, 2)
-        add_filter((11, 2), thickness, 2)
+        add_filter((2, 2), brand_list, 2)
+        add_filter((4, 2), group_list, 2)
+        add_filter((6, 3), subGroup_list, 3)
+        add_filter((9, 2), color_list, 2)
+        add_filter((11, 2), thickness_list, 2)
         
         # Define extraction for each field
         field_extracts = {
@@ -735,11 +749,11 @@ def get_filter_options(
         }
 
     elif category_name.upper() == "C":
-        add_filter((2, 2), brand, 2)
-        add_filter((4, 2), group, 2)
-        add_filter((6, 3), subGroup, 3)
-        add_filter((9, 2), color, 2)
-        add_filter((11, 2), thickness, 2)
+        add_filter((2, 2), brand_list, 2)
+        add_filter((4, 2), group_list, 2)
+        add_filter((6, 3), subGroup_list, 3)
+        add_filter((9, 2), color_list, 2)
+        add_filter((11, 2), thickness_list, 2)
         
         field_extracts = {
             "brand": "SUBSTRING(im.SKU, 2, 2)",
@@ -750,13 +764,14 @@ def get_filter_options(
         }
 
     elif category_name.upper() == "E":
-        add_filter((2, 3), brand, 3)
-        add_filter((5, 2), group, 2)
-        add_filter((7, 2), subGroup, 2)
-        add_filter((9, 2), color, 2)
-        if character:
-            where_clauses.append("SUBSTRING(im.SKU, 11, 1) = ?")
-            params.append(character)
+        add_filter((2, 3), brand_list, 3)
+        add_filter((5, 2), group_list, 2)
+        add_filter((7, 2), subGroup_list, 2)
+        add_filter((9, 2), color_list, 2)
+        if character_list:
+            placeholders = ','.join(['?'] * len(character_list))
+            where_clauses.append(f"SUBSTRING(im.SKU, 11, 1) IN ({placeholders})")
+            params.extend(character_list)
         
         field_extracts = {
             "brand": "SUBSTRING(im.SKU, 2, 3)",
@@ -767,10 +782,10 @@ def get_filter_options(
         }
 
     elif category_name.upper() == "S":
-        add_filter((2, 2), brand, 2)
-        add_filter((4, 2), group, 2)
-        add_filter((6, 3), subGroup, 3)
-        add_filter((9, 2), color, 2)
+        add_filter((2, 2), brand_list, 2)
+        add_filter((4, 2), group_list, 2)
+        add_filter((6, 3), subGroup_list, 3)
+        add_filter((9, 2), color_list, 2)
         
         field_extracts = {
             "brand": "SUBSTRING(im.SKU, 2, 2)",
@@ -780,11 +795,11 @@ def get_filter_options(
         }
 
     elif category_name.upper() == "Y":
-        add_filter((2, 2), brand, 2)
-        add_filter((4, 2), group, 2)
-        add_filter((6, 2), subGroup, 2)
-        add_filter((8, 3), color, 3)
-        add_filter((11, 2), thickness, 2)
+        add_filter((2, 2), brand_list, 2)
+        add_filter((4, 2), group_list, 2)
+        add_filter((6, 2), subGroup_list, 2)
+        add_filter((8, 3), color_list, 3)
+        add_filter((11, 2), thickness_list, 2)
         
         field_extracts = {
             "brand": "SUBSTRING(im.SKU, 2, 2)",
