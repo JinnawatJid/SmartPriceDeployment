@@ -875,7 +875,7 @@ async def calculate_pricing(req: PricingRequest = Body(...), branch_code: str = 
         
         # ราคาโครงการไม่ต้องปัดเศษ ใช้ราคาเป๊ะๆ
         if is_project_price:
-            return round(raw, 2)  # แค่ปัด 2 ทศนิยม
+            return raw  # ⭐ ใช้ราคาเป๊ะๆ ไม่ปัดเศษเลย
         else:
             return round_up_050(raw)  # ราคาระบบ/ประวัติ ปัดทีละ 0.50
 

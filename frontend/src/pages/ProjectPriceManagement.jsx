@@ -1382,7 +1382,7 @@ const ProjectPriceManagement = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  รายการสินค้า
+                  หมายเหตุ
                 </label>
                 <input
                   type="text"
