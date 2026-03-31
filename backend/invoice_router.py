@@ -22,6 +22,7 @@ def load_invoice_from_db(
     customer_no: Optional[str] = None,
     posting_date: Optional[str] = None,
     limit: int = 200,
+    project_only: bool = False,  # ⭐ เพิ่มพารามิเตอร์กรองเฉพาะ Invoice ที่มี Project_No
 ):
     """
     ดึงข้อมูล Invoice จาก MSSQL Database
@@ -33,10 +34,14 @@ def load_invoice_from_db(
         # สร้าง SQL query
         sql = "SELECT TOP (?) Document_No, Order_No, customer_code, Sell_to_Customer_Name, "
         sql += "Posting_Date, sku, Description, Variant_Code, Quantity, Unit_of_Measure, "
-        sql += "Unit_Price, Line_Amount, Line_Amount_Include_VAT "
+        sql += "Unit_Price, Line_Amount, Line_Amount_Include_VAT, Project_No "  # ⭐ เพิ่ม Project_No
         sql += "FROM dbo.Invoice WHERE 1=1"
         
         params = [limit]
+        
+        # ⭐ กรองเฉพาะ Invoice ที่มี Project_No (ไม่ใช่ NULL)
+        if project_only:
+            sql += " AND Project_No IS NOT NULL"
         
         # เพิ่ม filter ถ้ามี
         if customer_no:
@@ -80,6 +85,8 @@ def load_invoice_from_db(
                     row_dict["Amount"] = float(value) if value else 0
                 elif col_name == "Line_Amount_Include_VAT":
                     row_dict["Amount Including VAT"] = float(value) if value else 0
+                elif col_name == "Project_No":  # ⭐ เพิ่ม Project_No
+                    row_dict["Project No."] = value
                 else:
                     row_dict[col_name] = value
             
@@ -105,6 +112,7 @@ def list_invoice(
     posting_date: Optional[str] = Query(None),
     limit: int = 200,
     return_line_items: bool = Query(False),
+    project_only: bool = Query(False),  # ⭐ เพิ่มพารามิเตอร์กรองเฉพาะ Invoice ที่มี Project_No
 ):
     """
     ดึงรายการ Invoice จาก MSSQL Database
@@ -115,6 +123,7 @@ def list_invoice(
     - posting_date: Filter by posting date
     - limit: Maximum number of invoices to return (default: 200)
     - return_line_items: If True, return line items with calculated quantities
+    - project_only: If True, return only invoices with Project_No (not NULL)
     
     Returns:
     - If return_line_items=False: List of invoices sorted by posting date descending (Requirement 1.3)
@@ -127,6 +136,7 @@ def list_invoice(
         customer_no=customer_no,
         posting_date=posting_date,
         limit=limit,
+        project_only=project_only,  # ⭐ ส่งพารามิเตอร์ไปยัง load_invoice_from_db
     )
     
     # If return_line_items is True, enrich with product type and calculated quantities

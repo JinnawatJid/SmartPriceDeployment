@@ -55,6 +55,7 @@ const PurchaseHistory = ({ customerCode }) => {
             customer_no: customerCode,
             limit: 500,
             return_line_items: true, // Request line items with calculated quantities
+            project_only: true, // ⭐ กรองเฉพาะ Invoice ที่มี Project_No
           },
         });
 

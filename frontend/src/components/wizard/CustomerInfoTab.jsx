@@ -10,6 +10,10 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
   const [loading, setLoading] = useState(false);
   const [creditLoading, setCreditLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // ⭐ State สำหรับราคาโครงการ
+  const [projectPrices, setProjectPrices] = useState([]);
+  const [projectLoading, setProjectLoading] = useState(false);
 
   console.log("📋 [CustomerInfoTab] Received props:", { customer, customerCode });
   console.log("📋 [CustomerInfoTab] Current creditData:", creditData);
@@ -94,6 +98,38 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
     };
 
     loadCreditData();
+  }, [customerCode]);
+
+  // ⭐ โหลดราคาโครงการของลูกค้า
+  useEffect(() => {
+    const loadProjectPrices = async () => {
+      if (!customerCode || customerCode.toUpperCase() === "N/A") {
+        setProjectPrices([]);
+        return;
+      }
+
+      try {
+        setProjectLoading(true);
+        const res = await api.get('/api/project-prices/by-customer', {
+          params: { customerCode }
+        });
+        
+        // กรองเฉพาะโครงการที่ active และมีสินค้า
+        const activeProjects = (res.data || []).filter(
+          p => p.status === 'active' && p.items && p.items.length > 0
+        );
+        
+        setProjectPrices(activeProjects);
+        console.log('📦 [PROJECT PRICES] Loaded:', activeProjects);
+      } catch (err) {
+        console.error('❌ [PROJECT PRICES] Error loading:', err);
+        setProjectPrices([]);
+      } finally {
+        setProjectLoading(false);
+      }
+    };
+
+    loadProjectPrices();
   }, [customerCode]);
 
   if (loading || creditLoading) {
@@ -232,10 +268,6 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
             />
             <InfoField 
               label="ประเภทลูกค้า" 
-              value={customerData?.customer_type || customerData?.CustomerType || "-"} 
-            />
-            <InfoField 
-              label="ประเภทธุรกิจ" 
               value={customerData?.gen_bus || customerData?.GenBus || "-"} 
             />
             <InfoField 
@@ -248,7 +280,7 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
             />
             <InfoField 
               label="เลขที่ผู้เสียภาษี" 
-              value={customerData?.tax_id || customerData?.tax_number || "-"} 
+              value={customerData?.tax_no || customerData?.tax_number || "-"} 
             />
             <InfoField 
               label="ผู้ติดต่อ" 
@@ -361,6 +393,129 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
       <div className="mt-6">
         <PurchaseHistory customerCode={customerCode} />
       </div>
+
+      {/* ⭐ Project Price Section */}
+      {projectLoading ? (
+        <div className="mt-6 bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center justify-center">
+            <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+            <p className="text-gray-500">กำลังโหลดข้อมูลราคาโครงการ...</p>
+          </div>
+        </div>
+      ) : projectPrices.length > 0 ? (
+        <div className="mt-6 bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+              <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            ราคาโครงการของลูกค้า
+          </h3>
+          
+          <div className="space-y-4">
+            {projectPrices.map((project) => (
+              <div key={project.project_id} className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+                {/* Project Header */}
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h4 className="font-bold text-blue-900 text-lg">{project.project_code}</h4>
+                    {project.project_name && (
+                      <p className="text-sm text-blue-700">{project.project_name}</p>
+                    )}
+                  </div>
+                  <div className="text-right text-xs text-blue-600">
+                    <p>ใช้ได้ถึง: {formatDateThai(project.price_end_date)}</p>
+                  </div>
+                </div>
+
+                {/* Project Items */}
+                <div className="bg-white rounded-lg p-3 border border-blue-100">
+                  <p className="text-xs font-semibold text-gray-700 mb-2">
+                    📦 รายการสินค้าในโครงการ:
+                  </p>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {(() => {
+                      // ฟังก์ชันตัดขนาดและสีออกจากชื่อสินค้า
+                      const cleanProductName = (name) => {
+                        if (!name) return name;
+                        
+                        let cleaned = name;
+                        
+                        // ตัดส่วนที่เป็นตัวเลข x ตัวเลข (เช่น 120x168, 60x60)
+                        cleaned = cleaned.replace(/\s*\d+x\d+\s*/g, ' ');
+                        
+                        // ตัดสีออก (คำที่ขึ้นต้นด้วย "สี" เช่น สีแดง, สีเขียว, สีน้ำเงิน)
+                        cleaned = cleaned.replace(/\s*สี[ก-๙]+\s*/g, ' ');
+                        
+                        // ตัดชื่อสีภาษาอังกฤษที่อยู่ท้ายชื่อ (เช่น Red, Green, Blue, White, Black, Clear)
+                        cleaned = cleaned.replace(/\s+(Red|Green|Blue|White|Black|Clear|Yellow|Orange|Purple|Pink|Brown|Grey|Gray)\s*$/gi, ' ');
+                        
+                        // ลบช่องว่างซ้ำซ้อน
+                        cleaned = cleaned.replace(/\s+/g, ' ').trim();
+                        
+                        return cleaned;
+                      };
+                      
+                      // จัดกลุ่มสินค้าที่มีราคา หน่วย และจำนวนเหมือนกัน (ไม่สนใจขนาดและสี)
+                      const groupedItems = {};
+                      
+                      project.items.forEach(item => {
+                        const cleanName = cleanProductName(item.product_name);
+                        const groupKey = `${cleanName}_${item.price}_${item.unit}_${item.quantity || ''}`;
+                        
+                        if (!groupedItems[groupKey]) {
+                          groupedItems[groupKey] = {
+                            product_name: cleanName,
+                            unit: item.unit,
+                            price: item.price,
+                            quantity: item.quantity,
+                            skus: []
+                          };
+                        }
+                        
+                        groupedItems[groupKey].skus.push(item.sku);
+                      });
+                      
+                      return Object.values(groupedItems).map((group, idx) => (
+                        <div key={idx} className="flex justify-between items-start text-xs bg-gray-50 p-2 rounded border border-gray-100">
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-800">
+                              {group.product_name || '-'}
+                              {group.skus.length > 1 && (
+                                <span className="ml-2 text-blue-600 font-semibold">
+                                  ({group.skus.length} SKUs)
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="text-right ml-3">
+                            {group.quantity && (
+                              <p className="font-semibold text-blue-600">
+                                จำนวน: {parseFloat(group.quantity).toLocaleString()} {group.unit || ''}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2 text-right">
+                    รวม {project.items.length} SKU
+                  </p>
+                </div>
+
+                {/* Project Remark */}
+                {project.remark && (
+                  <div className="mt-2 bg-yellow-50 border-l-4 border-yellow-400 p-2 rounded">
+                    <p className="text-xs font-semibold text-yellow-800">หมายเหตุ:</p>
+                    <p className="text-xs text-yellow-700">{project.remark}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

@@ -545,10 +545,11 @@ const ProjectPriceManagement = () => {
       items.forEach(item => {
         if (item.skus && item.skus.length > 0) {
           // ถ้ามี skus array แปลว่าเป็น item จาก filter - แยกเป็นแต่ละ SKU
+          // ⭐ ใช้ชื่อสินค้าจาก filter (item.product_name) แทน description ของแต่ละ SKU
           item.skus.forEach(skuData => {
             expandedItems.push({
               sku: skuData.sku,
-              product_name: skuData.product_name,
+              product_name: item.product_name, // ⭐ ใช้ชื่อจาก filter ไม่ใช่ skuData.product_name
               brand: skuData.brand,
               thickness: skuData.thickness,
               unit: item.unit,
@@ -1331,7 +1332,6 @@ const ProjectPriceManagement = () => {
                 </label>
                 <input
                   type="date"
-                  required
                   value={formData.price_start_date}
                   onChange={(e) => setFormData({...formData, price_start_date: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2"
@@ -1344,7 +1344,6 @@ const ProjectPriceManagement = () => {
                 </label>
                 <input
                   type="date"
-                  required
                   value={formData.price_end_date}
                   onChange={(e) => setFormData({...formData, price_end_date: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2"

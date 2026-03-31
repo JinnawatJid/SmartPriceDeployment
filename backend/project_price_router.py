@@ -419,7 +419,7 @@ async def get_active_project_price(customerCode: str, sku: str):
 
 @router.get("/by-customer")
 async def get_projects_by_customer(customerCode: str):
-    """ดึงรายการโครงการทั้งหมดของลูกค้า (active เท่านั้น)"""
+    """ดึงรายการโครงการทั้งหมดของลูกค้า (active เท่านั้น) พร้อมรายการสินค้า"""
     conn = None
     
     try:
@@ -448,7 +448,7 @@ async def get_projects_by_customer(customerCode: str):
         query = """
             SELECT 
                 project_id, project_code, project_name,
-                price_start_date, price_end_date
+                price_start_date, price_end_date, remark, status
             FROM Project_Price_Header
             WHERE status = 'active'
             AND price_start_date <= ?
@@ -468,6 +468,21 @@ async def get_projects_by_customer(customerCode: str):
                 r['price_start_date'] = str(r['price_start_date'])
             if r.get('price_end_date'):
                 r['price_end_date'] = str(r['price_end_date'])
+            
+            # ⭐ ดึงรายการสินค้าของโครงการ
+            items_query = """
+                SELECT 
+                    sku, product_name, unit, price, quantity
+                FROM Project_Price_Line
+                WHERE project_id = ?
+                ORDER BY product_name
+            """
+            cursor.execute(items_query, [r['project_id']])
+            item_columns = [column[0] for column in cursor.description]
+            items = [dict(zip(item_columns, row)) for row in cursor.fetchall()]
+            
+            r['items'] = items
+            print(f"📦 [PROJECT LIST API] Project {r['project_code']}: {len(items)} items")
         
         print(f"📦 [PROJECT LIST API] Found {len(results)} active projects in date range")
         
