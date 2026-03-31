@@ -381,32 +381,117 @@ function Step6_Summary({ state, dispatch }) {
 
       const shipping = Number(state.shippingCustomerPay || 0);
 
-      // ✅ ถ้า "ไม่มีสินค้าใหม่" → ใช้ยอดเดิมทั้งหมด
-      if (itemsNeedingPricing.length === 0) {
-        const subtotalGross = sumLine(state.cart);
-        const grossBeforeVat = subtotalGross + shipping;
-        const vat = Math.round(grossBeforeVat * 0.07 * 100) / 100;
-        const exVat = grossBeforeVat - vat;
-        const total = grossBeforeVat;
+      // ✅ ถ้า "ไม่มีสินค้าใหม่" → ต้องส่ง request ไปยัง backend เพื่อคำนวณค่าใบกำกับภาษี
+      // แต่ถ้าไม่มีสินค้าเลย ไม่ต้องส่ง
+      if (itemsNeedingPricing.length === 0 && state.cart && state.cart.length > 0) {
+        // ⭐ ส่ง request ไปยัง backend เพื่อคำนวณค่าใบกำกับภาษี
+        setCalculation((prev) => ({ ...prev, loading: true }));
 
-        setCalculation({
-          cart: [], // Draft ไม่ใช้ calculated.cart
-          totals: {
-            exVat,
-            vat,
-            total,
-            exVatFmt: fmtTHB(exVat),
-            vatFmt: fmtTHB(vat),
-            totalFmt: fmtTHB(total),
-          },
-          loading: false,
-          error: null,
-        });
+        const calcDraftWithTax = async () => {
+          try {
+            const customerCode = getCustomerCode(state.customer);
+
+            const res = await api.post("/api/pricing/calculate", {
+              customerData: {
+                customerCode,
+                customerName: state.customer?.name || "",
+                paymentTerm:
+                  state.customer?.paymentTerm ??
+                  state.customer?.creditTerm ??
+                  state.customer?.payment_terms ??
+                  "",
+
+                paymentMethod: state.customer?.paymentMethod || "",
+
+                // ⭐ scoring fields
+                customer_date: state.customer?.customer_date,
+                accum_6m: Number(state.customer?.accum_6m || 0),
+                frequency: Number(state.customer?.frequency || 0),
+                gen_bus: state.customer?.gen_bus,
+                
+                // ⭐ sales by category
+                sales_g_cust: Number(state.customer?.sales_g_cust || 0),
+                sales_a_cust: Number(state.customer?.sales_a_cust || 0),
+                sales_s_cust: Number(state.customer?.sales_s_cust || 0),
+                sales_y_cust: Number(state.customer?.sales_y_cust || 0),
+                sales_c_cust: Number(state.customer?.sales_c_cust || 0),
+                sales_e_cust: Number(state.customer?.sales_e_cust || 0),
+
+                shippingCustomerPay: Number(state.shippingCustomerPay || 0),
+                project_id: selectedProject,
+              },
+
+              deliveryType: state.deliveryType,
+              needTaxInvoice: state.needsTax ?? false,  // ⭐ เพิ่ม flag ใบกำกับภาษี
+              cart: state.cart.map((it) => ({
+                sku: it.sku,
+                name: it.name ?? "",
+                qty: Number(it.qty || 0),
+                sqft_sheet: Number(it.sqft_sheet ?? it.sqft ?? 0),
+                cost: it.cost,
+                pkg_size: Number(it.pkg_size ?? 1),
+                category: it.category,
+                unit: it.unit ?? "",
+                product_weight: it.product_weight ?? 0,
+                isSoldByPack: it.isSoldByPack ?? false,
+                priceSource: it.priceSource ?? "system",
+                UnitPrice: it.priceSource === "manual" ? Number(it.UnitPrice ?? 0) : undefined,
+                pricePerSqft: it.priceSource === "manual" ? Number(it.pricePerSqft ?? 0) : undefined,
+                pricePerKg: it.priceSource === "manual" ? Number(it.pricePerKg ?? 0) : undefined,
+                weight: it.priceSource === "manual" ? Number(it.weight ?? 0) : undefined,
+                isPromotion: it.isPromotion ?? false,
+              })),
+            });
+
+            const pricedItems = res.data.items || [];
+            
+            // ⭐ อัพเดทราคาในตะกร้า
+            pricedItems.forEach((pi) => {
+              const key = `${pi.sku}__${Number(pi.sqft_sheet ?? 0)}`;
+
+              dispatch({
+                type: "APPLY_PRICING_RESULT",
+                payload: { key, priced: pi },
+              });
+            });
+
+            const subtotalGross = sumLine(state.cart);
+            const grossBeforeVat = subtotalGross + shipping;
+            const vat = Math.round(grossBeforeVat * 0.07 * 100) / 100;
+            const exVat = grossBeforeVat - vat;
+            const total = grossBeforeVat;
+
+            setCalculation({
+              cart: pricedItems,
+              totals: {
+                exVat,
+                vat,
+                total,
+                exVatFmt: fmtTHB(exVat),
+                vatFmt: fmtTHB(vat),
+                totalFmt: fmtTHB(total),
+              },
+              loading: false,
+              error: null,
+            });
+          } catch (err) {
+            console.error(err);
+            setCalculation({
+              cart: [],
+              totals: {},
+              loading: false,
+              error: "เกิดข้อผิดพลาดในการคำนวณราคา (Draft)",
+            });
+          }
+        };
+
+        calcDraftWithTax();
         return;
       }
 
       // ✅ ถ้ามีสินค้าใหม่ → pricing เฉพาะสินค้าใหม่
-      setCalculation((prev) => ({ ...prev, loading: true }));
+      if (itemsNeedingPricing.length > 0) {
+        setCalculation((prev) => ({ ...prev, loading: true }));
 
       const calcDraft = async () => {
         try {
@@ -453,6 +538,7 @@ function Step6_Summary({ state, dispatch }) {
             },
 
             deliveryType: state.deliveryType,
+            needTaxInvoice: state.needsTax ?? false,  // ⭐ เพิ่ม flag ใบกำกับภาษี
             cart: itemsNeedingPricing.map((it) => ({
               sku: it.sku,
               name: it.name ?? "",
@@ -528,6 +614,7 @@ function Step6_Summary({ state, dispatch }) {
 
       calcDraft();
       return;
+      }
     }
 
     // -------------------------------------------------
@@ -583,6 +670,7 @@ function Step6_Summary({ state, dispatch }) {
           },
 
           deliveryType: state.deliveryType,
+          needTaxInvoice: state.needsTax ?? false,  // ⭐ เพิ่ม flag ใบกำกับภาษี
           cart: state.cart.map((it) => ({
             sku: it.sku,
             name: it.name ?? "",
@@ -629,7 +717,7 @@ function Step6_Summary({ state, dispatch }) {
     };
 
     calc();
-  }, [state.status, cartItemsKey, state.customer, state.deliveryType, state.shippingCustomerPay, selectedProject]); // ⭐ เพิ่ม selectedProject
+  }, [state.status, cartItemsKey, state.customer, state.deliveryType, state.shippingCustomerPay, selectedProject, state.needsTax]); // ⭐ เพิ่ม state.needsTax
 
   // ===============================
   // AUTO RECALC SHIPPING (AFTER PRICING)
@@ -846,6 +934,7 @@ function Step6_Summary({ state, dispatch }) {
             project_id: selectedProject, // 🔥 ส่ง project_id ที่เลือก (null ถ้าไม่เลือก)
           },
           deliveryType: state.deliveryType,
+          needTaxInvoice: state.needsTax ?? false,  // ⭐ เพิ่ม flag ใบกำกับภาษี
           cart: state.cart.map((it) => ({
             sku: it.sku,
             name: it.name ?? "",
