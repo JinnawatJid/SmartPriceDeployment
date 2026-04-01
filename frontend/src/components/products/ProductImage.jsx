@@ -3,32 +3,42 @@ import { useState, useEffect } from "react";
 
 export default function ProductImage({ item }) {
   const [imageUrl, setImageUrl] = useState(null);
-  const [tried, setTried] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!item?.sku || tried) return;
+    if (!item?.sku) {
+      setImageUrl(null);
+      setLoading(false);
+      return;
+    }
+
+    // Reset state เมื่อเปลี่ยนสินค้า
+    setLoading(true);
+    setImageUrl(null);
 
     // ลองดึงรูปจาก API ก่อน
     const img = new Image();
     img.onload = () => {
-      setImageUrl(`/api/product-images/${item.sku}`);
-      setTried(true);
+      setImageUrl(`/api/product-images/${item.sku}?t=${Date.now()}`);
+      setLoading(false);
     };
     img.onerror = () => {
       // ถ้าไม่มีรูปจาก API ให้ใช้ imageUrl เดิม
       setImageUrl(item?.imageUrl || null);
-      setTried(true);
+      setLoading(false);
     };
-    img.src = `/api/product-images/${item.sku}`;
-  }, [item?.sku, tried]);
+    img.src = `/api/product-images/${item.sku}?t=${Date.now()}`;
+  }, [item?.sku]); // ⭐ ลบ tried ออกจาก dependency
 
   return (
     <div className="border rounded w-full h-[300px] flex items-center justify-center bg-gray-100 shadow">
-      {imageUrl ? (
+      {loading ? (
+        <span className="text-gray-400">Loading...</span>
+      ) : imageUrl ? (
         <img 
           src={imageUrl} 
           alt={item?.name || 'Product'} 
-          className="max-h-full object-contain"
+          className="max-h-full max-w-full object-contain"
         />
       ) : (
         <span className="text-gray-400">No Image</span>

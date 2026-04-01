@@ -364,13 +364,13 @@ export default function ProductImageManager() {
                   className="max-h-full max-w-full object-contain"
                 />
               ) : currentImage ? (
-                <div className="text-center">
+                <div className="h-full w-full flex flex-col items-center justify-center">
                   <img
                     src={currentImage}
                     alt="Current"
-                    className="max-h-full max-w-full object-contain mb-2"
+                    className="max-h-[calc(100%-2rem)] max-w-full object-contain"
                   />
-                  <p className="text-sm text-gray-500">รูปภาพปัจจุบัน</p>
+                  <p className="text-sm text-gray-500 mt-2">รูปภาพปัจจุบัน</p>
                 </div>
               ) : (
                 <p className="text-gray-400">ไม่มีรูปภาพ</p>

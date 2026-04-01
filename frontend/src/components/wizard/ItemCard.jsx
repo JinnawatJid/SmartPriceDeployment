@@ -7,6 +7,7 @@ const ItemCard = ({ item, onAdd }) => {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [imageKey, setImageKey] = useState(Date.now()); // ⭐ เพิ่ม key สำหรับ refresh รูป
 
   // ตรวจสอบว่าสินค้าถูกเลือกแล้วหรือไม่
   const sku = item.sku || item.SKU;
@@ -16,7 +17,12 @@ const ItemCard = ({ item, onAdd }) => {
 
   // 🔥 โหลด detail เฉพาะตอนเปิด dropdown
   useEffect(() => {
-    if (!open || detail) return;
+    if (!open) return;
+
+    // ⭐ Refresh รูปเมื่อเปิด dropdown
+    setImageKey(Date.now());
+
+    if (detail) return;
 
     const loadDetail = async () => {
       try {
@@ -55,7 +61,7 @@ const ItemCard = ({ item, onAdd }) => {
       <div className="flex gap-3 p-3 items-center">
         <div className="w-16 h-16 rounded-lg border bg-white overflow-hidden">
           <img
-            src={`/api/product-images/${item.sku}`}
+            src={`/api/product-images/${item.sku}?t=${imageKey}`}
             alt={item.name}
             className="w-full h-full object-contain"
             onError={(e) => {
