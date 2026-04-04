@@ -21,9 +21,20 @@ const BoxIcon = () => (
   <img src="/assets/pickup.png" alt="Box Icon" className="w-10 h-10 object-contain" />
 );
 
-function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, billTaxName, ibtBranch, branches = [] }) {
+function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, billTaxName, ibtBranch, branches = [], isPreOrder, onPreOrderChange, requiredDeliveryDate, onRequiredDeliveryDateChange }) {
   const update = (change) => {
     if (onChange) onChange(change);
+  };
+
+  // Helper function to format date in Thai
+  const formatDateThai = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const day = date.getDate();
+    const month = thaiMonths[date.getMonth()];
+    const year = date.getFullYear() + 543;
+    return `${day} ${month} ${year}`;
   };
   
   return (
@@ -44,6 +55,52 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
               selected={needsTax === false}
               onClick={() => update({ needsTax: false })}
             />
+          </div>
+
+          {/* Pre-Order Section */}
+          <div className="mt-4 space-y-3">
+            {/* Pre-Order Checkbox */}
+            <div className="font-bold text-gray-800 mt-1">Pre Order</div>
+            <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border-2 border-gray-300 w-56">
+              <input
+                type="checkbox"
+                id="preOrderCheckbox"
+                checked={isPreOrder}
+                onChange={(e) => onPreOrderChange && onPreOrderChange(e.target.checked)}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+              />
+              <label
+                htmlFor="preOrderCheckbox"
+                className="text-xs font-semibold text-gray-700 cursor-pointer select-none"
+              >
+                ใบเสนอราคานี้เป็น Pre-Order
+              </label>
+            </div>
+
+            {/* Required Delivery Date - แสดงเฉพาะเมื่อเลือก Pre-Order */}
+            {isPreOrder && (
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <label htmlFor="requiredDeliveryDate" className="block text-xs font-semibold text-gray-700 mb-2">
+                  วันที่ลูกค้าต้องการของ <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  id="requiredDeliveryDate"
+                  value={requiredDeliveryDate}
+                  onChange={(e) => onRequiredDeliveryDateChange && onRequiredDeliveryDateChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  min={new Date().toISOString().split("T")[0]}
+                />
+                {requiredDeliveryDate && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    วันที่ที่เลือก: <strong>{formatDateThai(requiredDeliveryDate)}</strong>
+                  </p>
+                )}
+                {!requiredDeliveryDate && isPreOrder && (
+                  <p className="text-xs text-red-500 mt-1">กรุณาเลือกวันที่ลูกค้าต้องการของ</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

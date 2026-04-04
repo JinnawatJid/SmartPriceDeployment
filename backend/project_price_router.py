@@ -722,3 +722,60 @@ async def get_all_projects_by_customer(customer_code: str):
     finally:
         if conn:
             conn.close()
+
+@router.get("/branch/{branch_code}/all")
+async def get_all_projects_by_branch(branch_code: str):
+    """
+    ดึงรายการโครงการทั้งหมดของสาขา (ไม่กรองสถานะหรือวันที่)
+    
+    Parameters:
+    - branch_code: รหัสสาขา (เช่น BKK, CNX)
+    
+    Response:
+    [
+        {
+            "project_code": "PJ2501001",
+            "project_name": "โครงการคอนโดXXX",
+            "customer_code": "08015AY",
+            "customer_name": "บริษัท ABC",
+            "branch_code": "BKK",
+            "request_by": "สมชาย",
+            "remark": "หมายเหตุ"
+        },
+        ...
+    ]
+    """
+    conn = None
+    
+    try:
+        conn = get_mssql_conn()
+        cursor = conn.cursor()
+        
+        print(f"🔍 [GET ALL PROJECTS BY BRANCH] Branch: {branch_code}")
+        
+        # ดึงโครงการทั้งหมดของสาขา (ไม่กรองสถานะหรือวันที่)
+        query = """
+            SELECT 
+                project_code, project_name, customer_code, customer_name,
+                branch_code, request_by, remark
+            FROM Project_Price_Header
+            WHERE branch_code = ?
+            ORDER BY project_code DESC
+        """
+        
+        cursor.execute(query, [branch_code])
+        
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        print(f"📦 [GET ALL PROJECTS BY BRANCH] พบ {len(results)} โครงการสำหรับสาขา {branch_code}")
+        
+        return results
+    
+    except Exception as e:
+        print(f"❌ [GET ALL PROJECTS BY BRANCH] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if conn:
+            conn.close()

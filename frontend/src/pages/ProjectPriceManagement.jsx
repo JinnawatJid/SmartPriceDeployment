@@ -101,6 +101,13 @@ const ProjectPriceManagement = () => {
     }
   }, [filterCriteria.brands, filterCriteria.groups, filterCriteria.subGroups, filterCriteria.colors, filterCriteria.thicknesses]);
 
+  // ⭐ Product search for individual items
+  useEffect(() => {
+    if (filterCriteria.categories.length > 0) {
+      loadFilterOptions();
+    }
+  }, [filterCriteria.brands, filterCriteria.groups, filterCriteria.subGroups, filterCriteria.colors, filterCriteria.thicknesses]);
+
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -634,6 +641,11 @@ const ProjectPriceManagement = () => {
     const newItems = [...items];
     newItems[index][field] = value;
     setItems(newItems);
+  };
+
+  // ⭐ Remove SKU from matched list
+  const removeMatchedSku = (skuToRemove) => {
+    setMatchedSkus(prev => prev.filter(item => item.sku !== skuToRemove));
   };
 
   const deleteProject = async (projectId) => {
@@ -1176,7 +1188,7 @@ const ProjectPriceManagement = () => {
             {(priceMode === 'branch' || (editingProjectId && formData.branch_code)) && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                ชื่อโครงการ *
+                ชื่อโครงการ <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -1193,7 +1205,7 @@ const ProjectPriceManagement = () => {
             {(priceMode === 'project' || editingProjectId) && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                ชื่อโครงการ *
+                ชื่อโครงการ <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -1293,12 +1305,13 @@ const ProjectPriceManagement = () => {
               {(priceMode === 'branch' || (editingProjectId && formData.branch_code)) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  สาขา
+                  สาขา <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.branch_code}
                   onChange={(e) => setFormData({...formData, branch_code: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2"
+                  required
                 >
                   <option value="">เลือกสาขา</option>
                   {Array.isArray(branches) && branches.map(b => (
@@ -1311,12 +1324,13 @@ const ProjectPriceManagement = () => {
               {(priceMode === 'project' || (editingProjectId && !formData.branch_code)) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  สาขา
+                  สาขา <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.branch_code}
                   onChange={(e) => setFormData({...formData, branch_code: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2"
+                  required
                 >
                   <option value="">เลือกสาขา</option>
                   {Array.isArray(branches) && branches.map(b => (
@@ -1407,72 +1421,44 @@ const ProjectPriceManagement = () => {
                     <Filter className="w-4 h-4" />
                     เลือกตาม Filter
                   </button>
-                  <button
-                    type="button"
-                    onClick={addItem}
-                    className="flex items-center gap-1 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-                  >
-                    <Plus className="w-4 h-4" />
-                    เพิ่มทีละรายการ
-                  </button>
                 </div>
               </div>
 
-              <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
-                <div className="space-y-2 p-2">
-                  {items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-2 rounded">
-                      <div className="col-span-5">
-                        <input
-                          type="text"
-                          placeholder="ชื่อสินค้า / รายละเอียด"
-                          value={item.product_name}
-                          onChange={(e) => updateItem(index, 'product_name', e.target.value)}
-                          className="w-full border rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <input
-                          type="text"
-                          placeholder="หน่วย"
-                          value={item.unit}
-                          onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                          className="w-full border rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="ราคา"
-                          value={item.price}
-                          onChange={(e) => updateItem(index, 'price', e.target.value)}
-                          className="w-full border rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="จำนวน"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                          className="w-full border rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-1 flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() => removeItem(index)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+              {/* แสดงรายการที่เพิ่มแล้ว */}
+              {items.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold mb-2">รายการที่เพิ่มแล้ว ({items.length})</h4>
+                  <div className="border border-gray-200 rounded-lg">
+                    <div className="space-y-2 p-2 max-h-96 overflow-y-auto">
+                      {items.map((item, index) => (
+                        <div key={index} className="bg-gray-50 p-2 rounded">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{item.product_name}</p>
+                              <p className="text-xs text-gray-600 mt-1">
+                                ราคา: ฿{parseFloat(item.price || 0).toLocaleString('th-TH', {minimumFractionDigits: 2})} | 
+                                จำนวน: {item.quantity} {item.unit}
+                              </p>
+                              {item.skus && item.skus.length > 0 && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                  ({item.skus.length} SKUs)
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeItem(index)}
+                              className="ml-2 text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Submit Buttons */}
@@ -1612,11 +1598,21 @@ const ProjectPriceManagement = () => {
                     <p className="text-green-800 font-semibold mb-2 text-sm">
                       ✅ พบ {matchedSkus.length} SKU ที่ตรงกับเงื่อนไข
                     </p>
-                    <div className="max-h-32 overflow-y-auto space-y-1 bg-white rounded p-2">
+                    <div className="max-h-64 overflow-y-auto space-y-1 bg-white rounded p-2">
                       {matchedSkus.map((item, idx) => (
-                        <p key={idx} className="text-xs text-gray-700">
-                          • {item.sku} - {item.description}
-                        </p>
+                        <div key={idx} className="flex items-center justify-between text-xs text-gray-700 hover:bg-gray-50 p-1 rounded group">
+                          <span className="flex-1">
+                            • {item.sku} - {item.description}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeMatchedSku(item.sku)}
+                            className="ml-2 text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="ลบรายการนี้"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
