@@ -21,7 +21,7 @@ const BoxIcon = () => (
   <img src="/assets/pickup.png" alt="Box Icon" className="w-10 h-10 object-contain" />
 );
 
-function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, billTaxName, ibtBranch, branches = [], isPreOrder, onPreOrderChange, requiredDeliveryDate, onRequiredDeliveryDateChange }) {
+function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, billTaxName, ibtBranch, branches = [], isPreOrder, onPreOrderChange, requiredDeliveryDate, onRequiredDeliveryDateChange, currentBranchCode }) {
   const update = (change) => {
     if (onChange) onChange(change);
   };
@@ -36,6 +36,9 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
     const year = date.getFullYear() + 543;
     return `${day} ${month} ${year}`;
   };
+
+  // ⭐ Filter branches for IBT: exclude current branch
+  const ibtBranches = branches.filter(branch => branch.Code !== currentBranchCode);
   
   return (
     <div className="flex flex-col gap-4 rounded-lg bg-gray-50 py-4 px-8">
@@ -149,7 +152,7 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
               className="w-full mt-1 rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm text-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">ไม่เลือก</option>
-              {branches.map((branch) => (
+              {ibtBranches.map((branch) => (
                 <option key={branch.Code} value={branch.Code}>
                    {branch.Code}-{branch.Name}
                 </option>

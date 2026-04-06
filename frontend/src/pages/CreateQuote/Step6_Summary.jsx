@@ -2392,6 +2392,7 @@ function Step6_Summary({ state, dispatch }) {
             onPreOrderChange={setIsPreOrder}
             requiredDeliveryDate={requiredDeliveryDate}
             onRequiredDeliveryDateChange={setRequiredDeliveryDate}
+            currentBranchCode={employee?.branchId || "00TR"}
             onOpenShipping={() => setShippingOpen(true)}
             onChange={(change) => {
               const payload = {

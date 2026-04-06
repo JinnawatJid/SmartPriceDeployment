@@ -8,14 +8,17 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import json
+import logging
 from config.db_mssql import get_mssql_conn
 
 
 from fastapi import APIRouter, HTTPException, Body, Depends
 from openpyxl import load_workbook
-from auth_dependency import get_branch_code
+from auth_dependency import get_branch_code, get_employee_info
 
 router = APIRouter(prefix="/quotation", tags=["quotation"])
+
+logger = logging.getLogger(__name__)
 
 
 # Excel template directory
@@ -448,32 +451,67 @@ def update_quotation(quote_no: str, payload: dict = Body(...)):
 @router.get("", summary="โหลดรายการใบเสนอราคาแบบทั้งหมด")
 def list_quotations(
     status: str = None,
-    branch_code: str = Depends(get_branch_code)
+    branch_code: str = Depends(get_branch_code),
+    employee_info: dict = Depends(get_employee_info)
 ):
     """
     โหลดรายการใบเสนอราคา กรองตามสาขาของพนักงาน
     รวมถึงใบเสนอราคา IBT ที่ส่งไปยังสาขานี้
     
+    สำหรับ RM (ผู้จัดการภาค): จะเห็นข้อมูลทุกสาขาในภาคของตนเอง
+    
     Args:
         status: กรองตาม status (draft, complete, cancelled)
         branch_code: รหัสสาขาจาก JWT token
+        employee_info: ข้อมูลพนักงานจาก JWT token (role, region)
     """
+    from branch_region_mapping import get_all_branches_by_region
+    
     conn = get_mssql_conn()
     cursor = conn.cursor()
 
-    # ⭐ กรองตามสาขาของพนักงาน หรือเป็น IBT ที่ส่งไปยังสาขานี้
-    if status:
-        cursor.execute("""
-            SELECT * FROM Quote_Header
-            WHERE Status = ? AND (BranchCode = ? OR IBT_branch = ?)
-            ORDER BY LastUpdate DESC
-        """, (status, branch_code, branch_code))
+    # ⭐ ถ้าเป็น RM ให้ดึงทุกสาขาในภาค
+    role = employee_info.get("role", "Sales")
+    region = employee_info.get("region", "BE")
+    
+    if role == "RM":
+        # RM เห็นทุกสาขาในภาค
+        branches_in_region = get_all_branches_by_region(region)
+        logger.info(f"RM viewing quotes for region {region}: {branches_in_region}")
+        
+        # สร้าง placeholders สำหรับ SQL IN clause
+        placeholders = ",".join(["?" for _ in branches_in_region])
+        
+        if status:
+            query = f"""
+                SELECT * FROM Quote_Header
+                WHERE Status = ? AND (BranchCode IN ({placeholders}) OR IBT_branch IN ({placeholders}))
+                ORDER BY LastUpdate DESC
+            """
+            params = [status] + branches_in_region + branches_in_region
+            cursor.execute(query, params)
+        else:
+            query = f"""
+                SELECT * FROM Quote_Header
+                WHERE BranchCode IN ({placeholders}) OR IBT_branch IN ({placeholders})
+                ORDER BY LastUpdate DESC
+            """
+            params = branches_in_region + branches_in_region
+            cursor.execute(query, params)
     else:
-        cursor.execute("""
-            SELECT * FROM Quote_Header
-            WHERE BranchCode = ? OR IBT_branch = ?
-            ORDER BY LastUpdate DESC
-        """, (branch_code, branch_code))
+        # พนักงานทั่วไป (Sales, ZM) เห็นเฉพาะสาขาของตนเอง
+        if status:
+            cursor.execute("""
+                SELECT * FROM Quote_Header
+                WHERE Status = ? AND (BranchCode = ? OR IBT_branch = ?)
+                ORDER BY LastUpdate DESC
+            """, (status, branch_code, branch_code))
+        else:
+            cursor.execute("""
+                SELECT * FROM Quote_Header
+                WHERE BranchCode = ? OR IBT_branch = ?
+                ORDER BY LastUpdate DESC
+            """, (branch_code, branch_code))
 
     headers = [normalize_keys(row_to_dict(cursor, r)) for r in cursor.fetchall()]
     result = []
@@ -645,65 +683,3 @@ def cancel_quotation(quote_no: str):
 
     return {"cancelled": quote_no}
 
-
-
-
-
-
-
-
-# =====================================================
-# GET PRE-ORDER QUOTES BY BRANCH CODE
-# =====================================================
-@router.get("/pre-order/{branch_code}", summary="ดึงใบเสนอราคา Pre-Order ตามสาขา")
-def get_preorder_quotes(branch_code: str):
-    """
-    ดึงรายการใบเสนอราคาที่เป็น Pre-Order ตามรหัสสาขา
-    
-    Args:
-        branch_code: รหัสสาขา (เช่น BKK, CNX)
-    
-    Returns:
-        List of Quote_Header records where Pre_Order = 1
-    """
-    conn = None
-    
-    try:
-        conn = get_mssql_conn()
-        cursor = conn.cursor()
-        
-        print(f"🔍 [GET PRE-ORDER QUOTES] Branch: {branch_code}")
-        
-        # ดึงใบเสนอราคาที่เป็น Pre-Order ของสาขานี้
-        cursor.execute("""
-            SELECT 
-                QuoteNo, Status, CustomerCode, CustomerName, SalesID, SalesName,
-                CreateDate, ExpireDate, ApproveDate, BranchCode,
-                ShippingCost, DiscountAmount, SubtotalAmount, TotalAmount,
-                NeedsTax, Remark, Remark_Shipping, LastUpdate,
-                Tel, tax_no, ShippingCustomerPay, Pre_Order, Required_Delivery_Date, project_code
-            FROM Quote_Header
-            WHERE Pre_Order = 1 AND BranchCode = ?
-            ORDER BY CreateDate DESC
-        """, (branch_code,))
-        
-        columns = [column[0] for column in cursor.description]
-        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        # แปลง datetime เป็น string
-        for r in results:
-            for key in ['CreateDate', 'ExpireDate', 'ApproveDate', 'LastUpdate', 'Required_Delivery_Date']:
-                if r.get(key):
-                    r[key] = str(r[key])
-        
-        print(f"📦 [GET PRE-ORDER QUOTES] Found {len(results)} pre-order quotes for branch {branch_code}")
-        
-        return results
-    
-    except Exception as e:
-        print(f"❌ [GET PRE-ORDER QUOTES] Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    
-    finally:
-        if conn:
-            conn.close()
