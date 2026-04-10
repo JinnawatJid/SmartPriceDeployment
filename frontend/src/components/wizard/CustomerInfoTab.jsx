@@ -7,6 +7,7 @@ import PurchaseHistory from "./PurchaseHistory.jsx";
 const CustomerInfoTab = ({ customer, customerCode }) => {
   const [customerData, setCustomerData] = useState(null);
   const [creditData, setCreditData] = useState(null);
+  const [remainingCreditData, setRemainingCreditData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [creditLoading, setCreditLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -63,6 +64,7 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
   useEffect(() => {
     // ⭐ Clear credit data ทันทีเมื่อ customerCode เปลี่ยน
     setCreditData(null);
+    setRemainingCreditData(null);
     
     const loadCreditData = async () => {
       if (!customerCode || customerCode.toUpperCase() === "N/A") {
@@ -83,6 +85,16 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
         // ⭐ Set credit data
         setCreditData(res.data);
         console.log("✅ [CREDIT] creditData updated to:", res.data);
+        
+        // ⭐ โหลด Remaining Credit
+        try {
+          const remainingRes = await api.get(`/api/remaining-credit/${customerCode}?_t=${timestamp}`);
+          console.log("✅ [REMAINING CREDIT] API response:", remainingRes.data);
+          setRemainingCreditData(remainingRes.data);
+        } catch (remainingErr) {
+          console.error("❌ [REMAINING CREDIT] Error:", remainingErr);
+          // ไม่ต้อง set null เพราะจะใช้ข้อมูลจาก credit API แทน
+        }
         
         // ⭐ Force re-render check
         setTimeout(() => {
@@ -224,15 +236,15 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
     return <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />;
   };
 
-  const creditPercentage = creditData 
-    ? ((creditData.credit_limit - (creditData.credit_available || 0)) / creditData.credit_limit) * 100
-    : 0;
-
   // ใช้ข้อมูลจาก API ถ้ามี ไม่งั้นใส่ 0 (สำหรับลูกค้าเงินสด)
   const displayCredit = creditData ? {
     creditLimit: creditData.credit_limit || 0,
-    creditUsed: (creditData.credit_limit || 0) - (creditData.credit_available || 0),
-    creditAvailable: creditData.credit_available || 0,
+    creditUsed: remainingCreditData?.data?.[0]?.["Remaining Credit"] 
+      ? (creditData.credit_limit || 0) - parseFloat(remainingCreditData.data[0]["Remaining Credit"])
+      : (creditData.credit_limit || 0) - (creditData.credit_available || 0),
+    creditAvailable: remainingCreditData?.data?.[0]?.["Remaining Credit"]
+      ? parseFloat(remainingCreditData.data[0]["Remaining Credit"])
+      : (creditData.credit_available || 0),
     paymentTerm: creditData.status || "-",
     creditDaysGA: creditData.credit_terms?.gs || 0,
     creditDaysYC: creditData.credit_terms?.yc || 0,
@@ -248,6 +260,11 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
     creditDaysAL: 0,
     lastUpdate: null,
   };
+
+  // ⭐ คำนวณเปอร์เซ็นต์การใช้วงเงิน (ต้องอยู่หลัง displayCredit)
+  const creditPercentage = creditData 
+    ? ((displayCredit.creditUsed) / displayCredit.creditLimit) * 100
+    : 0;
 
   return (
     <div className="border-t-4 border-gray-200 pt-6">
@@ -324,47 +341,53 @@ const CustomerInfoTab = ({ customer, customerCode }) => {
             )}
           </h3>
 
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className={`grid ${displayCredit.creditLimit > 0 ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-4`}>
             {/* Credit Limit */}
             <div className="bg-blue-50 rounded-lg p-3">
               <p className="text-xs text-gray-600 mb-1">วงเงินเครดิตทั้งหมด</p>
               <p className="text-xl font-bold text-blue-600">
                 ฿ {formatCurrency(displayCredit.creditLimit)}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                เหลือวงเงิน: ฿ {formatCurrency(displayCredit.creditAvailable)}
-              </p>
-            </div>
-
-            {/* Credit Used */}
-            <div className="bg-red-50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 mb-1">ยอดที่ใช้ไป:</p>
-              <p className="text-xl font-bold text-red-600">
-                ฿ {formatCurrency(displayCredit.creditUsed)}
-              </p>
-              {displayCredit.lastUpdate && (
+              {displayCredit.creditLimit > 0 && (
                 <p className="text-xs text-gray-500 mt-1">
-                  อัปเดต: {formatDateThai(displayCredit.lastUpdate)}
+                  เหลือวงเงิน: ฿ {formatCurrency(displayCredit.creditAvailable)}
                 </p>
               )}
             </div>
+
+            {/* Credit Used - แสดงเฉพาะลูกค้าที่มี credit_limit > 0 */}
+            {displayCredit.creditLimit > 0 && (
+              <div className="bg-red-50 rounded-lg p-3">
+                <p className="text-xs text-gray-600 mb-1">ยอดที่ใช้ไป:</p>
+                <p className="text-xl font-bold text-red-600">
+                  ฿ {formatCurrency(displayCredit.creditUsed)}
+                </p>
+                {displayCredit.lastUpdate && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    อัปเดต: {formatDateThai(displayCredit.lastUpdate)}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Credit Progress Bar */}
-          <div className="mb-4">
-            <div className="flex justify-between text-xs mb-2">
-              <span className="text-gray-600">การใช้วงเงิน</span>
-              <span className="font-semibold">{creditPercentage.toFixed(0)}%</span>
+          {/* Credit Progress Bar - แสดงเฉพาะลูกค้าที่มี credit_limit > 0 */}
+          {displayCredit.creditLimit > 0 && (
+            <div className="mb-4">
+              <div className="flex justify-between text-xs mb-2">
+                <span className="text-gray-600">การใช้วงเงิน</span>
+                <span className="font-semibold">{creditPercentage.toFixed(0)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full ${
+                    creditPercentage > 80 ? "bg-red-500" : "bg-blue-500"
+                  }`}
+                  style={{ width: `${Math.min(creditPercentage, 100)}%` }}
+                ></div>
+              </div>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full ${
-                  creditPercentage > 80 ? "bg-red-500" : "bg-blue-500"
-                }`}
-                style={{ width: `${Math.min(creditPercentage, 100)}%` }}
-              ></div>
-            </div>
-          </div>
+          )}
 
           <div className="border-t pt-3 space-y-2 mb-3">
             <div className="flex justify-between items-center">

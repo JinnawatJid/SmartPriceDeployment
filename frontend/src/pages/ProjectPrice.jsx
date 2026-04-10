@@ -5,7 +5,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import api from "../services/api.js";
 import ProjectPriceManagement from "./ProjectPriceManagement";
 
-// รหัสพนักงานที่มีสิทธิ์เข้าถึงหน้า "ราคาโครงการ"
+// รหัสพนักงานที่มีสิทธิ์เข้าถึงหน้า "ราคาโครงการ" (fallback)
 const ALLOWED_PROJECT_PRICE_EMPLOYEES = ['90038', '20061', '11186', '21702', '21367', '20614', '20194', '20785', '20093', '20686', '16647', '20595', '20091', '16053', '16654', '16725', '10011', '20040', '10254', '16646', '16702', '20037', '16723', '20974', '20129', '10073', '20084', '21094', '20813'];
 
 export default function ProjectPrice() {
@@ -26,8 +26,14 @@ export default function ProjectPrice() {
     fetchEmployeeAccess();
   }, []);
 
-  // ตรวจสอบว่าพนักงานมีสิทธิ์เข้าถึงหรือไม่
-  const hasAccess = employee && allowedEmployees.includes(employee.id);
+  // ⭐ ตรวจสอบสิทธิ์จาก role หรือรายชื่อพนักงาน
+  // Role ที่มีสิทธิ์: ZM, RM, SDM, Sales_Project, PM (ทั้งหมด)
+  const isPM = employee?.role && typeof employee.role === "string" && (
+    employee.role === "PM" || employee.role.startsWith("PM_")
+  );
+  const hasRoleAccess = ["ZM", "RM", "SDM", "Sales_Project"].includes(employee?.role) || isPM;
+  const hasEmployeeIdAccess = employee && allowedEmployees.includes(employee.id);
+  const hasAccess = hasRoleAccess || hasEmployeeIdAccess;
 
   // ตรวจสอบสิทธิ์เข้าถึง
   useEffect(() => {

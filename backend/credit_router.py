@@ -1,7 +1,7 @@
 # credit_router.py
 from fastapi import APIRouter, HTTPException
 import httpx
-from config.config_external_api import CREDIT_API_URL, CREDIT_API_HEADERS
+from config.config_external_api import CREDIT_API_URL, CREDIT_API_HEADERS, REMAININGCREDIT_URL, REMAININGCREDIT_HEADERS
 import logging
 
 router = APIRouter()
@@ -91,6 +91,65 @@ async def get_credit_status(customer_id: str):
         )
     except Exception as e:
         logger.error(f"Unexpected error in get_credit_status: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.get("/api/remaining-credit/{customer_id}")
+async def get_remaining_credit(customer_id: str):
+    """
+    ดึงข้อมูลยอดเครดิตคงเหลือของลูกค้าจาก External API
+    
+    Args:
+        customer_id: รหัสลูกค้า
+    
+    Returns:
+        ข้อมูลยอดเครดิตคงเหลือ
+    """
+    import requests
+    import json
+    
+    try:
+        logger.info(f"🔍 [REMAINING CREDIT API] Calling: {REMAININGCREDIT_URL}")
+        logger.info(f"🔍 [REMAINING CREDIT API] Headers: {REMAININGCREDIT_HEADERS}")
+        logger.info(f"🔍 [REMAINING CREDIT API] Customer ID: {customer_id}")
+        
+        # ⭐ ใช้ GET method
+        response = requests.get(
+            REMAININGCREDIT_URL,
+            headers=REMAININGCREDIT_HEADERS,
+            timeout=10.0
+        )
+        
+        logger.info(f"🔍 [REMAINING CREDIT API] Response status: {response.status_code}")
+        logger.info(f"🔍 [REMAINING CREDIT API] Content-Encoding: {response.headers.get('Content-Encoding', 'none')}")
+        
+        response.raise_for_status()
+        
+        # ⭐ ใช้ .json() ของ requests ซึ่งจะจัดการ encoding ให้อัตโนมัติ
+        data = response.json()
+        
+        logger.info(f"✅ [REMAINING CREDIT API] Success! Data keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
+        return data
+            
+    except requests.HTTPError as e:
+        logger.error(f"HTTP error from remaining credit API: {e.response.status_code if e.response else 'N/A'}")
+        raise HTTPException(
+            status_code=e.response.status_code if e.response else 500,
+            detail=f"Remaining Credit API error: {e.response.text if e.response else str(e)}"
+        )
+    except requests.RequestException as e:
+        logger.error(f"Request error to remaining credit API: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cannot connect to remaining credit API: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in get_remaining_credit: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"

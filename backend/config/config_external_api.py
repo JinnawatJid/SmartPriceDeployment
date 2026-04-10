@@ -1,8 +1,11 @@
 # config_external_api.py
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # =========================
 # Base URL for Email Links
@@ -119,3 +122,24 @@ ITEMCOST_API_HEADERS = {
 SDM_THRESHOLD_PRICE = float(os.getenv("SDM_THRESHOLD_PRICE", "50000"))
 # ราคาขั้นต่ำที่ต้องส่งให้ SDM อนุมัติ
 # ถ้าราคา < SDM_THRESHOLD_PRICE จะส่งให้ PM แทน
+
+
+# =========================
+# Remaining Credit API (D365)
+# =========================
+REMAININGCREDIT_URL = os.getenv(
+    "REMAININGCREDIT_URL",
+    "http://192.192.0.37:8280/silver_customerremainingcredit/1.0.0",
+)
+# ⭐ ลองใช้ CUSTOMER_API_KEY ก่อน เพราะเป็น API เกี่ยวกับข้อมูลลูกค้า
+# ถ้าไม่ได้ ให้ขอ API key ใหม่ที่มีสิทธิ์เข้าถึง silver_customerremainingcredit
+REMAININGCREDIT_KEY = os.getenv("REMAININGCREDIT_KEY", "").strip()
+if not REMAININGCREDIT_KEY:
+    REMAININGCREDIT_KEY = CUSTOMER_API_KEY
+    logger.warning("⚠️ REMAININGCREDIT_KEY not found, using CUSTOMER_API_KEY instead")
+
+# ⭐ API นี้ใช้ header "apikey" (ตัวเล็กทั้งหมด) เหมือน API อื่นๆ
+REMAININGCREDIT_HEADERS = {
+    "apikey": REMAININGCREDIT_KEY,
+    "Content-Type": "application/json",
+}

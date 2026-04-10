@@ -251,54 +251,126 @@ export default function OrderDetailPage() {
 
           <button
             className="px-6 py-2 rounded-lg bg-blue-600 text-white  shadow hover:bg-blue-700 font-semibold"
-            onClick={() => {
-              dispatch({
-                type: "LOAD_DRAFT",
-                payload: {
-                  id: null,
-                  quoteNo: null,
-                  customer: {
-                    id: order.customer?.id || "",
-                    code: order.customer?.id || "",
-                    name: order.customer?.name || "",
-                    phone: order.customer?.phone || "",
-                    _needsHydrate: true,
+            onClick={async () => {
+              try {
+                // ⭐ เรียก API เพื่อตรวจสอบวันหมดอายุ
+                const response = await api.post(`/api/quotation/${order.quoteNo}/reorder`);
+                const { quote, isExpired, daysExpired } = response.data;
+
+                // ⭐ แจ้งเตือนถ้าหมดอายุ
+                if (isExpired) {
+                  const confirmReorder = window.confirm(
+                    `ใบเสนอราคานี้หมดอายุแล้ว ${daysExpired} วัน\n` +
+                    `ระบบได้คำนวณราคาใหม่ตามราคาปัจจุบันแล้ว\n\n` +
+                    `คุณต้องการดำเนินการต่อหรือไม่?`
+                  );
+                  
+                  if (!confirmReorder) {
+                    return; // ยกเลิกการซื้อซ้ำ
+                  }
+                }
+
+                dispatch({
+                  type: "LOAD_DRAFT",
+                  payload: {
+                    id: null,
+                    quoteNo: null,
+                    customer: {
+                      id: quote.customer?.id || quote.customer?.code || "",
+                      code: quote.customer?.id || quote.customer?.code || "",
+                      name: quote.customer?.name || "",
+                      phone: quote.customer?.phone || "",
+                      _needsHydrate: true,
+                    },
+                    deliveryType: quote.deliveryType ?? "PICKUP",
+                    billTaxName: quote.billTaxName ?? "",
+                    note: quote.note ?? "",
+                    cart: (quote.cart || []).map((it) => ({
+                      sku: it.sku,
+                      name: it.name,
+                      qty: Number(it.qty ?? 0),
+                      price: Number(it.price ?? 0),
+                      lineTotal: Number(it.lineTotal ?? 0),
+                      Price_System: Number(it.Price_System ?? 0),
+                      category: it.category,
+                      unit: it.unit || "-",
+
+                      // ⭐ normalize key fields
+                      variantCode: String(it.variantCode ?? ""),
+                      sqft_sheet: Number(it.sqft_sheet ?? 0),
+
+                      product_weight: Number(it.product_weight ?? 0),
+
+                      // ⭐ flags - ใช้ราคาที่ Backend คำนวณมาแล้ว
+                      source: "db",
+                      needsPricing: false,
+                      isDraftItem: true,
+                    })),
+
+                    totals: {
+                      exVat: 0,
+                      vat: 0,
+                      grandTotal: 0,
+                      shippingRaw: 0,
+                      shippingCustomerPay: 0,
+                      shippingCompanyPay: 0,
+                    },
                   },
-                  deliveryType: order.deliveryType ?? "PICKUP",
-                  billTaxName: order.billTaxName ?? "",
-                  note: order.note ?? "",
-                  cart: (order.cart || []).map((it) => ({
-                    sku: it.sku,
-                    name: it.name,
-                    qty: Number(it.qty ?? 0),
-                    price: Number(it.price ?? 0),
-                    lineTotal: Number(it.lineTotal ?? it.price * it.qty ?? 0),
-                    category: it.category,
-                    unit: it.unit || "-",
+                });
 
-                    // ⭐ normalize key fields
-                    variantCode: String(it.variantCode ?? ""),
-                    sqft_sheet: Number(it.sqft_sheet ?? 0),
+                navigate("/create?step=6");
+              } catch (error) {
+                console.error("Error checking quote expiration:", error);
+                
+                // ถ้า API ล้มเหลว ให้ใช้วิธีเดิม
+                dispatch({
+                  type: "LOAD_DRAFT",
+                  payload: {
+                    id: null,
+                    quoteNo: null,
+                    customer: {
+                      id: order.customer?.id || "",
+                      code: order.customer?.id || "",
+                      name: order.customer?.name || "",
+                      phone: order.customer?.phone || "",
+                      _needsHydrate: true,
+                    },
+                    deliveryType: order.deliveryType ?? "PICKUP",
+                    billTaxName: order.billTaxName ?? "",
+                    note: order.note ?? "",
+                    cart: (order.cart || []).map((it) => ({
+                      sku: it.sku,
+                      name: it.name,
+                      qty: Number(it.qty ?? 0),
+                      price: Number(it.price ?? 0),
+                      lineTotal: Number(it.lineTotal ?? it.price * it.qty ?? 0),
+                      category: it.category,
+                      unit: it.unit || "-",
 
-                    product_weight: Number(it.product_weight ?? 0),
+                      // ⭐ normalize key fields
+                      variantCode: String(it.variantCode ?? ""),
+                      sqft_sheet: Number(it.sqft_sheet ?? 0),
 
-                    // ⭐ flags เหมือน draft
-                    source: "db",
-                    needsPricing: false,
-                    isDraftItem: true,
-                  })),
+                      product_weight: Number(it.product_weight ?? 0),
 
-                  totals: {
-                    exVat: 0,
-                    vat: 0,
-                    grandTotal: 0,
-                    shippingRaw: 0,
-                    shippingCustomerPay: 0,
-                    shippingCompanyPay: 0,
+                      // ⭐ flags เหมือน draft
+                      source: "db",
+                      needsPricing: false,
+                      isDraftItem: true,
+                    })),
+
+                    totals: {
+                      exVat: 0,
+                      vat: 0,
+                      grandTotal: 0,
+                      shippingRaw: 0,
+                      shippingCustomerPay: 0,
+                      shippingCompanyPay: 0,
+                    },
                   },
-                },
-              });
-              navigate("/create?step=6");
+                });
+                navigate("/create?step=6");
+              }
             }}
           >
             สั่งซื้อซ้ำ

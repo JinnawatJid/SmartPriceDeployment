@@ -6,7 +6,7 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 from config.db_mssql import get_mssql_conn
@@ -34,16 +34,36 @@ def _now_iso():
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _calculate_expire_date(create_date: str = None) -> str:
+    """
+    คำนวณวันหมดอายุ (1 เดือนหลังจากวันที่สร้าง)
+    
+    Args:
+        create_date: วันที่สร้าง (ISO format) หรือ None เพื่อใช้วันที่ปัจจุบัน
+    
+    Returns:
+        วันหมดอายุในรูปแบบ ISO format
+    """
+    if create_date:
+        base_date = datetime.fromisoformat(create_date)
+    else:
+        base_date = datetime.now()
+    
+    # เพิ่ม 1 เดือน (30 วัน)
+    expire_date = base_date + timedelta(days=30)
+    return expire_date.isoformat(timespec="seconds")
+
+
 def _generate_quote_no(branch_code: str, ibt_branch: str = None) -> str:
     """
-    Format:  BSQT-2502/0001 (normal)
-             BSQT-2502/0001-IBT-00TR (IBT)
+    Format:  BSSP-2502/0001 (normal)
+             BSSP-2502/0001-IBT-00TR (IBT)
     """
     now = datetime.now()
     yy = str(now.year)[-2:]
     mm = f"{now.month:02d}"
 
-    prefix = f"{branch_code[-2:].upper()}QT-{yy}{mm}"
+    prefix = f"{branch_code[-2:].upper()}SP-{yy}{mm}"
 
     conn = get_mssql_conn()
     cursor = conn.cursor()
@@ -216,6 +236,7 @@ def create_quotation(payload: dict = Body(...)):
 
     quote_no = _generate_quote_no(branch, ibt_branch)  # ⭐ ส่ง ibt_branch
     now = _now_iso()
+    expire_date = _calculate_expire_date(now)  # ⭐ คำนวณวันหมดอายุอัตโนมัติ
 
     header = {
         "QuoteNo": quote_no,
@@ -224,7 +245,7 @@ def create_quotation(payload: dict = Body(...)):
         "SalesID": employee.get("id", ""),
         "SalesName": employee.get("name", ""),
         "CreateDate": now,
-        "ExpireDate": payload.get("expireDate", ""),
+        "ExpireDate": expire_date,  # ⭐ ใช้วันหมดอายุที่คำนวณ
         "ApproveDate": now,
         "BranchCode": branch,
         "PaymentTerm": payload.get("paymentTerm", ""),
@@ -682,4 +703,210 @@ def cancel_quotation(quote_no: str):
     conn.close()
 
     return {"cancelled": quote_no}
+
+
+# -----------------------------------------------------
+# REORDER / ซื้อซ้ำ
+# -----------------------------------------------------
+@router.post("/{quote_no:path}/reorder", summary="ซื้อซ้ำจากใบเสนอราคา")
+async def reorder_quotation(quote_no: str, branch_code: str = Depends(get_branch_code)):
+    """ซื้อซ้ำจากใบเสนอราคา - คำนวณราคาใหม่ถ้าหมดอายุ"""
+    from quotation_reorder import reorder_quotation_new
+    return await reorder_quotation_new(quote_no, branch_code)
+    """
+    ซื้อซ้ำจากใบเสนอราคา
+    - ตรวจสอบว่าใบเสนอราคาหมดอายุหรือไม่
+    - ถ้าหมดอายุ (เกิน 1 เดือน) จะคำนวณราคาใหม่จาก Backend
+    - Frontend จะได้รับราคาใหม่พร้อมใช้งาน
+    
+    Returns:
+        {
+            "quote": {...},
+            "isExpired": bool,
+            "expireDate": str,
+            "daysExpired": int (ถ้าหมดอายุ)
+        }
+    """
+    import httpx
+    
+    conn = get_mssql_conn()
+    cursor = conn.cursor()
+
+    # ดึงข้อมูลใบเสนอราคา
+    cursor.execute("SELECT * FROM Quote_Header WHERE QuoteNo=?", (quote_no,))
+    header = cursor.fetchone()
+    if not header:
+        raise HTTPException(404, f"ไม่พบใบเสนอราคา {quote_no}")
+
+    header = normalize_keys(row_to_dict(cursor, header))
+
+    # ดึงรายการสินค้า
+    cursor.execute("SELECT * FROM Quote_Line WHERE QuoteID=?", (quote_no,))
+    lines = [normalize_keys(row_to_dict(cursor, r)) for r in cursor.fetchall()]
+
+    conn.close()
+
+    # ตรวจสอบวันหมดอายุ
+    expire_date_str = header.get("ExpireDate")
+    is_expired = False
+    days_expired = 0
+
+    if expire_date_str:
+        try:
+            # แปลง string เป็น datetime
+            if isinstance(expire_date_str, str):
+                expire_date = datetime.fromisoformat(expire_date_str.replace('Z', '+00:00'))
+            else:
+                expire_date = expire_date_str
+            
+            now = datetime.now()
+            
+            # ตรวจสอบว่าหมดอายุหรือไม่
+            if now > expire_date:
+                is_expired = True
+                days_expired = (now - expire_date).days
+                logger.info(f"Quote {quote_no} expired {days_expired} days ago - recalculating prices")
+        except Exception as e:
+            logger.error(f"Error parsing expire date: {e}")
+
+    # สร้าง cart items
+    cart_items = []
+    for ln in lines:
+        item = {
+            "sku": ln["ItemCode"],
+            "name": ln["ItemName"],
+            "qty": ln["Quantity"],
+            "category": ln["Category"],
+            "unit": ln["Unit"],
+            "sqft_sheet": ln.get("Sqft_Sheet") or 0,
+            "product_weight": ln.get("ProductWeight") or 0,
+            "variantCode": ln.get("VariantCode", ""),
+            "isGlassCut": ln.get("IsGlassCut") == "Y",
+            "remark": ln.get("Remark", ""),
+        }
+        
+        # ⭐ ถ้าไม่หมดอายุ ให้ใช้ราคาเดิม
+        if not is_expired:
+            item["price"] = ln["UnitPrice"]
+            item["Price_System"] = ln.get("Price_System", 0)
+            item["lineTotal"] = ln["TotalPrice"]
+        
+        # ถ้ามี CutInfoJson ให้แปลงกลับเป็น object
+        if ln.get("CutInfoJson"):
+            try:
+                item["cutInfo"] = json.loads(ln["CutInfoJson"])
+            except:
+                item["cutInfo"] = ""
+        
+        cart_items.append(item)
+
+    # ⭐ ถ้าหมดอายุ ให้เรียก pricing API คำนวณราคาใหม่
+    if is_expired:
+        try:
+            logger.info(f"Recalculating prices for expired quote {quote_no}")
+            
+            # เตรียมข้อมูลลูกค้า
+            customer_code = header["CustomerCode"]
+            
+            # ดึงข้อมูลลูกค้าเพิ่มเติมจาก customer API
+            customer_data = {
+                "customerCode": customer_code,
+                "customerName": header["CustomerName"],
+                "paymentTerm": header.get("PaymentTerm", ""),
+                "paymentMethod": header.get("CreditTerm", ""),
+            }
+            
+            # เรียก pricing API
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                pricing_response = await client.post(
+                    "http://localhost:8000/api/pricing/calculate",
+                    json={
+                        "customerData": customer_data,
+                        "items": [
+                            {
+                                "sku": it["sku"],
+                                "qty": it["qty"],
+                                "category": it["category"],
+                                "variantCode": it.get("variantCode", ""),
+                                "sqft_sheet": it.get("sqft_sheet", 0),
+                            }
+                            for it in cart_items
+                        ],
+                    }
+                )
+                
+                if pricing_response.status_code == 200:
+                    pricing_data = pricing_response.json()
+                    priced_items = pricing_data.get("items", [])
+                    
+                    # อัพเดทราคาใหม่
+                    for i, item in enumerate(cart_items):
+                        if i < len(priced_items):
+                            priced = priced_items[i]
+                            item["price"] = priced.get("UnitPrice", 0)
+                            item["Price_System"] = priced.get("Price_System", 0)
+                            
+                            # คำนวณ lineTotal
+                            if item["category"] == "G" and item.get("sqft_sheet", 0) > 0:
+                                item["lineTotal"] = item["price"] * item["sqft_sheet"] * item["qty"]
+                            else:
+                                item["lineTotal"] = item["price"] * item["qty"]
+                            
+                            logger.info(f"Updated price for {item['sku']}: {item['price']}")
+                else:
+                    logger.error(f"Pricing API failed: {pricing_response.status_code}")
+                    raise HTTPException(500, "ไม่สามารถคำนวณราคาใหม่ได้")
+                    
+        except Exception as e:
+            logger.error(f"Error recalculating prices: {e}")
+            raise HTTPException(500, f"เกิดข้อผิดพลาดในการคำนวณราคาใหม่: {str(e)}")
+
+    # สร้าง response
+    result = {
+        "quote": {
+            "quoteNo": quote_no,
+            "id": quote_no,
+            "status": header.get("Status", "draft"),
+            "customer": {
+                "id": header["CustomerCode"],
+                "code": header["CustomerCode"],
+                "name": header["CustomerName"],
+                "phone": header.get("Tel", ""),
+                "tax_no": header.get("tax_no", "")
+            },
+            "employee": {
+                "id": header["SalesID"],
+                "name": header["SalesName"],
+                "branchId": header["BranchCode"]
+            },
+            "createdAt": header["CreateDate"],
+            "expireDate": header.get("ExpireDate"),
+            "totals": {
+                "grandTotal": header["TotalAmount"],
+                "exVat": header["SubtotalAmount"],
+                "shippingRaw": header["ShippingCost"],
+                "shippingCustomerPay": header.get("ShippingCustomerPay", 0)
+            },
+            "cart": cart_items,
+            "items": cart_items,
+            "remark": header.get("Remark", ""),
+            "note": header.get("Remark_Shipping", ""),
+            "paymentTerm": header.get("PaymentTerm", ""),
+            "creditTerm": header.get("CreditTerm", ""),
+            "deliveryType": header.get("ShippingMethod", ""),
+            "needTaxInvoice": header.get("NeedsTax") == "Y",
+            "discount": header.get("DiscountAmount", 0),
+            "pre_order": header.get("Pre_Order", 0),
+            "required_delivery_date": header.get("Required_Delivery_Date"),
+            "project_code": header.get("project_code"),
+            "ibtBranch": header.get("IBT_branch"),
+        },
+        "isExpired": is_expired,
+        "expireDate": expire_date_str,
+    }
+
+    if is_expired:
+        result["daysExpired"] = days_expired
+
+    return result
 
