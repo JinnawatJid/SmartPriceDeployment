@@ -41,8 +41,11 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
   const ibtBranches = branches.filter(branch => branch.Code !== currentBranchCode);
   
   return (
-    <div className="flex flex-col gap-4 rounded-lg bg-gray-50 py-4 px-8">
-      <div className="flex justify-between gap-16 md:grid-cols-3">
+    <div className="flex flex-col gap-4 rounded-lg py-4 px-8">
+      <div className="flex justify-between gap-8 md:grid-cols-3">
+        {/* Left Vertical Divider */}
+        <div className="w-px bg-gray-300 self-stretch"></div>
+
         {/* ใบกำกับภาษี */}
         <div className="flex flex-col rounded-lg h-full">
           <h3 className="text-lg font-bold text-gray-800">ใบกำกับภาษี</h3>
@@ -60,8 +63,11 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
             />
           </div>
 
+          {/* Horizontal Divider */}
+          <div className="my-4 border-t border-gray-300"></div>
+
           {/* Pre-Order Section */}
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3">
             {/* Pre-Order Checkbox */}
             <div className="font-bold text-gray-800 mt-1">Pre Order</div>
             <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border-2 border-gray-300 w-56">
@@ -80,32 +86,30 @@ function TaxDeliverySection({ needsTax, deliveryType, onChange, onOpenShipping, 
               </label>
             </div>
 
-            {/* Required Delivery Date - แสดงเฉพาะเมื่อเลือก Pre-Order */}
-            {isPreOrder && (
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <label htmlFor="requiredDeliveryDate" className="block text-xs font-semibold text-gray-700 mb-2">
-                  วันที่ลูกค้าต้องการของ <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  id="requiredDeliveryDate"
-                  value={requiredDeliveryDate}
-                  onChange={(e) => onRequiredDeliveryDateChange && onRequiredDeliveryDateChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  min={new Date().toISOString().split("T")[0]}
-                />
-                {requiredDeliveryDate && (
-                  <p className="text-xs text-blue-600 mt-2">
-                    วันที่ที่เลือก: <strong>{formatDateThai(requiredDeliveryDate)}</strong>
-                  </p>
-                )}
-                {!requiredDeliveryDate && isPreOrder && (
-                  <p className="text-xs text-red-500 mt-1">กรุณาเลือกวันที่ลูกค้าต้องการของ</p>
-                )}
-              </div>
-            )}
+            {/* Required Delivery Date - แสดงเสมอ */}
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <label htmlFor="requiredDeliveryDate" className="block text-xs font-semibold text-gray-700 mb-2">
+                วันที่ลูกค้าต้องการของ
+              </label>
+              <input
+                type="date"
+                id="requiredDeliveryDate"
+                value={requiredDeliveryDate}
+                onChange={(e) => onRequiredDeliveryDateChange && onRequiredDeliveryDateChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                min={new Date().toISOString().split("T")[0]}
+              />
+              {requiredDeliveryDate && (
+                <p className="text-xs text-blue-600 mt-2">
+                  วันที่ที่เลือก: <strong>{formatDateThai(requiredDeliveryDate)}</strong>
+                </p>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Vertical Divider */}
+        <div className="w-px bg-gray-300 self-stretch"></div>
 
         {/* ช่องทางการรับสินค้า */}
         <div className="flex flex-col col-span-2 rounded-lg h-full">

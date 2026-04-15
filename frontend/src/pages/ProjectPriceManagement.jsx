@@ -12,6 +12,17 @@ const CATEGORY_OPTIONS = [
   { value: 'Accessories', label: 'Accessories' }
 ];
 
+const UNIT_OPTIONS = [
+  { value: 'ตารางฟุต', label: 'ตารางฟุต' },
+  { value: 'หลอด', label: 'หลอด' },
+  { value: 'อัน', label: 'อัน' },
+  { value: 'กิโลกรัม', label: 'กิโลกรัม' },
+  { value: 'แผ่น', label: 'แผ่น' },
+  { value: 'ม้วน', label: 'ม้วน' },
+  { value: 'กล่อง', label: 'กล่อง' },
+  { value: 'ถุง', label: 'ถุง' }
+];
+
 const ProjectPriceManagement = () => {
   const { employee } = useAuth();
   const [projects, setProjects] = useState([]);
@@ -1099,7 +1110,7 @@ const ProjectPriceManagement = () => {
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">ขอราคาพิเศษ</h1>
+        <h1 className="text-3xl font-bold text-gray-800">สร้างหมายเลขโครงการ</h1>
         <button
           onClick={() => {
             setPriceMode(null);
@@ -1643,14 +1654,19 @@ const ProjectPriceManagement = () => {
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           หน่วย *
                         </label>
-                        <input
-                          type="text"
-                          placeholder="เช่น ตารางฟุต"
+                        <select
                           value={globalUnit}
                           onChange={(e) => setGlobalUnit(e.target.value)}
                           className="w-full border rounded-lg px-3 py-2 border-red-300 focus:border-red-500 focus:ring-red-500"
                           required
-                        />
+                        >
+                          <option value="">-- เลือกหน่วย --</option>
+                          {UNIT_OPTIONS.map((unit) => (
+                            <option key={unit.value} value={unit.value}>
+                              {unit.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div>

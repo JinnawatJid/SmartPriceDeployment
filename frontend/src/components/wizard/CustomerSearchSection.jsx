@@ -81,7 +81,7 @@ function CustomerSearchSection({ customer, onCustomerChange }) {
   // ---------------- Render ----------------
   return (
     <>
-      <div className="mx-auto max-w-lg rounded-lg bg-gray-50 px-4 py-4">
+      <div className="mx-auto max-w-lg rounded-lg  px-4 py-4">
         <p className="text-lg font-bold text-gray-800 mb-2">ข้อมูลลูกค้า</p>
 
         <div className="space-y-3">
